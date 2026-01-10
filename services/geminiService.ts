@@ -103,31 +103,31 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish'): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
   try {
     const ai = getAI();
-    // Increase context limit heavily to catch scripts at bottom of HTML or large JSON dumps
+    // Allow massive limit for raw HTML dumps or big JSON
     const truncatedText = rawText.substring(0, 400000); 
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Analyze the following content and extract quiz questions.
       
-      The content might be:
-      1. A JSON dump from an API (Gimkit/Kahoot). LOOK HERE FIRST.
-      2. Raw HTML from a website.
-      3. Raw text.
+      SOURCES & FORMATS:
+      - "GIMKIT API JSON": This is a direct JSON dump from Gimkit. Parse the 'kit.questions' array. 
+      - "KAHOOT API JSON": Direct JSON from Kahoot. Parse 'questions' array.
+      - "JINA READER MARKDOWN": Clean text. Parse naturally.
+      - "RAW HTML DUMP": Look for hidden JSON in <script> tags or visual text.
 
       INSTRUCTIONS:
-      - If you see JSON data labeled 'GIMKIT API DATA' or 'KAHOOT API DATA', parse that JSON strictly.
-      - Gimkit JSON usually has a 'kit' object with a 'questions' array.
-      - Kahoot JSON usually has a 'questions' array.
-      - Extract: Question Text, Options (Correct & Incorrect), Answer Index.
-      - TRANSLATE everything to ${language} if it is in English.
-      - Ensure 'Multiple Choice' questions have 4 options. If fewer are found, generate plausible distractors.
+      1. Extract Question Text, Options, and Correct Answer.
+      2. TRANSLATE to ${language} if necessary.
+      3. For Gimkit/Kahoot JSON: The data is structured. Trust it.
+         - Gimkit JSON: Look for "answers" array inside each question. "correct": true marks the winner.
+      4. Ensure exactly 4 options per question (add plausible distractors if missing).
 
-      CONTENT TO ANALYZE:\n${truncatedText}`,
+      CONTENT:\n${truncatedText}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a data extraction specialist. Your priority is to find structured JSON data embedded in the text and convert it into the quiz schema. Output language MUST be ${language}.`,
+        systemInstruction: `You are a data extraction specialist. Your goal is to convert unstructured or semi-structured data into a standardized Quiz JSON. If the input is already a JSON API response (Gimkit/Kahoot), prioritize exact data extraction over interpretation. Output language MUST be ${language}.`,
       },
     });
 
