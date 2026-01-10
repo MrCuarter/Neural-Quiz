@@ -103,29 +103,30 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish'): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
   try {
     const ai = getAI();
-    // We increase the context limit implicitly by just passing the string. 
-    // Gemini 1.5/3 Flash has a huge context window, so 30k chars is very safe. We can try 100k.
-    const truncatedText = rawText.substring(0, 150000); 
+    // Increase context limit heavily to catch scripts at bottom of HTML
+    const truncatedText = rawText.substring(0, 300000); 
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Analyze the following text/HTML/content and extract quiz questions from it. 
       
-      The content might be:
-      1. A raw copy-paste from a PDF.
-      2. Raw HTML code from a website (look for JSON data inside <script> tags or text inside standard HTML tags).
-      3. Structured CSV/Excel data.
+      CRITICAL INSTRUCTION FOR WEBSITES (Gimkit, Kahoot, Blooket):
+      - The questions are often HIDDEN inside <script> tags in JSON format. 
+      - Look for variables like 'window.__PRELOADED_STATE__', 'window.__GIMKIT_DATA__', 'quizData', 'questions', or big JSON objects inside the HTML.
+      - Parse that JSON data to find the questions.
+      - Ignore the visible UI text (like "Join Game", "Login") if you find the hidden question data.
+      
+      Other Sources:
+      - Copy-paste from PDF: Reconstruct questions split across lines.
+      - CSV: Parse structured data.
 
-      IMPORTANT:
-      - Translate the questions and answers to ${language} if they are in another language.
-      - If you find JSON data (like in Next.js props or window.__PRELOADED_STATE__), parse that data to find the questions.
-      - Ignore navigation menus, footers, and UI elements. Focus on the Quiz content.
+      Translate output to ${language}.
 
       CONTENT TO ANALYZE:\n${truncatedText}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a data extraction specialist and translator. Identify questions, options, and correct answers. Output language MUST be ${language}. If the source is English, TRANSLATE it to ${language}. Ensure Spanish questions use '¿'.`,
+        systemInstruction: `You are a data extraction code-breaker. Your goal is to find the HIDDEN quiz data inside raw HTML of Single Page Applications (SPAs). Look inside script tags. Output language MUST be ${language}.`,
       },
     });
 

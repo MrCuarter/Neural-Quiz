@@ -1,26 +1,36 @@
 
-// Uses a public CORS proxy to fetch HTML content from supported quiz platforms
-// Note: This is a "best effort" approach as many sites block scraping.
+// Uses a robust CORS proxy to fetch HTML content from supported quiz platforms.
+// Switched to corsproxy.io as it handles redirects and some SPA rendering better than allorigins.
 
-const PROXY_URL = 'https://api.allorigins.win/get?url=';
+const PROXY_URL = 'https://corsproxy.io/?';
 
 export const fetchUrlContent = async (url: string): Promise<string> => {
     try {
+        // Validation for common URL issues
+        if (!url.startsWith('http')) {
+            url = 'https://' + url;
+        }
+
         const encodedUrl = encodeURIComponent(url);
-        const response = await fetch(`${PROXY_URL}${encodedUrl}`);
+        // corsproxy.io syntax is ?url (unencoded) or just appending the url. 
+        // Best stability with this format:
+        const target = `${PROXY_URL}${encodedUrl}`;
+
+        const response = await fetch(target);
         
-        if (!response.ok) throw new Error("Network response was not ok");
+        if (!response.ok) throw new Error(`Error de conexión (${response.status})`);
         
-        const data = await response.json();
+        const html = await response.text();
         
-        if (!data.contents) throw new Error("No content retrieved");
+        if (!html || html.length < 500) {
+            throw new Error("El contenido recuperado es demasiado corto o está vacío.");
+        }
         
-        // We return a larger chunk of the HTML because many modern sites (Gimkit, Kahoot)
-        // embed their data in large JSON objects inside <script> tags in the <head> or <body>.
-        // 250k characters should cover most inline data scripts.
-        return data.contents.substring(0, 250000); 
+        // Return a massive chunk because modern SPAs (Gimkit/Kahoot) hide data in 
+        // huge one-line JSON blobs inside <script> tags at the bottom of the body.
+        return html.substring(0, 400000); 
     } catch (error) {
         console.error("URL Fetch Error:", error);
-        throw new Error("No he podido acceder a la URL. Puede que tenga protección anti-bots. Por favor, COPIA el texto de la web y usa la pestaña PEGAR.");
+        throw new Error("No he podido acceder a la URL. Puede que tenga protección anti-bots potente. Por favor, COPIA el texto de la web manualmente y usa la pestaña PEGAR.");
     }
 };

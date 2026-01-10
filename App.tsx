@@ -306,19 +306,16 @@ const App: React.FC = () => {
   const performAnalysis = async (content: string, sourceName: string, isAlreadyStructured: boolean = false, preParsedQuestions: Question[] = []) => {
     setView('convert_analysis');
     setAnalysisProgress(0);
-    
-    // 1. Initial Start Message
     setAnalysisStatus(getRandomMessage('start'));
 
-    // Setup the Artificial Delay Animation (Target: ~8 seconds)
-    const totalDuration = 8000; 
-    const stepInterval = 200;
-    const totalSteps = totalDuration / stepInterval;
-    let currentStep = 0;
+    // Config
+    const MIN_DURATION = 8000; // 8 Seconds minimum show
+    const startTime = Date.now();
+    let currentVirtualProgress = 0;
 
     clearAnalysisInterval();
     
-    // We use a promise to handle the delay while we might already be processing in background
+    // We start the AI process in parallel
     const processingPromise = (async () => {
         try {
             if (isAlreadyStructured && preParsedQuestions.length > 0) {
@@ -350,24 +347,42 @@ const App: React.FC = () => {
         }
     })();
 
-    // Animation Loop
+    // Animation Loop: Updates UI every 100ms
     progressIntervalRef.current = window.setInterval(() => {
-       currentStep++;
-       const progress = Math.min((currentStep / totalSteps) * 100, 95); // Cap at 95 until done
-       setAnalysisProgress(progress);
-
-       // Message Logic based on time
-       const timePassed = currentStep * stepInterval;
+       const elapsed = Date.now() - startTime;
        
-       if (timePassed === 1000) {
+       // Calculate target progress based on time
+       // 0-8s: Move linearly up to 80%
+       // 8s+: Asymptotically approach 99%
+       
+       let targetP = 0;
+       if (elapsed < MIN_DURATION) {
+           targetP = (elapsed / MIN_DURATION) * 80;
+       } else {
+           // Slow creep from 80 to 99
+           // We use a formula that never quite hits 100
+           const extraTime = elapsed - MIN_DURATION;
+           const creep = 19 * (1 - Math.exp(-extraTime / 10000)); // takes ~30s more to reach 99
+           targetP = 80 + creep;
+       }
+       
+       // Only move forward
+       if (targetP > currentVirtualProgress) {
+           currentVirtualProgress = targetP;
+       }
+       
+       setAnalysisProgress(currentVirtualProgress);
+
+       // Message Logic based on simple time checkpoints
+       if (elapsed > 1000 && elapsed < 1200) {
            setAnalysisStatus(getDetectionMessage(sourceName, content));
-       } else if (timePassed === 3000) {
+       } else if (elapsed > 4000 && elapsed < 4200) {
            setAnalysisStatus(getRandomMessage('detect_generic'));
-       } else if (timePassed === 5000) {
+       } else if (elapsed > 6000 && elapsed < 6200) {
            setAnalysisStatus(getRandomMessage('progress'));
        }
 
-    }, stepInterval);
+    }, 100);
 
     try {
         const questions = await processingPromise;
@@ -376,10 +391,10 @@ const App: React.FC = () => {
             throw new Error("No questions extracted.");
         }
 
-        // Wait for the animation to finish at least 8 seconds
-        const remainingTime = totalDuration - (currentStep * stepInterval);
-        if (remainingTime > 0) {
-            await new Promise(r => setTimeout(r, remainingTime));
+        // Wait if we finished too fast (enforce min duration)
+        const elapsedNow = Date.now() - startTime;
+        if (elapsedNow < MIN_DURATION) {
+            await new Promise(r => setTimeout(r, MIN_DURATION - elapsedNow));
         }
 
         // Final Success State
@@ -398,7 +413,7 @@ const App: React.FC = () => {
         }, 1500); // Show 100% for 1.5s
 
     } catch (error: any) {
-        // Handle Error Gracefully with UI feedback instead of Alert
+        // Handle Error Gracefully
         clearAnalysisInterval();
         setAnalysisProgress(0);
         setAnalysisStatus(getRandomMessage('error'));
@@ -476,6 +491,7 @@ const App: React.FC = () => {
     }
     
     // START ANIMATION IMMEDIATELY (Fake start)
+    // We start the view change here so the user sees something happening while fetching
     setView('convert_analysis');
     setAnalysisStatus("Iniciando escaneo de red neural...");
     setAnalysisProgress(5);
