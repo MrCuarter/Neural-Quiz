@@ -22,7 +22,10 @@ export const detectAndParseStructure = (wb: XLSX.WorkBook): Question[] | null =>
     if (!data || data.length === 0) return null;
 
     // 1. Signature Detection
-    const signatureText = data.slice(0, 5).map(row => row.join(" ").toLowerCase()).join(" ");
+    const signatureText = data.slice(0, 5)
+        .filter(row => Array.isArray(row)) // Safety Check
+        .map(row => row.join(" ").toLowerCase())
+        .join(" ");
 
     // KAHOOT DETECTION
     if (signatureText.includes("kahoot") || (signatureText.includes("question - max 120 characters") && signatureText.includes("time limit"))) {
@@ -47,6 +50,7 @@ export const detectAndParseStructure = (wb: XLSX.WorkBook): Question[] | null =>
     // UNIVERSAL CSV / EXCEL DETECTION (Our own format)
     // Check header row for "Pregunta" and "Respuesta 1 (Correcta)"
     const headerRowIndex = data.findIndex(row => 
+        Array.isArray(row) &&
         row.some(cell => clean(cell).toLowerCase() === "pregunta") && 
         row.some(cell => clean(cell).toLowerCase().includes("correcta"))
     );
@@ -58,6 +62,7 @@ export const detectAndParseStructure = (wb: XLSX.WorkBook): Question[] | null =>
     // GENERIC CSV FALLBACK
     // If we have columns like "Question", "Answer 1", "Correct"
     const genericHeaderIndex = data.findIndex(row => 
+        Array.isArray(row) &&
         row.some(c => clean(c).toLowerCase().includes("question")) &&
         (row.some(c => clean(c).toLowerCase().includes("answer")) || row.some(c => clean(c).toLowerCase().includes("option")))
     );
@@ -76,10 +81,7 @@ export const detectAndParseStructure = (wb: XLSX.WorkBook): Question[] | null =>
 
 const parseKahootStructure = (data: any[][]): Question[] => {
     const questions: Question[] = [];
-    // Kahoot header usually around row 8 (index 7), data starts at 8
-    // Cols: 1=Question, 2=Ans1, 3=Ans2, 4=Ans3, 5=Ans4, 6=Time, 7=CorrectIndex(s)
     
-    // Find the row that starts with actual data (look for the header row first)
     let startRow = -1;
     for(let i=0; i<data.length; i++) {
         if (data[i] && clean(data[i][1]).toLowerCase().includes("question - max")) {
@@ -91,7 +93,7 @@ const parseKahootStructure = (data: any[][]): Question[] => {
 
     for (let i = startRow; i < data.length; i++) {
         const row = data[i];
-        if (!row || !row[1]) continue; // Skip empty rows
+        if (!row || !Array.isArray(row) || !row[1]) continue; // Skip empty rows
 
         const qText = clean(row[1]);
         if (!qText) continue;
@@ -120,7 +122,7 @@ const parseKahootStructure = (data: any[][]): Question[] => {
         questions.push({
             id: uuid(),
             text: qText,
-            options: options.filter(o => o.text !== ""), // Remove empties later if needed, but structure usually expects 4 slots
+            options: options.filter(o => o.text !== ""), 
             correctOptionId: correctId,
             timeLimit: parseInt(clean(row[6])) || 20,
             questionType: "Multiple Choice"
@@ -131,12 +133,10 @@ const parseKahootStructure = (data: any[][]): Question[] => {
 
 const parseSocrativeStructure = (data: any[][]): Question[] => {
     const questions: Question[] = [];
-    // Header usually row index 5 ("Question Type", "Question", "Answer A"...)
-    // Data starts index 6
     let startRow = -1;
     for(let i=0; i<data.length; i++) {
-        if (data[i] && clean(data[i][1]).toLowerCase() === "3. question:") { // Socrative strict template
-             startRow = i + 2; // Header is i+1 ("2. Question Type..."), Data is i+2
+        if (data[i] && clean(data[i][1]).toLowerCase() === "3. question:") { 
+             startRow = i + 2; 
              break;
         }
     }
@@ -144,15 +144,12 @@ const parseSocrativeStructure = (data: any[][]): Question[] => {
 
     for (let i = startRow; i < data.length; i++) {
         const row = data[i];
-        if (!row || !row[1]) continue;
+        if (!row || !Array.isArray(row) || !row[1]) continue;
 
-        const type = clean(row[0]).toLowerCase(); // "multiple choice" or "open-ended"
+        const type = clean(row[0]).toLowerCase(); 
         const qText = clean(row[1]);
         
         const options: Option[] = [];
-        // Cols 2-6 (C-G) are Answers A-E
-        // Cols 7-11 (H-L) are Correct markers ('x')
-        
         let correctId = "";
 
         for (let offset = 0; offset < 5; offset++) {
@@ -160,14 +157,11 @@ const parseSocrativeStructure = (data: any[][]): Question[] => {
             if (txt) {
                 const optId = uuid();
                 options.push({ id: optId, text: txt });
-                
-                // Check if marked correct
                 const isMarked = clean(row[7 + offset]).toLowerCase() === 'x';
-                if (isMarked && !correctId) correctId = optId; // Take first correct
+                if (isMarked && !correctId) correctId = optId; 
             }
         }
         
-        // Fill empty options to maintain 2 minimum
         while(options.length < 2) options.push({ id: uuid(), text: "" });
 
         if (!correctId && options.length > 0) correctId = options[0].id;
@@ -187,16 +181,11 @@ const parseSocrativeStructure = (data: any[][]): Question[] => {
 
 const parseBlooketStructure = (data: any[][]): Question[] => {
     const questions: Question[] = [];
-    // Row 1: Headers ("Question Text", "Answer 1"...)
-    // Format is loose CSV usually.
-    // Index: 1=Text, 2=Ans1, 3=Ans2, 4=Ans3, 5=Ans4, 6=Time, 7=CorrectIndex
     
-    // Skip row 0 (headers)
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        if (!row || !row[1]) continue; // Assume col 1 is text
+        if (!row || !Array.isArray(row) || !row[1]) continue; 
 
-        // Adjust index based on Blooket CSV usually having "Question #" at col 0
         const qText = clean(row[1]); 
         const options: Option[] = [];
         const opt1 = { id: uuid(), text: clean(row[2]) };
@@ -225,15 +214,12 @@ const parseBlooketStructure = (data: any[][]): Question[] => {
 };
 
 const parseGimkitStructure = (data: any[][]): Question[] => {
-    // Gimkit Classic: Question, Correct Answer, Incorrect 1, Incorrect 2, Incorrect 3
     const questions: Question[] = [];
-    
-    // Find header
     let startRow = 1;
-    // Iterate
+
     for (let i = startRow; i < data.length; i++) {
         const row = data[i];
-        if (!row || row.length < 2) continue;
+        if (!row || !Array.isArray(row) || row.length < 2) continue;
         
         const qText = clean(row[0]);
         if (!qText) continue;
@@ -253,7 +239,7 @@ const parseGimkitStructure = (data: any[][]): Question[] => {
         questions.push({
             id: uuid(),
             text: qText,
-            options: options, // Gimkit usually shuffles, so order implies correct is first here
+            options: options, 
             correctOptionId: cOpt.id,
             timeLimit: 20,
             questionType: "Multiple Choice"
@@ -267,17 +253,7 @@ const parseUniversalStructure = (data: any[][], headerIndex: number): Question[]
     
     for (let i = headerIndex + 1; i < data.length; i++) {
         const row = data[i];
-        if (!row || !row[0]) continue;
-
-        // 0: Pregunta
-        // 1: Respuesta 1 (Correcta)
-        // 2-4: Distractores
-        // 5: Img
-        // 6: Distractor 5
-        // 7: Type
-        // 8: Time
-        // 9: Feedback
-        // 13: Audio
+        if (!row || !Array.isArray(row) || !row[0]) continue;
 
         const qText = clean(row[0]);
         const correctTxt = clean(row[1]);
@@ -291,7 +267,6 @@ const parseUniversalStructure = (data: any[][], headerIndex: number): Question[]
         if (clean(row[4])) options.push({ id: uuid(), text: clean(row[4]) });
         if (clean(row[6])) options.push({ id: uuid(), text: clean(row[6]) });
 
-        // Ensure at least 2
         while(options.length < 2) options.push({ id: uuid(), text: "" });
 
         questions.push({
@@ -310,46 +285,40 @@ const parseUniversalStructure = (data: any[][], headerIndex: number): Question[]
 };
 
 const parseGenericStructure = (data: any[][], headerIndex: number): Question[] => {
-    // Attempt to map columns based on header name
+    if (!data[headerIndex] || !Array.isArray(data[headerIndex])) return [];
+
     const headers = data[headerIndex].map(h => clean(h).toLowerCase());
     
     const colQ = headers.findIndex(h => h.includes("question") || h.includes("pregunta"));
     const colAns1 = headers.findIndex(h => h.includes("option 1") || h.includes("answer 1") || h.includes("respuesta 1"));
     const colCorrect = headers.findIndex(h => h.includes("correct") || h.includes("respuesta correcta"));
     
-    if (colQ === -1) return []; // Abort if can't find question column
+    if (colQ === -1) return []; 
 
     const questions: Question[] = [];
 
     for (let i = headerIndex + 1; i < data.length; i++) {
         const row = data[i];
-        if (!row || !row[colQ]) continue;
+        if (!row || !Array.isArray(row) || !row[colQ]) continue;
 
         const qText = clean(row[colQ]);
         const options: Option[] = [];
         
-        // Try to gather adjacent options if detected
         if (colAns1 !== -1) {
             for (let o = 0; o < 4; o++) {
                  const txt = clean(row[colAns1 + o]);
                  if (txt) options.push({ id: uuid(), text: txt });
             }
         } else {
-             // Fallback: assume cols 1-4 are options if not defined? 
-             // Too risky. If generic parsing fails, return null to let AI handle it.
              return []; 
         }
 
-        // Determine correct
         let correctId = options[0]?.id;
         if (colCorrect !== -1) {
              const correctVal = clean(row[colCorrect]);
-             // If correct val is an index (1, 2, A, B) or the text itself
-             // Try text match
              const match = options.find(o => o.text === correctVal);
              if (match) correctId = match.id;
              else {
-                 // Try index
                  const idx = parseInt(correctVal);
                  if (!isNaN(idx) && idx > 0 && idx <= options.length) correctId = options[idx-1].id;
              }
@@ -366,7 +335,6 @@ const parseGenericStructure = (data: any[][], headerIndex: number): Question[] =
     return questions;
 };
 
-// Kept for backward compat with text-only calls if needed, but mostly superseded by structure parser
 export const parseUniversalCSV = (csvContent: string): Question[] => {
     const wb = XLSX.read(csvContent, { type: 'string' });
     const res = detectAndParseStructure(wb);

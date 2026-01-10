@@ -1,9 +1,37 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question } from "../types";
 
+// Helper to safely retrieve API Key from various environment configurations
+const getAPIKey = (): string => {
+  // 1. Check process.env (Standard)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  
+  // 2. Check Vite / Modern Browsers (import.meta.env)
+  // We check both VITE_API_KEY (standard convention) and API_KEY
+  try {
+    // @ts-ignore
+    if (import.meta && import.meta.env) {
+      // @ts-ignore
+      if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
+      // @ts-ignore
+      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore errors if import.meta is not defined
+  }
+
+  return "";
+};
+
 // Helper to safely get the AI instance only when needed
 const getAI = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getAPIKey();
+  if (!apiKey) {
+    console.error("⚠️ API KEY MISSING: Please set 'API_KEY' or 'VITE_API_KEY' in your environment variables.");
+  }
+  return new GoogleGenAI({ apiKey: apiKey });
 };
 
 const questionSchema: Schema = {
@@ -84,14 +112,23 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     const text = response.text;
     if (!text) return [];
 
-    const data = JSON.parse(text);
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        console.error("JSON Parse failed", text);
+        return [];
+    }
     
-    return data.map((q: any) => ({
-      text: q.text,
-      rawOptions: q.options,
-      correctIndex: q.correctAnswerIndex,
-      feedback: q.feedback,
-      questionType: q.type
+    const items = Array.isArray(data) ? data : (data.questions || data.items || []);
+    if (!Array.isArray(items)) return [];
+
+    return items.map((q: any) => ({
+      text: q.text || "Question Text Missing",
+      rawOptions: Array.isArray(q.options) ? q.options : [],
+      correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+      feedback: q.feedback || "",
+      questionType: q.type || "Multiple Choice"
     }));
 
   } catch (error) {
@@ -104,36 +141,63 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
   try {
     const ai = getAI();
     // Allow massive limit for raw HTML dumps or big JSON
-    const truncatedText = rawText.substring(0, 400000); 
+    const truncatedText = rawText.substring(0, 500000); 
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Analyze the following content and extract quiz questions.
       
-      SOURCES & FORMATS:
-      - "GIMKIT API JSON": This is a direct JSON dump from Gimkit. Parse the 'kit.questions' array. 
-      - "KAHOOT API JSON": Direct JSON from Kahoot. Parse 'questions' array.
-      - "JINA READER MARKDOWN": Clean text. Parse naturally.
-      - "RAW HTML DUMP": Look for hidden JSON in <script> tags or visual text.
+      DATA SOURCE TYPES:
+      
+      1. **KAHOOT API JSON**: Look for "questions" array. 
+         - question: "question" field.
+         - choices: "choices" array (answer, correct: boolean).
+         
+      2. **GIMKIT API JSON**: Look for "kit" -> "questions" array.
+         - question: "text" field.
+         - answers: "answers" array (text, correct: boolean).
+         
+      3. **QUIZLET DATA JSON**: Look for "term" and "definition" pairs inside the props.
+         - Convert Term -> Question, Definition -> Answer (Multiple Choice).
+         - Generate 3 plausible distractors for each question using definitions from other terms in the set.
+         
+      4. **RAW HTML/MARKDOWN**: Parse visually.
 
       INSTRUCTIONS:
-      1. Extract Question Text, Options, and Correct Answer.
-      2. TRANSLATE to ${language} if necessary.
-      3. For Gimkit/Kahoot JSON: The data is structured. Trust it.
-         - Gimkit JSON: Look for "answers" array inside each question. "correct": true marks the winner.
-      4. Ensure exactly 4 options per question (add plausible distractors if missing).
+      - Extract all valid questions.
+      - TRANSLATE to ${language} if the source is in another language.
+      - Output exactly 4 options per question.
+      - If only "Term" and "Definition" exist (Quizlet), create Multiple Choice questions by using other definitions as distractors.
 
-      CONTENT:\n${truncatedText}`,
+      CONTENT TO ANALYZE:\n${truncatedText}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a data extraction specialist. Your goal is to convert unstructured or semi-structured data into a standardized Quiz JSON. If the input is already a JSON API response (Gimkit/Kahoot), prioritize exact data extraction over interpretation. Output language MUST be ${language}.`,
+        systemInstruction: `You are a specialized Data Extraction AI. Your capability includes parsing complex JSON structures from Kahoot, Gimkit, and Quizlet Next.js hydration data. Prioritize exact data extraction over generation. Output language: ${language}.`,
       },
     });
 
     const text = response.text;
     if (!text) return [];
-    return JSON.parse(text);
+
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        console.error("JSON Parse failed", text);
+        return [];
+    }
+
+    const items = Array.isArray(data) ? data : (data.questions || data.items || []);
+    if (!Array.isArray(items)) return [];
+
+    return items.map((q: any) => ({
+      text: q.text || "Question Text Missing",
+      rawOptions: Array.isArray(q.options) ? q.options : [],
+      correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+      feedback: q.feedback || "",
+      questionType: q.type || "Multiple Choice"
+    }));
   } catch (error) {
     console.error("Gemini Parse Error:", error);
     throw new Error("Failed to analyze content.");
@@ -158,7 +222,15 @@ export const generateQuizCategories = async (questions: string[]): Promise<strin
     const text = response.text;
     if (!text) return ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"];
     
-    const categories = JSON.parse(text);
+    let categories = [];
+    try {
+        categories = JSON.parse(text);
+    } catch (e) {
+        return ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"];
+    }
+
+    if (!Array.isArray(categories)) return ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"];
+
     while (categories.length < 6) categories.push(`Category ${categories.length + 1}`);
     return categories.slice(0, 6);
   } catch (error) {
@@ -205,14 +277,22 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
         const text = response.text;
         if (!text) throw new Error("Empty response from AI");
 
-        const adaptedData = JSON.parse(text);
+        let adaptedData: any = [];
+        try {
+            adaptedData = JSON.parse(text);
+        } catch (e) {
+             throw new Error("Invalid JSON from AI during adaptation");
+        }
+
+        const items = Array.isArray(adaptedData) ? adaptedData : (adaptedData.questions || []);
 
         // Map back to Question objects while preserving original IDs if possible
-        return adaptedData.map((aq: any, index: number) => {
-             const originalQ = questions[index]; // Correlation by index usually works with robust models, or we could ask AI to return ID.
+        return items.map((aq: any, index: number) => {
+             const originalQ = questions[index] || { id: Math.random().toString(36).substring(2,9) }; 
              
+             const rawOptions = Array.isArray(aq.options) ? aq.options : [];
              // Create options
-             const newOptions = aq.rawOptions.map((optText: string) => ({ 
+             const newOptions = rawOptions.map((optText: string) => ({ 
                  id: Math.random().toString(36).substring(2, 9), 
                  text: optText 
              }));
@@ -221,9 +301,9 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
 
              return {
                  ...originalQ, // Keep time limits, media, etc
-                 text: aq.text,
+                 text: aq.text || "Adapted Question",
                  options: newOptions,
-                 correctOptionId: newOptions[correctIndex].id,
+                 correctOptionId: newOptions[correctIndex]?.id || "",
                  questionType: aq.questionType,
                  feedback: aq.feedback
              };
