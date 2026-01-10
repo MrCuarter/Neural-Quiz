@@ -6,7 +6,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz } from './services/geminiService';
 import { parseUniversalCSV } from './services/importService';
 import * as XLSX from 'xlsx';
@@ -93,6 +93,8 @@ const App: React.FC = () => {
   const contextFileInputRef = useRef<HTMLInputElement>(null);
 
   // Conversion State
+  const [convertTab, setConvertTab] = useState<'upload' | 'paste'>('upload');
+  const [textToConvert, setTextToConvert] = useState('');
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -282,10 +284,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const performAnalysis = async (content: string, sourceName: string) => {
     setView('convert_analysis');
     setAnalysisProgress(10);
     setAnalysisStatus('INITIALIZING NEURAL LINK...');
@@ -295,29 +294,10 @@ const App: React.FC = () => {
     }, 200);
 
     try {
-      let questions: Question[] = [];
-
-      if (file.name.endsWith('.csv')) {
-        setAnalysisStatus('PARSING CSV STRUCTURE...');
-        const text = await file.text();
-        questions = parseUniversalCSV(text);
-      } else if (file.name.endsWith('.xlsx')) {
-        setAnalysisStatus('DECODING BINARY DATA...');
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer);
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const csv = XLSX.utils.sheet_to_csv(worksheet);
-        questions = parseUniversalCSV(csv);
-      } else {
         setAnalysisStatus('AI ANALYZING UNSTRUCTURED DATA...');
-        let text = "";
-        try {
-           text = await file.text();
-        } catch(e) {
-           text = "Binary data";
-        }
-        const generatedQs = await parseRawTextToQuiz(text);
-        questions = generatedQs.map(gq => {
+        // Fallback to AI Analysis
+        const generatedQs = await parseRawTextToQuiz(content);
+        const questions = generatedQs.map(gq => {
           const qId = uuid();
           const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
           const correctIdx = (gq.correctIndex >= 0 && gq.correctIndex < options.length) ? gq.correctIndex : 0;
@@ -326,30 +306,94 @@ const App: React.FC = () => {
             text: gq.text,
             options: options,
             correctOptionId: options[correctIdx].id,
-            timeLimit: 30
+            timeLimit: 30,
+            feedback: gq.feedback,
+            questionType: gq.questionType
           };
         });
+
+        clearInterval(progressInterval);
+        setAnalysisProgress(100);
+        setAnalysisStatus(t.completed);
+        
+        setQuiz({
+            title: sourceName,
+            description: 'Converted Quiz',
+            questions: questions
+        });
+
+        setTimeout(() => {
+            setView('create_manual');
+        }, 800);
+
+    } catch (error: any) {
+        clearInterval(progressInterval);
+        alert("Analysis Failed: " + error.message);
+        setView('convert_upload');
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset view slightly to show processing start
+    setAnalysisProgress(0);
+    
+    try {
+      let contentToAnalyze = "";
+
+      if (file.name.endsWith('.xlsx')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        // Convert to CSV string for text analysis
+        contentToAnalyze = XLSX.utils.sheet_to_csv(worksheet);
+        
+        // Try strict parsing first (if it's our format)
+        try {
+            const strictQuestions = parseUniversalCSV(contentToAnalyze);
+            // If successful, bypass AI
+            setQuiz({
+                title: file.name.split('.')[0],
+                description: 'Imported Quiz',
+                questions: strictQuestions
+            });
+            setView('create_manual');
+            return;
+        } catch (e) {
+            // Strict parsing failed, fall through to AI analysis of the CSV text
+            console.log("Strict parsing failed, attempting AI analysis on XLSX content");
+        }
+
+      } else {
+         // Text or CSV
+         contentToAnalyze = await file.text();
+         
+         if (file.name.endsWith('.csv')) {
+            try {
+                const strictQuestions = parseUniversalCSV(contentToAnalyze);
+                setQuiz({ title: file.name, description: 'Imported', questions: strictQuestions });
+                setView('create_manual');
+                return;
+            } catch (e) { console.log("Strict CSV failed, falling back to AI"); }
+         }
       }
 
-      clearInterval(progressInterval);
-      setAnalysisProgress(100);
-      setAnalysisStatus(t.completed);
-      
-      setQuiz({
-        title: file.name.split('.')[0],
-        description: 'Converted Quiz',
-        questions: questions
-      });
-
-      setTimeout(() => {
-        setView('create_manual');
-      }, 800);
+      // Execute AI Analysis on the extracted text
+      await performAnalysis(contentToAnalyze, file.name.split('.')[0]);
 
     } catch (e: any) {
-      clearInterval(progressInterval);
-      alert("Analysis Failed: " + e.message);
-      setView('home');
+      alert("File Read Error: " + e.message);
     }
+  };
+
+  const handlePasteAnalysis = async () => {
+      if (!textToConvert.trim()) {
+          alert("Please paste some text first.");
+          return;
+      }
+      await performAnalysis(textToConvert, "Pasted Content");
   };
 
   const resetHome = () => {
@@ -628,32 +672,73 @@ const App: React.FC = () => {
         <ArrowLeft className="w-4 h-4" /> {t.back_hub}
       </CyberButton>
 
-      <div className="text-center space-y-2">
+      <div className="text-center space-y-2 mb-6">
         <h2 className="text-3xl font-cyber text-pink-400">{t.upload_source}</h2>
-        <p className="text-gray-400 font-mono">Supported: CSV, XLSX, Text (AI Analysis)</p>
+        <p className="text-gray-400 font-mono">Extract questions from existing files or text.</p>
       </div>
 
       <CyberCard className="border-pink-500/30">
-        <div className="border-2 border-dashed border-gray-700 rounded-lg p-12 text-center hover:border-pink-500 hover:bg-pink-950/5 transition-all cursor-pointer"
-             onClick={() => fileInputRef.current?.click()}>
-           <Upload className="w-16 h-16 text-pink-500 mx-auto mb-4" />
-           <h3 className="text-xl font-bold text-white mb-2">{t.drop_file}</h3>
-           <p className="text-sm text-gray-500 font-mono">Automated Neural Parsing Active</p>
-           <input 
-             type="file" 
-             ref={fileInputRef}
-             className="hidden"
-             accept=".csv,.xlsx,.txt"
-             onChange={handleFileUpload}
-           />
+        
+        {/* Tabs */}
+        <div className="flex border-b border-gray-700 mb-6">
+            <button 
+                onClick={() => setConvertTab('upload')}
+                className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors ${convertTab === 'upload' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+                <FileUp className="w-4 h-4" /> UPLOAD FILE
+            </button>
+            <button 
+                onClick={() => setConvertTab('paste')}
+                className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors ${convertTab === 'paste' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+                <ClipboardPaste className="w-4 h-4" /> PASTE TEXT (PDF)
+            </button>
         </div>
+
+        {convertTab === 'upload' ? (
+            <div className="space-y-6">
+                <div className="border-2 border-dashed border-gray-700 rounded-lg p-12 text-center hover:border-pink-500 hover:bg-pink-950/5 transition-all cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="w-16 h-16 text-pink-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">{t.drop_file}</h3>
+                    <p className="text-sm text-gray-500 font-mono">Supports: .CSV, .XLSX, .TXT</p>
+                    <p className="text-xs text-gray-600 font-mono mt-2">AI Fallback Enabled for Unstructured Excel</p>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept=".csv,.xlsx,.txt"
+                        onChange={handleFileUpload}
+                    />
+                </div>
+            </div>
+        ) : (
+            <div className="space-y-4">
+                <div className="bg-pink-950/10 border border-pink-900/50 p-3 rounded flex items-start gap-3">
+                    <Info className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-pink-200 font-mono">
+                        For PDF files: Open your PDF, select all text (Ctrl+A), copy it (Ctrl+C), and paste it below. 
+                        The AI will extract the questions automatically.
+                    </p>
+                </div>
+                <CyberTextArea 
+                    placeholder="Paste your raw text, PDF content, or webpage content here..."
+                    className="h-64 font-mono text-sm"
+                    value={textToConvert}
+                    onChange={(e) => setTextToConvert(e.target.value)}
+                />
+                <CyberButton 
+                    variant="neural" 
+                    className="w-full"
+                    onClick={handlePasteAnalysis}
+                    disabled={!textToConvert.trim()}
+                >
+                    <Bot className="w-4 h-4" /> ANALYZE TEXT WITH AI
+                </CyberButton>
+            </div>
+        )}
+
       </CyberCard>
-      
-      <div className="text-center">
-        <p className="text-xs font-mono text-gray-600">
-          NOTE: FOR PDF FILES, PLEASE COPY THE TEXT AND USE THE "CREATE QUIZ > AI" OPTION FOR BEST RESULTS IF DIRECT PARSING FAILS.
-        </p>
-      </div>
     </div>
   );
 

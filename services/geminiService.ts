@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question } from "../types";
 
@@ -101,11 +100,11 @@ export const parseRawTextToQuiz = async (rawText: string): Promise<(Omit<Questio
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analyze the following text and extract quiz questions from it. It might be a raw copy-paste from a PDF or website. Return them in the specified JSON format.\n\nTEXT:\n${rawText.substring(0, 30000)}`,
+      contents: `Analyze the following text and extract quiz questions from it. The text might be unstructured, a copy-paste from a PDF, or raw CSV/Excel data. \n\nTEXT:\n${rawText.substring(0, 30000)}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: "You are a data extraction specialist. Identify questions, options, and correct answers from unstructured text. Ensure Spanish questions use '¿' and not other symbols.",
+        systemInstruction: "You are a data extraction specialist. Identify questions, options, and correct answers from unstructured text or structured tables. If the text seems to be a list of rows/columns, infer which column is the question and which are answers. Ensure Spanish questions use '¿' and not other symbols. If correct answer is not explicitly marked, infer the most logical one.",
       },
     });
 
