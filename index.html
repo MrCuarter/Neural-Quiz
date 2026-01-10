@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neural Quiz Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+      body {
+        background-color: #050505;
+        color: #e0e0e0;
+        font-family: 'Rajdhani', sans-serif;
+        overflow-x: hidden;
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      .font-cyber {
+        font-family: 'Orbitron', sans-serif;
+      }
+      .font-mono-cyber {
+        font-family: 'Share Tech Mono', monospace;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #111;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #0ea5e9;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #0284c7;
+      }
+      
+      /* CRT Scanline Effect */
+      .scanlines {
+        background: linear-gradient(
+          to bottom,
+          rgba(255,255,255,0),
+          rgba(255,255,255,0) 50%,
+          rgba(0,0,0,0.1) 50%,
+          rgba(0,0,0,0.1)
+        );
+        background-size: 100% 4px;
+        position: fixed;
+        pointer-events: none;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 50;
+        opacity: 0.6;
+      }
+
+      /* Neural Background Animation */
+      .neural-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: 
+          radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
+          linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(10,10,20,1) 100%);
+        z-index: -1;
+      }
+      
+      .grid-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: 
+          linear-gradient(rgba(6, 182, 212, 0.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(6, 182, 212, 0.1) 1px, transparent 1px);
+        background-size: 50px 50px;
+        perspective: 500px;
+        transform: scale(1.1);
+        z-index: -1;
+        opacity: 0.3;
+      }
+
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 10px rgba(6, 182, 212, 0.2); }
+        50% { box-shadow: 0 0 25px rgba(6, 182, 212, 0.5); }
+      }
+      
+      .animate-pulse-glow {
+        animation: pulse-glow 3s infinite;
+      }
+
+      /* --- CLASSROOM MODE (High Contrast) --- */
+      body.classroom-mode {
+        background-color: #f3f4f6; /* Gray-100 */
+        color: #111827; /* Gray-900 */
+      }
+      body.classroom-mode .neural-bg,
+      body.classroom-mode .grid-overlay,
+      body.classroom-mode .scanlines {
+        display: none;
+      }
+      body.classroom-mode ::-webkit-scrollbar-track {
+        background: #e5e7eb;
+      }
+      body.classroom-mode ::-webkit-scrollbar-thumb {
+        background: #6b7280;
+      }
+      
+      /* Component Overrides for Classroom Mode */
+      body.classroom-mode .cyber-card {
+        background-color: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        color: #111827 !important;
+      }
+      body.classroom-mode .cyber-input, 
+      body.classroom-mode .cyber-select,
+      body.classroom-mode .cyber-textarea {
+        background-color: #ffffff !important;
+        border: 1px solid #9ca3af !important;
+        color: #111827 !important;
+      }
+      body.classroom-mode .cyber-input::placeholder,
+      body.classroom-mode .cyber-textarea::placeholder {
+        color: #6b7280 !important;
+      }
+      body.classroom-mode .text-cyan-400,
+      body.classroom-mode .text-pink-400,
+      body.classroom-mode .text-purple-400 {
+        color: #1f2937 !important; /* Dark Gray for headings */
+      }
+      body.classroom-mode .border-cyan-500,
+      body.classroom-mode .border-pink-500 {
+        border-color: #374151 !important;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "xlsx": "https://esm.sh/xlsx@0.18.5"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <div class="neural-bg"></div>
+    <div class="grid-overlay"></div>
+    <div class="scanlines"></div>
+  </body>
+</html>
