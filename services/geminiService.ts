@@ -1,7 +1,10 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to safely get the AI instance only when needed
+const getAI = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 const questionSchema: Schema = {
   type: Type.OBJECT,
@@ -37,6 +40,7 @@ interface GenParams {
 
 export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
   try {
+    const ai = getAI();
     const { topic, count, types, age, context, urls, language = 'Spanish' } = params;
 
     let prompt = `Generate ${count} quiz questions about "${topic}".`;
@@ -92,12 +96,13 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
 
   } catch (error) {
     console.error("Gemini Generation Error:", error);
-    throw new Error("Failed to generate quiz content.");
+    throw new Error("Failed to generate quiz content. Check API Key configuration.");
   }
 };
 
 export const parseRawTextToQuiz = async (rawText: string): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Analyze the following text and extract quiz questions from it. The text might be unstructured, a copy-paste from a PDF, or raw CSV/Excel data. \n\nTEXT:\n${rawText.substring(0, 30000)}`,
@@ -119,6 +124,7 @@ export const parseRawTextToQuiz = async (rawText: string): Promise<(Omit<Questio
 
 export const generateQuizCategories = async (questions: string[]): Promise<string[]> => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Based on the following quiz questions, generate 6 short, catchy, and distinct category names (max 2-3 words each) suitable for a Jeopardy-style game board. Return ONLY a JSON array of 6 strings.\n\nQuestions sample: ${questions.slice(0, 10).join(' | ')}`,
@@ -146,6 +152,7 @@ export const generateQuizCategories = async (questions: string[]): Promise<strin
 // Adaptation Function
 export const adaptQuestionsToPlatform = async (questions: Question[], platformName: string, allowedTypes: string[]): Promise<Question[]> => {
     try {
+        const ai = getAI();
         const questionsJson = questions.map(q => ({
             id: q.id,
             text: q.text,
