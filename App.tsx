@@ -6,9 +6,12 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info, FileType } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz } from './services/geminiService';
-import { parseUniversalCSV } from './services/importService';
+import { detectAndParseStructure } from './services/importService';
+import { extractTextFromPDF } from './services/pdfService';
+import { fetchUrlContent } from './services/urlService';
+import { getRandomMessage, getDetectionMessage } from './services/messageService';
 import * as XLSX from 'xlsx';
 
 // Types
@@ -93,12 +96,14 @@ const App: React.FC = () => {
   const contextFileInputRef = useRef<HTMLInputElement>(null);
 
   // Conversion State
-  const [convertTab, setConvertTab] = useState<'upload' | 'paste'>('upload');
+  const [convertTab, setConvertTab] = useState<'upload' | 'paste' | 'url'>('upload');
   const [textToConvert, setTextToConvert] = useState('');
+  const [urlToConvert, setUrlToConvert] = useState('');
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const exportSectionRef = useRef<HTMLDivElement>(null);
+  const progressIntervalRef = useRef<number | null>(null);
 
   // Helper for ID generation
   const uuid = () => Math.random().toString(36).substring(2, 9);
@@ -190,18 +195,23 @@ const App: React.FC = () => {
 
       for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          // Check for text-readable types roughly
-          if (file.type.match(/text.*/) || file.name.endsWith('.md') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
-             try {
+          
+          try {
+             if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+                 const pdfText = await extractTextFromPDF(file);
+                 combinedText += `\n\n--- DOCUMENT START: ${file.name} (PDF) ---\n${pdfText}\n--- DOCUMENT END ---\n`;
+                 count++;
+             }
+             else if (file.type.match(/text.*/) || file.name.match(/\.(md|json|csv|txt)$/)) {
                 const text = await file.text();
                 combinedText += `\n\n--- DOCUMENT START: ${file.name} ---\n${text}\n--- DOCUMENT END ---\n`;
                 count++;
-             } catch (e) {
-                console.error("Error reading file", file.name);
+             } else {
+                 alert(`Skipped ${file.name}: Binary files (Docx, Images) need manual copy-paste.`);
              }
-          } else {
-              // Warning for binaries (like PDF if we don't have a parser)
-              alert(`Skipped ${file.name}: Binary files (PDF, Docx) need to be converted to text or copy-pasted manually.`);
+          } catch (e: any) {
+             console.error("Error reading file", file.name, e);
+             alert(`Error reading ${file.name}: ${e.message}`);
           }
       }
 
@@ -284,51 +294,108 @@ const App: React.FC = () => {
     }
   };
 
-  const performAnalysis = async (content: string, sourceName: string) => {
-    setView('convert_analysis');
-    setAnalysisProgress(10);
-    setAnalysisStatus('INITIALIZING NEURAL LINK...');
+  // Centralized cleanup for timers
+  const clearAnalysisInterval = () => {
+      if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+      }
+  };
 
-    const progressInterval = setInterval(() => {
-       setAnalysisProgress(prev => Math.min(prev + 5, 90));
-    }, 200);
+  const performAnalysis = async (content: string, sourceName: string, isAlreadyStructured: boolean = false, preParsedQuestions: Question[] = []) => {
+    setView('convert_analysis');
+    setAnalysisProgress(0);
+    
+    // 1. Initial Start Message
+    setAnalysisStatus(getRandomMessage('start'));
+
+    // Setup the Artificial Delay Animation (Target: ~8 seconds)
+    const totalDuration = 8000; 
+    const stepInterval = 200;
+    const totalSteps = totalDuration / stepInterval;
+    let currentStep = 0;
+
+    clearAnalysisInterval();
+    
+    // We use a promise to handle the delay while we might already be processing in background
+    const processingPromise = (async () => {
+        try {
+            if (isAlreadyStructured && preParsedQuestions.length > 0) {
+                 return preParsedQuestions;
+            } else {
+                const generatedQs = await parseRawTextToQuiz(content);
+                return generatedQs.map(gq => {
+                  const qId = uuid();
+                  const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
+                  const correctIdx = (gq.correctIndex >= 0 && gq.correctIndex < options.length) ? gq.correctIndex : 0;
+                  return {
+                    id: qId,
+                    text: gq.text,
+                    options: options,
+                    correctOptionId: options[correctIdx].id,
+                    timeLimit: 30,
+                    feedback: gq.feedback,
+                    questionType: gq.questionType
+                  };
+                });
+            }
+        } catch (e) {
+            throw e;
+        }
+    })();
+
+    // Animation Loop
+    progressIntervalRef.current = window.setInterval(() => {
+       currentStep++;
+       const progress = Math.min((currentStep / totalSteps) * 100, 95); // Cap at 95 until done
+       setAnalysisProgress(progress);
+
+       // Message Logic based on time
+       const timePassed = currentStep * stepInterval;
+       
+       if (timePassed === 1000) {
+           setAnalysisStatus(getDetectionMessage(sourceName, content));
+       } else if (timePassed === 3000) {
+           setAnalysisStatus(getRandomMessage('detect_generic'));
+       } else if (timePassed === 5000) {
+           setAnalysisStatus(getRandomMessage('progress'));
+       }
+
+    }, stepInterval);
 
     try {
-        setAnalysisStatus('AI ANALYZING UNSTRUCTURED DATA...');
-        // Fallback to AI Analysis
-        const generatedQs = await parseRawTextToQuiz(content);
-        const questions = generatedQs.map(gq => {
-          const qId = uuid();
-          const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
-          const correctIdx = (gq.correctIndex >= 0 && gq.correctIndex < options.length) ? gq.correctIndex : 0;
-          return {
-            id: qId,
-            text: gq.text,
-            options: options,
-            correctOptionId: options[correctIdx].id,
-            timeLimit: 30,
-            feedback: gq.feedback,
-            questionType: gq.questionType
-          };
-        });
+        const questions = await processingPromise;
 
-        clearInterval(progressInterval);
+        if (questions.length === 0) {
+            throw new Error("No questions extracted.");
+        }
+
+        // Wait for the animation to finish at least 8 seconds
+        const remainingTime = totalDuration - (currentStep * stepInterval);
+        if (remainingTime > 0) {
+            await new Promise(r => setTimeout(r, remainingTime));
+        }
+
+        // Final Success State
+        clearAnalysisInterval();
         setAnalysisProgress(100);
-        setAnalysisStatus(t.completed);
+        setAnalysisStatus(getRandomMessage('success'));
         
         setQuiz({
             title: sourceName,
-            description: 'Converted Quiz',
+            description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI',
             questions: questions
         });
 
         setTimeout(() => {
             setView('create_manual');
-        }, 800);
+        }, 1500); // Show 100% for 1.5s
 
     } catch (error: any) {
-        clearInterval(progressInterval);
-        alert("Analysis Failed: " + error.message);
+        clearAnalysisInterval();
+        setAnalysisProgress(0);
+        console.error(error);
+        alert("Analysis Failed: " + error.message + ". Try pasting plain text instead.");
         setView('convert_upload');
     }
   };
@@ -337,54 +404,43 @@ const App: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Reset view slightly to show processing start
+    // Reset view
     setAnalysisProgress(0);
     
     try {
-      let contentToAnalyze = "";
-
-      if (file.name.endsWith('.xlsx')) {
+      if (file.name.match(/\.(xlsx|xls|csv)$/i)) {
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer);
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        // Convert to CSV string for text analysis
-        contentToAnalyze = XLSX.utils.sheet_to_csv(worksheet);
         
-        // Try strict parsing first (if it's our format)
-        try {
-            const strictQuestions = parseUniversalCSV(contentToAnalyze);
-            // If successful, bypass AI
-            setQuiz({
-                title: file.name.split('.')[0],
-                description: 'Imported Quiz',
-                questions: strictQuestions
-            });
-            setView('create_manual');
-            return;
-        } catch (e) {
-            // Strict parsing failed, fall through to AI analysis of the CSV text
-            console.log("Strict parsing failed, attempting AI analysis on XLSX content");
+        // 1. Try Deterministic Parsing First
+        const strictQuestions = detectAndParseStructure(workbook);
+
+        if (strictQuestions && strictQuestions.length > 0) {
+            await performAnalysis("", file.name.split('.')[0], true, strictQuestions);
+        } else {
+             // 2. Fallback to AI
+             let contentToAnalyze = "";
+             workbook.SheetNames.forEach(name => {
+                 contentToAnalyze += `\n--- SHEET: ${name} ---\n`;
+                 contentToAnalyze += XLSX.utils.sheet_to_csv(workbook.Sheets[name]);
+             });
+             await performAnalysis(contentToAnalyze, file.name.split('.')[0]);
         }
-
+      } else if (file.name.toLowerCase().endsWith('.pdf')) {
+         const pdfText = await extractTextFromPDF(file);
+         await performAnalysis(pdfText, file.name);
       } else {
-         // Text or CSV
-         contentToAnalyze = await file.text();
-         
-         if (file.name.endsWith('.csv')) {
-            try {
-                const strictQuestions = parseUniversalCSV(contentToAnalyze);
-                setQuiz({ title: file.name, description: 'Imported', questions: strictQuestions });
-                setView('create_manual');
-                return;
-            } catch (e) { console.log("Strict CSV failed, falling back to AI"); }
-         }
+         // Text file
+         const content = await file.text();
+         await performAnalysis(content, file.name.split('.')[0]);
       }
-
-      // Execute AI Analysis on the extracted text
-      await performAnalysis(contentToAnalyze, file.name.split('.')[0]);
 
     } catch (e: any) {
       alert("File Read Error: " + e.message);
+      clearAnalysisInterval();
+    } finally {
+        // Reset input
+        if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -393,7 +449,33 @@ const App: React.FC = () => {
           alert("Please paste some text first.");
           return;
       }
-      await performAnalysis(textToConvert, "Pasted Content");
+      // Simple heuristic cleanup for PDF copy-paste
+      const cleaned = textToConvert
+          .replace(/Page \d+ of \d+/g, '') 
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, " "); 
+      
+      await performAnalysis(cleaned, "Pasted Content");
+  };
+
+  const handleUrlAnalysis = async () => {
+    if (!urlToConvert.trim()) {
+        alert("Please enter a valid URL.");
+        return;
+    }
+    
+    // Initial status for URL fetching
+    setView('convert_analysis');
+    setAnalysisStatus("Accessing Neural Network to scrape URL...");
+    setAnalysisProgress(5);
+
+    try {
+        const content = await fetchUrlContent(urlToConvert);
+        // Once we have content, handover to the main analysis loop
+        await performAnalysis(content, urlToConvert);
+    } catch (e: any) {
+        setView('convert_upload');
+        alert(e.message);
+    }
   };
 
   const resetHome = () => {
@@ -627,7 +709,7 @@ const App: React.FC = () => {
                  <UploadCloud className={`w-10 h-10 ${dragActive ? 'text-pink-400' : 'text-gray-500'}`} />
                  <div>
                     <p className="text-sm text-gray-300 font-bold">DRAG & DROP DOCUMENTS HERE</p>
-                    <p className="text-xs text-gray-500 font-mono">(.txt, .md, .csv, .json)</p>
+                    <p className="text-xs text-gray-500 font-mono">(.txt, .md, .csv, .json, .pdf)</p>
                  </div>
              </div>
 
@@ -674,24 +756,30 @@ const App: React.FC = () => {
 
       <div className="text-center space-y-2 mb-6">
         <h2 className="text-3xl font-cyber text-pink-400">{t.upload_source}</h2>
-        <p className="text-gray-400 font-mono">Extract questions from existing files or text.</p>
+        <p className="text-gray-400 font-mono">Extract questions from existing files, text, or URLs.</p>
       </div>
 
       <CyberCard className="border-pink-500/30">
         
         {/* Tabs */}
-        <div className="flex border-b border-gray-700 mb-6">
+        <div className="flex border-b border-gray-700 mb-6 overflow-x-auto">
             <button 
                 onClick={() => setConvertTab('upload')}
-                className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors ${convertTab === 'upload' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
+                className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors min-w-[120px] ${convertTab === 'upload' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
             >
-                <FileUp className="w-4 h-4" /> UPLOAD FILE
+                <FileUp className="w-4 h-4" /> UPLOAD
             </button>
             <button 
                 onClick={() => setConvertTab('paste')}
-                className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors ${convertTab === 'paste' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
+                className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors min-w-[120px] ${convertTab === 'paste' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
             >
-                <ClipboardPaste className="w-4 h-4" /> PASTE TEXT (PDF)
+                <ClipboardPaste className="w-4 h-4" /> PASTE
+            </button>
+            <button 
+                onClick={() => setConvertTab('url')}
+                className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors min-w-[120px] ${convertTab === 'url' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+                <LinkIcon className="w-4 h-4" /> URL
             </button>
         </div>
 
@@ -701,18 +789,18 @@ const App: React.FC = () => {
                     onClick={() => fileInputRef.current?.click()}>
                     <Upload className="w-16 h-16 text-pink-500 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-white mb-2">{t.drop_file}</h3>
-                    <p className="text-sm text-gray-500 font-mono">Supports: .CSV, .XLSX, .TXT</p>
-                    <p className="text-xs text-gray-600 font-mono mt-2">AI Fallback Enabled for Unstructured Excel</p>
+                    <p className="text-sm text-gray-500 font-mono">Supports: .CSV, .XLSX, .TXT, .PDF</p>
+                    <p className="text-xs text-gray-600 font-mono mt-2">Auto-detection for Kahoot, Socrative, Blooket templates.</p>
                     <input 
                         type="file" 
                         ref={fileInputRef}
                         className="hidden"
-                        accept=".csv,.xlsx,.txt"
+                        accept=".csv,.xlsx,.xls,.txt,.pdf"
                         onChange={handleFileUpload}
                     />
                 </div>
             </div>
-        ) : (
+        ) : convertTab === 'paste' ? (
             <div className="space-y-4">
                 <div className="bg-pink-950/10 border border-pink-900/50 p-3 rounded flex items-start gap-3">
                     <Info className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
@@ -736,6 +824,34 @@ const App: React.FC = () => {
                     <Bot className="w-4 h-4" /> ANALYZE TEXT WITH AI
                 </CyberButton>
             </div>
+        ) : (
+            <div className="space-y-4">
+                <div className="bg-pink-950/10 border border-pink-900/50 p-3 rounded flex items-start gap-3">
+                    <Globe className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-xs text-pink-200 font-mono">
+                            Paste a public URL from Kahoot, Wayground, Gimkit, etc. 
+                            We will attempt to fetch the page content for the AI to analyze.
+                        </p>
+                        <p className="text-[10px] text-pink-400 font-mono">
+                            Note: Some sites block direct access. If this fails, please copy the text from the site manually and use the Paste tab.
+                        </p>
+                    </div>
+                </div>
+                <CyberInput 
+                    placeholder="https://create.kahoot.it/details/..."
+                    value={urlToConvert}
+                    onChange={(e) => setUrlToConvert(e.target.value)}
+                />
+                <CyberButton 
+                    variant="neural" 
+                    className="w-full"
+                    onClick={handleUrlAnalysis}
+                    disabled={!urlToConvert.trim()}
+                >
+                    <Bot className="w-4 h-4" /> SCAN URL WITH AI
+                </CyberButton>
+            </div>
         )}
 
       </CyberCard>
@@ -744,10 +860,12 @@ const App: React.FC = () => {
 
   const renderAnalysis = () => (
     <div className="flex flex-col items-center justify-center min-h-[50vh] max-w-xl mx-auto gap-8">
-       <Bot className="w-24 h-24 text-cyan-400 animate-pulse" />
+       <Bot className="w-24 h-24 text-cyan-400 animate-bounce" />
        <div className="w-full space-y-4">
-         <h2 className="text-2xl font-cyber text-center text-white animate-pulse">{analysisStatus}</h2>
-         <CyberProgressBar progress={analysisProgress} text={t.processing} />
+         <h2 className="text-2xl font-cyber text-center text-white animate-pulse min-h-[64px] flex items-center justify-center">
+            {analysisStatus}
+         </h2>
+         <CyberProgressBar progress={analysisProgress} text="NEURAL PROCESSING" />
        </div>
     </div>
   );
