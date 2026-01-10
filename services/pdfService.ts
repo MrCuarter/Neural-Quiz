@@ -1,14 +1,10 @@
 
-// We use the global pdfjsLib injected via index.html script tag (from esm.sh)
-declare const pdfjsLib: any;
+// Import directly using the module name defined in importmap
+import * as pdfjsLib from 'pdfjs-dist';
 
 export const extractTextFromPDF = async (file: File): Promise<string> => {
     try {
-        if (typeof pdfjsLib === 'undefined') {
-            throw new Error("PDF Library not loaded. Please check internet connection.");
-        }
-
-        // Set worker (using the same version as in index.html)
+        // Set worker (using the same version as in index.html importmap)
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
         const arrayBuffer = await file.arrayBuffer();

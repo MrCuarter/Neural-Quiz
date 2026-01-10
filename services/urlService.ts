@@ -15,12 +15,12 @@ export const fetchUrlContent = async (url: string): Promise<string> => {
         
         if (!data.contents) throw new Error("No content retrieved");
         
-        // Basic cleanup of HTML to text/relevant parts helps Gemini
-        // We return the raw HTML (or a large chunk of it) and let Gemini parse it
-        // But we truncate extremely large files to avoid token limits
-        return data.contents.substring(0, 100000); 
+        // We return a larger chunk of the HTML because many modern sites (Gimkit, Kahoot)
+        // embed their data in large JSON objects inside <script> tags in the <head> or <body>.
+        // 250k characters should cover most inline data scripts.
+        return data.contents.substring(0, 250000); 
     } catch (error) {
         console.error("URL Fetch Error:", error);
-        throw new Error("Could not access URL. The site might be blocking access. Try copying the text manually.");
+        throw new Error("No he podido acceder a la URL. Puede que tenga protección anti-bots. Por favor, COPIA el texto de la web y usa la pestaña PEGAR.");
     }
 };

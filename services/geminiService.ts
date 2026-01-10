@@ -9,7 +9,7 @@ const getAI = () => {
 const questionSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    text: { type: Type.STRING, description: "The question text. If Spanish, MUST start with '¿' and end with '?'." },
+    text: { type: Type.STRING, description: "The question text. MUST be in the target language." },
     options: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
@@ -62,7 +62,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
 
     prompt += `\n\nIMPORTANT RULES:
     1. Ensure each question has exactly 4 options. 
-    2. If True/False, use 'True', 'False', '', ''.
+    2. If True/False, use 'Verdadero', 'Falso', '', '' (translated to target lang).
     3. If 'Fill in the Blank' or 'Fill in the gaps':
        - The 'text' must contain the gap represented by 5 underscores: '_____'.
        - The 'options' should contain the correct word/phrase and 3 distractors.
@@ -100,16 +100,32 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
   }
 };
 
-export const parseRawTextToQuiz = async (rawText: string): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
+export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish'): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
   try {
     const ai = getAI();
+    // We increase the context limit implicitly by just passing the string. 
+    // Gemini 1.5/3 Flash has a huge context window, so 30k chars is very safe. We can try 100k.
+    const truncatedText = rawText.substring(0, 150000); 
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analyze the following text and extract quiz questions from it. The text might be unstructured, a copy-paste from a PDF, or raw CSV/Excel data. \n\nTEXT:\n${rawText.substring(0, 30000)}`,
+      contents: `Analyze the following text/HTML/content and extract quiz questions from it. 
+      
+      The content might be:
+      1. A raw copy-paste from a PDF.
+      2. Raw HTML code from a website (look for JSON data inside <script> tags or text inside standard HTML tags).
+      3. Structured CSV/Excel data.
+
+      IMPORTANT:
+      - Translate the questions and answers to ${language} if they are in another language.
+      - If you find JSON data (like in Next.js props or window.__PRELOADED_STATE__), parse that data to find the questions.
+      - Ignore navigation menus, footers, and UI elements. Focus on the Quiz content.
+
+      CONTENT TO ANALYZE:\n${truncatedText}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: "You are a data extraction specialist. Identify questions, options, and correct answers from unstructured text or structured tables. If the text seems to be a list of rows/columns, infer which column is the question and which are answers. Ensure Spanish questions use '¿' and not other symbols. If correct answer is not explicitly marked, infer the most logical one.",
+        systemInstruction: `You are a data extraction specialist and translator. Identify questions, options, and correct answers. Output language MUST be ${language}. If the source is English, TRANSLATE it to ${language}. Ensure Spanish questions use '¿'.`,
       },
     });
 
@@ -127,7 +143,7 @@ export const generateQuizCategories = async (questions: string[]): Promise<strin
     const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Based on the following quiz questions, generate 6 short, catchy, and distinct category names (max 2-3 words each) suitable for a Jeopardy-style game board. Return ONLY a JSON array of 6 strings.\n\nQuestions sample: ${questions.slice(0, 10).join(' | ')}`,
+      contents: `Based on the following quiz questions, generate 6 short, catchy, and distinct category names (max 2-3 words each) suitable for a Jeopardy-style game board. Return ONLY a JSON array of 6 strings. Language: Spanish.\n\nQuestions sample: ${questions.slice(0, 10).join(' | ')}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -168,7 +184,7 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
         Please rewrite or reformat the following questions to strictly fit into one of the allowed types.
         - If a question is already compatible, keep it essentially the same but ensure the type label is correct.
         - If a question is "Open Ended" or "Draw" and the platform only supports "Multiple Choice", convert it into a Multiple Choice question with plausible distractors.
-        - Maintain the original language (Spanish/English/etc).
+        - Maintain the original language.
         
         QUESTIONS TO ADAPT:
         ${JSON.stringify(questionsJson, null, 2)}

@@ -65,6 +65,13 @@ const messages = {
         "Conversión exitosa al 100%.",
         "¡Listo para el despegue!",
         "¡Victoria! La IA ha triunfado."
+    ],
+    error: [
+        "Vaya, la página web tiene un campo de fuerza anti-IA...",
+        "Houston, tenemos un problema con esa URL...",
+        "Mis sensores no pueden leer esa web. Está blindada.",
+        "¡Error! La web se resiste a ser leída.",
+        "Ups, parece que esa web no quiere compartir sus secretos hoy."
     ]
 };
 
@@ -86,6 +93,7 @@ export const getDetectionMessage = (filename: string, content: string): string =
     if (content.includes('kahoot.it')) return getRandomMessage('detect_kahoot');
     if (content.includes('blooket.com')) return getRandomMessage('detect_blooket');
     if (content.includes('genial.ly')) return getRandomMessage('detect_genially');
+    if (content.includes('gimkit.com')) return getRandomMessage('detect_generic'); // Gimkit logic
 
     return getRandomMessage('detect_generic');
 };

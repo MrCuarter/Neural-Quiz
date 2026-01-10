@@ -250,6 +250,7 @@ const App: React.FC = () => {
       const langMap: Record<string, string> = {
           'es': 'Spanish', 'en': 'English', 'fr': 'French', 'it': 'Italian', 'de': 'German'
       };
+      const selectedLang = langMap[language] || 'Spanish';
 
       // Split URLs by comma or newline
       const urlList = genParams.urls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
@@ -261,7 +262,7 @@ const App: React.FC = () => {
         age: genParams.age,
         context: genParams.context,
         urls: urlList,
-        language: langMap[language] || 'Spanish'
+        language: selectedLang
       });
       
       const newQuestions: Question[] = generatedQs.map(gq => {
@@ -323,7 +324,12 @@ const App: React.FC = () => {
             if (isAlreadyStructured && preParsedQuestions.length > 0) {
                  return preParsedQuestions;
             } else {
-                const generatedQs = await parseRawTextToQuiz(content);
+                const langMap: Record<string, string> = {
+                    'es': 'Spanish', 'en': 'English', 'fr': 'French', 'it': 'Italian', 'de': 'German'
+                };
+                const selectedLang = langMap[language] || 'Spanish';
+                
+                const generatedQs = await parseRawTextToQuiz(content, selectedLang);
                 return generatedQs.map(gq => {
                   const qId = uuid();
                   const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
@@ -392,11 +398,17 @@ const App: React.FC = () => {
         }, 1500); // Show 100% for 1.5s
 
     } catch (error: any) {
+        // Handle Error Gracefully with UI feedback instead of Alert
         clearAnalysisInterval();
         setAnalysisProgress(0);
+        setAnalysisStatus(getRandomMessage('error'));
+        
         console.error(error);
-        alert("Analysis Failed: " + error.message + ". Try pasting plain text instead.");
-        setView('convert_upload');
+        
+        // Wait a few seconds for user to read the error message before resetting
+        setTimeout(() => {
+            setView('convert_upload');
+        }, 4000);
     }
   };
 
@@ -463,18 +475,22 @@ const App: React.FC = () => {
         return;
     }
     
-    // Initial status for URL fetching
+    // START ANIMATION IMMEDIATELY (Fake start)
     setView('convert_analysis');
-    setAnalysisStatus("Accessing Neural Network to scrape URL...");
+    setAnalysisStatus("Iniciando escaneo de red neural...");
     setAnalysisProgress(5);
 
     try {
         const content = await fetchUrlContent(urlToConvert);
-        // Once we have content, handover to the main analysis loop
+        // Handover to the main analysis loop (which will continue the animation)
+        // We pass the URL as sourceName so detect_messages works
         await performAnalysis(content, urlToConvert);
     } catch (e: any) {
-        setView('convert_upload');
-        alert(e.message);
+        // Show error in the UI via the status message, not alert
+        setAnalysisStatus(getRandomMessage('error'));
+        setTimeout(() => {
+            setView('convert_upload');
+        }, 4000);
     }
   };
 
@@ -862,7 +878,7 @@ const App: React.FC = () => {
     <div className="flex flex-col items-center justify-center min-h-[50vh] max-w-xl mx-auto gap-8">
        <Bot className="w-24 h-24 text-cyan-400 animate-bounce" />
        <div className="w-full space-y-4">
-         <h2 className="text-2xl font-cyber text-center text-white animate-pulse min-h-[64px] flex items-center justify-center">
+         <h2 className="text-2xl font-cyber text-center text-white animate-pulse min-h-[64px] flex items-center justify-center px-4">
             {analysisStatus}
          </h2>
          <CyberProgressBar progress={analysisProgress} text="NEURAL PROCESSING" />
