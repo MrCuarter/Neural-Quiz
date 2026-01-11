@@ -25,6 +25,7 @@ export interface Quiz {
 
 export enum ExportFormat {
   UNIVERSAL_CSV = 'UNIVERSAL_CSV', // The Master Format
+  GOOGLE_FORMS = 'GOOGLE_FORMS', // Google Forms API
   BLOOKET = 'BLOOKET', // Blooket CSV
   WAYGROUND = 'WAYGROUND', // Wayground XLSX
   KAHOOT = 'KAHOOT', // Kahoot XLSX

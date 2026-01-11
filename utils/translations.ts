@@ -78,6 +78,7 @@ export const translations = {
     
     // Format Descriptions
     fmt_universal: "El Formato Maestro. Incluye enlaces multimedia, feedback y atributos extendidos. Mejor para copias de seguridad.",
+    fmt_google_forms: "Crea automáticamente un Google Form en tu Drive. Requiere iniciar sesión.",
     fmt_kahoot: "Plantilla oficial de Excel. Lista para subir directamente a Kahoot.",
     fmt_wooclap: "Formato Excel especial (Moodle XML structure) para importar eventos en Wooclap.",
     fmt_plickers: "Formato de texto optimizado para importar en Plickers.",
@@ -98,7 +99,8 @@ export const translations = {
     fmt_gift: "Formato avanzado para Moodle (símbolos para emparejamiento).",
     fmt_json: "Copia de seguridad de datos crudos o uso para desarrolladores.",
     
-    preview_action: "VISTA PREVIA Y ACCIÓN"
+    preview_action: "VISTA PREVIA Y ACCIÓN",
+    connect_create: "CONECTAR Y CREAR (GOOGLE)"
   },
   en: {
     app_subtitle: "UNIVERSAL CONVERTER SYSTEM",
@@ -176,6 +178,7 @@ export const translations = {
     
     // Format Descriptions
     fmt_universal: "The Master Format. Includes media links, feedback, and extended attributes. Best for backups.",
+    fmt_google_forms: "Automatically creates a Google Form in your Drive. Requires login.",
     fmt_kahoot: "Official Excel Template format. Ready for direct upload to Kahoot.",
     fmt_wooclap: "Special Excel format (Moodle XML structure) for importing into Wooclap events.",
     fmt_plickers: "Text format optimized for Plickers import. Questions + Correct Answer first.",
@@ -196,7 +199,8 @@ export const translations = {
     fmt_gift: "Advanced Moodle format (symbols for matching).",
     fmt_json: "Data backup or developer use.",
     
-    preview_action: "PREVIEW & ACTION"
+    preview_action: "PREVIEW & ACTION",
+    connect_create: "CONNECT & CREATE (GOOGLE)"
   },
   fr: {
     // ... (Keeping existing structure, defaulting to English logic for new keys if strictly needed, but focusing on ES/EN as per main request to avoid bloat)
@@ -274,7 +278,8 @@ export const translations = {
     incompatible_desc: "Types non supportés.",
     fmt_universal: "Le format maître.",
     fmt_kahoot: "Modèle Excel officiel.",
-    preview_action: "APERÇU & ACTION"
+    preview_action: "APERÇU & ACTION",
+    connect_create: "CONNECTER & CRÉER"
   },
   // Add other langs similarly
   it: {
@@ -352,7 +357,8 @@ export const translations = {
     incompatible_desc: "Tipi non supportati.",
     fmt_universal: "Il formato principale.",
     fmt_kahoot: "Modello Excel ufficiale.",
-    preview_action: "ANTEPRIMA E AZIONE"
+    preview_action: "ANTEPRIMA E AZIONE",
+    connect_create: "CONNETTI E CREA"
   },
   de: {
     app_subtitle: "UNIVERSELLES UMWANDLUNGSSYSTEM",
@@ -429,6 +435,7 @@ export const translations = {
     incompatible_desc: "Typen nicht unterstützt.",
     fmt_universal: "Das Master-Format.",
     fmt_kahoot: "Offizielle Excel-Vorlage.",
-    preview_action: "VORSCHAU & AKTION"
+    preview_action: "VORSCHAU & AKTION",
+    connect_create: "VERBINDEN & ERSTELLEN"
   }
 };

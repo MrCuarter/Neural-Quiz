@@ -2,9 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { ExportFormat, Quiz, Question } from '../types';
 import { exportQuiz } from '../services/exportService';
+import { exportToGoogleForms } from '../services/googleFormsService';
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
-import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench } from 'lucide-react';
+import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink } from 'lucide-react';
 
 interface ExportPanelProps {
   quiz: Quiz;
@@ -17,6 +18,10 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   const [copied, setCopied] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
   
+  // Google Forms State
+  const [isExportingGoogle, setIsExportingGoogle] = useState(false);
+  const [googleFormLink, setGoogleFormLink] = useState('');
+
   // Flippity specific state
   const [flippityMode, setFlippityMode] = useState<'30' | '6'>('30');
   const [flippitySelection, setFlippitySelection] = useState<string[]>([]);
@@ -26,6 +31,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   // Define allowed types per platform. Null or '*' means all types are "okay" or generic.
   const formats = [
     { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
+    { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://www.gstatic.com/images/branding/product/1x/forms_2020q4_48dp.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.KAHOOT, name: "Kahoot (XLSX)", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.WOOCLAP, name: "Wooclap (XLSX)", desc: t.fmt_wooclap, logo: "https://i.postimg.cc/SKc8L982/Wooclap.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.PLICKERS, name: "Plickers (Text)", desc: t.fmt_plickers, logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
@@ -108,7 +114,25 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
     return quiz;
   };
 
-  const handleDownload = () => {
+  // Main Export Handler
+  const handleExportAction = async () => {
+    // 1. Google Forms Special Path
+    if (selectedFormat === ExportFormat.GOOGLE_FORMS) {
+        setIsExportingGoogle(true);
+        setGoogleFormLink('');
+        try {
+            const link = await exportToGoogleForms(quiz.title, quiz.questions);
+            setGoogleFormLink(link);
+        } catch (error: any) {
+            console.error(error);
+            alert(`Error: ${error.message || "Could not connect to Google Forms."}`);
+        } finally {
+            setIsExportingGoogle(false);
+        }
+        return;
+    }
+
+    // 2. Standard File Download Path
     try {
       const quizToExport = getPreparedQuiz();
       const exportOptions = selectedFormat === ExportFormat.FLIPPITY ? { categories: flippityCategories } : undefined;
@@ -144,8 +168,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   };
 
   const handleCopy = () => {
-    if (selectedFormat === ExportFormat.FLIPPITY || selectedFormat === ExportFormat.WOOCLAP) {
-        alert("This format export is a binary Excel file. Please use Download.");
+    if (selectedFormat === ExportFormat.FLIPPITY || selectedFormat === ExportFormat.WOOCLAP || selectedFormat === ExportFormat.GOOGLE_FORMS) {
+        alert("This format requires file generation or API interaction. Please use the main action button.");
         return;
     }
 
@@ -164,17 +188,14 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
     }
   };
 
+  // ... (Flippity Logic omitted for brevity, same as before) ...
   const toggleFlippitySelection = (id: string) => {
     setFlippitySelection(prev => {
-        if (prev.includes(id)) {
-            return prev.filter(x => x !== id);
-        } else {
-            if (prev.length >= 6) return prev; 
-            return [...prev, id];
-        }
+        if (prev.includes(id)) return prev.filter(x => x !== id);
+        if (prev.length >= 6) return prev; 
+        return [...prev, id];
     });
   };
-
   const handleGenerateCategories = async () => {
       setIsGeneratingCats(true);
       const questionTexts = quiz.questions.slice(0, 30).map(q => q.text);
@@ -182,7 +203,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
       setFlippityCategories(cats);
       setIsGeneratingCats(false);
   };
-
   const updateCategory = (idx: number, val: string) => {
       const newCats = [...flippityCategories];
       newCats[idx] = val;
@@ -192,6 +212,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   const currentExport = (() => {
     try {
         if (selectedFormat === ExportFormat.FLIPPITY || selectedFormat === ExportFormat.WOOCLAP) return { content: "", isBase64: true }; 
+        if (selectedFormat === ExportFormat.GOOGLE_FORMS) return { content: "", isBase64: true };
         return exportQuiz(getPreparedQuiz(), selectedFormat);
     } catch(e) {
         return { content: "Error generating preview.", isBase64: false };
@@ -202,6 +223,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   const isQuizlet = selectedFormat === ExportFormat.QUIZLET_QA || selectedFormat === ExportFormat.QUIZLET_AQ;
   const isDeckToys = selectedFormat === ExportFormat.DECKTOYS_QA || selectedFormat === ExportFormat.DECKTOYS_AQ;
   const isFlippity = selectedFormat === ExportFormat.FLIPPITY;
+  const isGoogle = selectedFormat === ExportFormat.GOOGLE_FORMS;
   const isCSV = selectedFormat.includes('CSV') || selectedFormat === ExportFormat.QUIZALIZE || selectedFormat === ExportFormat.BLOOKET;
 
   const renderCSVTable = (csv: string) => {
@@ -250,7 +272,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
            return (
             <button 
               key={fmt.id}
-              onClick={() => setSelectedFormat(fmt.id)}
+              onClick={() => { setSelectedFormat(fmt.id); setGoogleFormLink(''); }}
               className={`text-left p-0 border transition-all duration-300 group relative overflow-hidden flex h-24 ${
                 isActive
                 ? 'bg-cyan-950/40 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.2)]' 
@@ -324,6 +346,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
           {/* Sub-options for Gimkit */}
           {isGimkit && (
             <div className="flex flex-col sm:flex-row gap-4 p-4 bg-black/40 border border-cyan-900/50 rounded-lg">
+              {/* ... (Gimkit logic same as before) ... */}
               <div className="flex-1">
                 <p className="text-cyan-400 font-mono-cyber text-sm mb-2 uppercase">Select Gimkit Mode:</p>
                 <div className="flex gap-4">
@@ -358,7 +381,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
           {/* Sub-options for Flippity */}
           {isFlippity && (
             <div className="flex flex-col gap-4 p-4 bg-black/40 border border-orange-500/50 rounded-lg animate-in fade-in">
-              <div className="flex flex-col sm:flex-row gap-4">
+                {/* ... (Flippity logic same as before) ... */}
+                <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <p className="text-orange-400 font-mono-cyber text-sm mb-2 uppercase">Configuración de Flippity:</p>
                   <div className="flex gap-4">
@@ -419,11 +443,32 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
 
           <div className="bg-black/80 rounded border border-gray-800 font-mono text-xs text-gray-400 h-64 overflow-y-auto custom-scrollbar relative">
              {/* Live Preview */}
-             {currentExport.isBase64 ? (
+             {googleFormLink ? (
+                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-gray-900">
+                     <div className="mb-4 p-4 bg-purple-950/30 rounded-full border border-purple-500/50">
+                         <Check className="w-12 h-12 text-purple-400" />
+                     </div>
+                     <h3 className="text-xl font-cyber text-white mb-2">GOOGLE FORM CREATED!</h3>
+                     <p className="text-gray-400 mb-6">Your quiz is ready in your Google Drive.</p>
+                     <a 
+                        href={googleFormLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded font-bold transition-all shadow-[0_0_20px_rgba(147,51,234,0.4)]"
+                     >
+                         OPEN FORM <ExternalLink className="w-4 h-4" />
+                     </a>
+                 </div>
+             ) : currentExport.isBase64 && !isGoogle ? (
                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
                  <AlertTriangle className="w-8 h-8 opacity-50" />
                  <p>{t.preview_unavailable}</p>
                </div>
+             ) : isGoogle ? (
+                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
+                     <img src="https://www.gstatic.com/images/branding/product/1x/forms_2020q4_48dp.png" className="w-16 h-16 opacity-50 grayscale group-hover:grayscale-0" />
+                     <p className="max-w-xs text-center">Preview unavailable. Click the button below to connect your Google account and generate the form.</p>
+                 </div>
              ) : (
                 isCSV ? renderCSVTable(currentExport.content) : (
                   <pre className="whitespace-pre-wrap break-all p-4">
@@ -433,17 +478,33 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
              )}
           </div>
           
-          {/* Copy/Download Buttons */}
+          {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-end mt-4">
-            {!currentExport.isBase64 && (
+            {!currentExport.isBase64 && !isGoogle && (
               <CyberButton variant="secondary" onClick={handleCopy} className="flex items-center justify-center gap-2">
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 {copied ? t.copied : t.copy_clipboard}
               </CyberButton>
             )}
-            <CyberButton onClick={handleDownload} className="flex items-center justify-center gap-2">
-              <FileDown className="w-4 h-4" />
-              {t.download_file}
+            
+            {/* Main Action Button - Changes based on context */}
+            <CyberButton 
+                onClick={handleExportAction} 
+                className={`flex items-center justify-center gap-2 ${isGoogle ? 'bg-purple-700 hover:bg-purple-600 border-purple-500' : ''}`}
+                isLoading={isExportingGoogle}
+                disabled={!!googleFormLink && isGoogle}
+            >
+              {isGoogle ? (
+                  <>
+                    <img src="https://www.gstatic.com/images/branding/product/1x/forms_2020q4_48dp.png" className="w-5 h-5 bg-white rounded-full p-0.5" />
+                    {t.connect_create}
+                  </>
+              ) : (
+                  <>
+                    <FileDown className="w-4 h-4" />
+                    {t.download_file}
+                  </>
+              )}
             </CyberButton>
           </div>
         </div>
