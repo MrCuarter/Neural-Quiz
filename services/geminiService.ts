@@ -84,8 +84,8 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     const ai = getAI();
     const { topic, count, types, age, context, urls, language = 'Spanish' } = params;
 
-    // Enforce hard limit of 60 to prevent abuse / timeouts
-    const safeCount = Math.min(Math.max(count, 1), 60);
+    // Enforce hard limit of 100 to prevent abuse / timeouts
+    const safeCount = Math.min(Math.max(count, 1), 100);
 
     let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
     prompt += `\nTarget Audience Age: ${age}.`;

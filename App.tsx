@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, ExportFormat } from './types';
+import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS } from './types';
 import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -27,92 +27,6 @@ const initialQuiz: Quiz = {
   questions: []
 };
 
-// Platform Capabilities Matrix
-const QUESTION_TYPES = {
-    MULTIPLE_CHOICE: 'Multiple Choice',
-    TRUE_FALSE: 'True/False',
-    FILL_GAP: 'Fill in the Blank',
-    OPEN_ENDED: 'Open Ended',
-    MULTI_SELECT: 'Multi-Select (Checkbox)',
-    POLL: 'Poll',
-    DRAW: 'Draw'
-};
-
-const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
-    'UNIVERSAL': { 
-        name: 'Universal / Generic', 
-        types: Object.values(QUESTION_TYPES) 
-    },
-    [ExportFormat.GOOGLE_FORMS]: {
-        name: 'Google Forms',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.MULTI_SELECT]
-    },
-    [ExportFormat.KAHOOT]: { 
-        name: 'Kahoot!', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.POLL] 
-    },
-    [ExportFormat.SOCRATIVE]: { 
-        name: 'Socrative', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.OPEN_ENDED] 
-    },
-    [ExportFormat.BLOOKET]: { 
-        name: 'Blooket', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE] 
-    },
-    [ExportFormat.GIMKIT_CLASSIC]: {
-        name: 'Gimkit',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED]
-    },
-    [ExportFormat.QUIZALIZE]: {
-        name: 'Quizalize',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.OPEN_ENDED]
-    },
-    [ExportFormat.WOOCLAP]: {
-        name: 'Wooclap',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.MULTI_SELECT]
-    },
-    [ExportFormat.GENIALLY]: { 
-        name: 'Genially', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE] 
-    },
-    [ExportFormat.WAYGROUND]: { 
-        name: 'Wayground', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.DRAW] 
-    },
-    [ExportFormat.PLICKERS]: {
-        name: 'Plickers',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE]
-    },
-    [ExportFormat.WORDWALL]: {
-        name: 'Wordwall',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE]
-    },
-    [ExportFormat.IDOCEO]: {
-        name: 'iDoceo',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE]
-    },
-    [ExportFormat.FLIPPITY]: {
-        name: 'Flippity',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED]
-    },
-    [ExportFormat.QUIZLET_QA]: {
-        name: 'Quizlet / Deck.Toys',
-        types: [QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.MULTIPLE_CHOICE]
-    },
-    [ExportFormat.BAAMBOOZLE]: {
-        name: 'Baamboozle',
-        types: [QUESTION_TYPES.OPEN_ENDED]
-    },
-    [ExportFormat.SANDBOX]: {
-        name: 'Sandbox Education',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE]
-    },
-    [ExportFormat.AIKEN]: {
-        name: 'Moodle / LMS (Aiken)',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE]
-    }
-};
-
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('home');
   const [quiz, setQuiz] = useState<Quiz>(initialQuiz);
@@ -126,7 +40,7 @@ const App: React.FC = () => {
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
   const [genParams, setGenParams] = useState<{
     topic: string;
-    count: number;
+    count: number | string;
     types: string[];
     age: string;
     context: string;
@@ -313,7 +227,7 @@ const App: React.FC = () => {
 
       const generatedQs = await generateQuizQuestions({
         topic: genParams.topic,
-        count: genParams.count,
+        count: Number(genParams.count) || 5,
         types: genParams.types,
         age: genParams.age,
         context: genParams.context,
@@ -780,15 +694,20 @@ const App: React.FC = () => {
                 onChange={e => setGenParams({...genParams, topic: e.target.value})}
               />
               <CyberInput 
-                label={`${t.count_label} (Max 60)`} 
+                label={`${t.count_label} (Max 100)`} 
                 type="number"
                 min={1}
-                max={60}
+                max={100}
                 value={genParams.count}
                 onChange={e => {
-                  let val = parseInt(e.target.value) || 1;
-                  if (val > 60) val = 60;
-                  setGenParams({...genParams, count: val});
+                  const val = e.target.value;
+                  if (val === '') {
+                    setGenParams({...genParams, count: ''});
+                  } else {
+                    let num = parseInt(val);
+                    if (num > 100) num = 100;
+                    setGenParams({...genParams, count: num});
+                  }
                 }}
               />
               <CyberInput 

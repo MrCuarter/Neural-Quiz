@@ -14,7 +14,7 @@ interface ExportPanelProps {
 }
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) => {
-  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>(ExportFormat.UNIVERSAL_CSV);
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>(ExportFormat.KAHOOT); // Default to Kahoot
   const [copied, setCopied] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
   
@@ -30,26 +30,33 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
 
   // Define allowed types per platform. Null or '*' means all types are "okay" or generic.
   const formats = [
-    { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
+    // --- TIER 1: THE BIG ONES ---
+    { id: ExportFormat.KAHOOT, name: "Kahoot!", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
-    { id: ExportFormat.KAHOOT, name: "Kahoot (XLSX)", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
-    { id: ExportFormat.WOOCLAP, name: "Wooclap (XLSX)", desc: t.fmt_wooclap, logo: "https://i.postimg.cc/SKc8L982/Wooclap.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.PLICKERS, name: "Plickers (Text)", desc: t.fmt_plickers, logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.BLOOKET, name: "Blooket", desc: t.fmt_blooket, logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit", desc: t.fmt_gimkit_classic, logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
+    
+    // --- TIER 2: POPULAR CLASSROOM TOOLS ---
+    { id: ExportFormat.SOCRATIVE, name: "Socrative", desc: t.fmt_socrative, logo: "https://i.postimg.cc/ZCD0Wmwy/Socrative.png", allowedTypes: ['Multiple Choice', 'True/False', 'Short Answer'] },
+    { id: ExportFormat.QUIZALIZE, name: "Quizalize", desc: t.fmt_quizalize, logo: "https://i.postimg.cc/ZCD0WmwB/Quizalize.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer'] },
+    { id: ExportFormat.WORDWALL, name: "Wordwall", desc: t.fmt_wordwall, logo: "https://i.postimg.cc/3dbWkht2/Wordwall.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.GENIALLY, name: "Genially", desc: t.fmt_genially, logo: "https://i.postimg.cc/rKpKysNw/Genially.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.PLICKERS, name: "Plickers", desc: t.fmt_plickers, logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.WOOCLAP, name: "Wooclap", desc: t.fmt_wooclap, logo: "https://i.postimg.cc/SKc8L982/Wooclap.png", allowedTypes: ['Multiple Choice'] },
+    
+    // --- TIER 3: SPECIFIC & NICHE ---
+    { id: ExportFormat.IDOCEO, name: "iDoceo", desc: t.fmt_idoceo, logo: "https://i.postimg.cc/2VX31Y0S/i-Doceo.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.FLIPPITY, name: "Flippity", desc: t.fmt_flippity, logo: "https://i.postimg.cc/jdTHMZvS/Flippity.png", allowedTypes: ['*'] },
+    { id: ExportFormat.QUIZLET_QA, name: "Quizlet", desc: t.fmt_quizlet, logo: "https://i.postimg.cc/Cz6dR0cZ/Quizlet.png", allowedTypes: ['*'] },
+    { id: ExportFormat.DECKTOYS_QA, name: "Deck.Toys", desc: t.fmt_decktoys, logo: "https://i.postimg.cc/PPqPfJQP/Decktoys.png", allowedTypes: ['*'] },
+    { id: ExportFormat.WAYGROUND, name: "Wayground", desc: t.fmt_wayground, logo: "https://i.postimg.cc/HVPjrm6X/Wayground.png", allowedTypes: ['*'] },
+    { id: ExportFormat.SANDBOX, name: "Sandbox Edu", desc: t.fmt_sandbox, logo: "https://i.postimg.cc/hf3hXn2X/Sandbox.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.BAAMBOOZLE, name: "Baamboozle", desc: t.fmt_baamboozle, logo: "https://i.postimg.cc/3dwdrNFw/Baamboozle.png", allowedTypes: ['*'] },
-    { id: ExportFormat.SOCRATIVE, name: "Socrative (XLSX)", desc: t.fmt_socrative, logo: "https://i.postimg.cc/ZCD0Wmwy/Socrative.png", allowedTypes: ['Multiple Choice', 'True/False', 'Short Answer'] },
-    { id: ExportFormat.QUIZALIZE, name: "Quizalize (CSV)", desc: t.fmt_quizalize, logo: "https://i.postimg.cc/ZCD0WmwB/Quizalize.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer'] },
-    { id: ExportFormat.IDOCEO, name: "iDoceo (XLSX)", desc: t.fmt_idoceo, logo: "https://i.postimg.cc/2VX31Y0S/i-Doceo.png", allowedTypes: ['Multiple Choice', 'True/False'] },
-    { id: ExportFormat.BLOOKET, name: "Blooket (CSV)", desc: t.fmt_blooket, logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.GENIALLY, name: "Genially (XLSX)", desc: t.fmt_genially, logo: "https://i.postimg.cc/rKpKysNw/Genially.png", allowedTypes: ['Multiple Choice', 'True/False'] },
-    { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit (Pack)", desc: t.fmt_gimkit_classic, logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.WORDWALL, name: "Wordwall (Text)", desc: t.fmt_wordwall, logo: "https://i.postimg.cc/3dbWkht2/Wordwall.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.FLIPPITY, name: "Flippity (Game)", desc: t.fmt_flippity, logo: "https://i.postimg.cc/jdTHMZvS/Flippity.png", allowedTypes: ['*'] },
-    { id: ExportFormat.SANDBOX, name: "Sandbox Educación", desc: t.fmt_sandbox, logo: "https://i.postimg.cc/hf3hXn2X/Sandbox.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.QUIZLET_QA, name: "Quizlet (Flash)", desc: t.fmt_quizlet, logo: "https://i.postimg.cc/Cz6dR0cZ/Quizlet.png", allowedTypes: ['*'] },
-    { id: ExportFormat.DECKTOYS_QA, name: "Deck.Toys (Study)", desc: t.fmt_decktoys, logo: "https://i.postimg.cc/PPqPfJQP/Decktoys.png", allowedTypes: ['*'] },
-    { id: ExportFormat.WAYGROUND, name: "Wayground (XLSX)", desc: t.fmt_wayground, logo: "https://i.postimg.cc/HVPjrm6X/Wayground.png", allowedTypes: ['*'] },
-    { id: ExportFormat.AIKEN, name: "Aiken (LMS)", desc: t.fmt_aiken, logo: "https://i.postimg.cc/SKc8L98N/LMS.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.GIFT, name: "GIFT (Moodle)", desc: t.fmt_gift, logo: "https://i.postimg.cc/JhjJ3XJ0/Moodle.png", allowedTypes: ['*'] },
+    
+    // --- TIER 4: TECHNICAL & BACKUP ---
+    { id: ExportFormat.AIKEN, name: "Moodle/LMS (Aiken)", desc: t.fmt_aiken, logo: "https://i.postimg.cc/SKc8L98N/LMS.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.GIFT, name: "Moodle (GIFT)", desc: t.fmt_gift, logo: "https://i.postimg.cc/JhjJ3XJ0/Moodle.png", allowedTypes: ['*'] },
+    { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
     { id: ExportFormat.JSON, name: "JSON (Raw)", desc: t.fmt_json, logo: "https://i.postimg.cc/zfTWwhWG/JSON.png", allowedTypes: ['*'] },
   ];
 
@@ -273,7 +280,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
             <button 
               key={fmt.id}
               onClick={() => { setSelectedFormat(fmt.id); setGoogleFormLink(''); }}
-              className={`text-left p-0 border transition-all duration-300 group relative overflow-hidden flex h-24 ${
+              className={`text-left p-0 border transition-all duration-300 group relative overflow-hidden flex h-32 ${
                 isActive
                 ? 'bg-cyan-950/40 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.2)]' 
                 : 'bg-gray-900/40 border-gray-800 hover:border-gray-600'
@@ -285,11 +292,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                 </div>
               )}
               
-              <div className="flex-1 p-4 flex flex-col justify-center min-w-0">
-                <h3 className={`font-cyber text-sm md:text-lg truncate mb-1 ${isActive ? 'text-cyan-300' : 'text-gray-300 group-hover:text-cyan-200'}`}>
+              <div className="flex-1 p-4 flex flex-col justify-center min-w-0 h-full">
+                <h3 className={`font-cyber text-sm md:text-lg mb-2 leading-tight ${isActive ? 'text-cyan-300' : 'text-gray-300 group-hover:text-cyan-200'}`}>
                     {fmt.name}
                 </h3>
-                <p className="text-[10px] text-gray-500 font-mono leading-tight line-clamp-3">
+                <p className="text-[10px] text-gray-500 font-mono leading-relaxed line-clamp-4">
                   {fmt.desc}
                 </p>
               </div>
