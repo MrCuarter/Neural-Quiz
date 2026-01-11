@@ -27,7 +27,6 @@ const getClientId = () => {
     return "1005385021667-brm86kgaontbtkr1erqdfiomnlh39374.apps.googleusercontent.com";
 }
 
-const CLIENT_ID = getClientId();
 const SCOPES = 'https://www.googleapis.com/auth/forms.body https://www.googleapis.com/auth/drive.file';
 
 // Interface for Google response
@@ -37,8 +36,10 @@ interface TokenResponse {
 }
 
 export const exportToGoogleForms = async (title: string, questions: Question[]) => {
+  const CLIENT_ID = getClientId();
+  
   if (!CLIENT_ID) {
-      throw new Error("Missing VITE_GOOGLE_CLIENT_ID in environment variables.");
+      throw new Error("Missing Client ID. Please configure it in settings.");
   }
 
   return new Promise<string>((resolve, reject) => {
