@@ -73,7 +73,7 @@ export const exportQuiz = (quiz: Quiz, format: ExportFormat, options?: any): Gen
       return generateSandbox(quiz, sanitizedTitle);
 
     case ExportFormat.WOOCLAP:
-      return generateWooclapJSON(quiz, sanitizedTitle);
+      return generateWooclapXLSX(quiz, sanitizedTitle);
 
     case ExportFormat.QUIZLET_QA:
       return generateQuizletQA(quiz, sanitizedTitle);
@@ -895,51 +895,46 @@ const generateSandbox = (quiz: Quiz, title: string): GeneratedFile => {
   };
 };
 
-// 21. Wooclap JSON Format
-const generateWooclapJSON = (quiz: Quiz, title: string): GeneratedFile => {
+// 21. Wooclap XLSX Format (Based on Moodle XML Structure mapped to Excel)
+const generateWooclapXLSX = (quiz: Quiz, title: string): GeneratedFile => {
   const alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
   
-  // Prepare Header Row (Definition of schema for Wooclap import)
-  const headerRow = {
-    "index": 2,
-    "cells": [
-      { "col": 1, "val": "/question/@type", "bg": "#c0c0c0" },
-      { "col": 2, "val": "/question/#id", "bg": "#c0c0c0" },
-      { "col": 3, "val": "/question/answer/@fraction", "bg": "#c0c0c0" },
-      { "col": 4, "val": "/question/answer/text", "bg": "#c0c0c0" },
-      { "col": 5, "val": "/question/answernumbering", "bg": "#c0c0c0" },
-      { "col": 6, "val": "/question/defaultgrade", "bg": "#c0c0c0" },
-      { "col": 7, "val": "/question/defaultgrade/#agg", "bg": "#c0c0c0" },
-      { "col": 8, "val": "/question/generalfeedback", "bg": "#c0c0c0" },
-      { "col": 9, "val": "/question/hidden", "bg": "#c0c0c0" },
-      { "col": 10, "val": "/question/hidden/#agg", "bg": "#c0c0c0" },
-      { "col": 11, "val": "/question/name/text", "bg": "#c0c0c0" },
-      { "col": 12, "val": "/question/partiallycorrectfeedback/text", "bg": "#c0c0c0" },
-      { "col": 13, "val": "/question/penalty", "bg": "#c0c0c0" },
-      { "col": 14, "val": "/question/penalty/#agg", "bg": "#c0c0c0" },
-      { "col": 15, "val": "/question/questiontext/@format", "bg": "#c0c0c0" },
-      { "col": 16, "val": "/question/questiontext/text", "bg": "#c0c0c0" },
-      { "col": 17, "val": "/question/shuffleanswers", "bg": "#c0c0c0" },
-      { "col": 18, "val": "/question/shuffleanswers/#agg", "bg": "#c0c0c0" },
-      { "col": 19, "val": "/question/single", "bg": "#c0c0c0" },
-      { "col": 20, "val": "/question/tags", "bg": "#c0c0c0" }
-    ]
-  };
+  // Define structure using array of arrays for XLSX
+  const data: any[][] = [];
 
-  const rows: any[] = [];
-  
-  // Row 1 (Metadata)
-  rows.push({
-    "index": 1,
-    "cells": [{ "col": 1, "val": "/quiz" }]
-  });
+  // Row 1: Metadata
+  // In the JSON sample, Col 1 = /quiz. XLSX indices are 0-based.
+  const row1 = new Array(20).fill("");
+  row1[0] = "/quiz";
+  data.push(row1);
 
-  // Row 2 (Headers)
-  rows.push(headerRow);
+  // Row 2: Headers
+  // Mapping the column keys from the JSON spec to array indices (0-19)
+  const headerRow = [
+    "/question/@type",                  // 0
+    "/question/#id",                    // 1
+    "/question/answer/@fraction",       // 2
+    "/question/answer/text",            // 3
+    "/question/answernumbering",        // 4
+    "/question/defaultgrade",           // 5
+    "/question/defaultgrade/#agg",      // 6
+    "/question/generalfeedback",        // 7
+    "/question/hidden",                 // 8
+    "/question/hidden/#agg",            // 9
+    "/question/name/text",              // 10
+    "/question/partiallycorrectfeedback/text", // 11
+    "/question/penalty",                // 12
+    "/question/penalty/#agg",           // 13
+    "/question/questiontext/@format",   // 14
+    "/question/questiontext/text",      // 15
+    "/question/shuffleanswers",         // 16
+    "/question/shuffleanswers/#agg",    // 17
+    "/question/single",                 // 18
+    "/question/tags"                    // 19
+  ];
+  data.push(headerRow);
 
   // Data Rows
-  let currentRowIndex = 3;
-
   quiz.questions.forEach((q, qIdx) => {
     // Sanitize question text
     const cleanQ = q.text.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -952,61 +947,47 @@ const generateWooclapJSON = (quiz: Quiz, title: string): GeneratedFile => {
       const cleanOpt = opt.text.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const optionHtml = `<div><simpleChoice identifier="${letter}"><div> <p>${cleanOpt}</p> </div></simpleChoice></div>`;
 
-      const cellData: any[] = [
-        { "col": 1, "val": "multichoice" }, // Type
-        { "col": 2, "val": qIdx + 1 },      // Question ID (1-based index)
-        { "col": 3, "val": score },         // Fraction/Score
-        { "col": 4, "val": optionHtml },    // Option Text
-        { "col": 5, "val": "none" },        // Numbering
-        { "col": 6, "val": 1 },             // Default grade
-      ];
+      // Build the row array
+      const row = new Array(20).fill(""); // Initialize empty cells
 
-      // Add aggregation fields only for the first option row of a question? 
-      // Based on sample, aggregation fields (col 7, 10, 14, 18) appear on first row of question group.
-      // But actually, Wooclap sample shows them on every row. Let's follow sample pattern.
-      // Sample shows:
-      // Row 3 (Index 1, Opt a): Col 7=1, Col 9=0, Col 10=0...
-      // Row 4 (Index 1, Opt b): Col 9=0... missing Col 7.
-      // It seems some aggregation fields appear on specific rows. 
-      // To be safe and simple, we replicate the most common fields populated in the sample.
+      row[0] = "multichoice"; // Type
+      row[1] = qIdx + 1;      // Question ID (1-based index)
+      row[2] = score;         // Fraction/Score
+      row[3] = optionHtml;    // Option Text
+      row[4] = "none";        // Numbering
+      row[5] = 1;             // Default grade
 
+      // Aggregation fields usually appear on the first row of a question group in XML-to-Excel structures
       if (oIdx === 0) {
-          cellData.push({ "col": 7, "val": 1 }); // defaultgrade agg
-          cellData.push({ "col": 10, "val": 0 }); // hidden agg
-          cellData.push({ "col": 14, "val": 0 }); // penalty agg
-          cellData.push({ "col": 18, "val": 1 }); // shuffle agg
+          row[6] = 1;  // defaultgrade agg
+          row[9] = 0;  // hidden agg
+          row[13] = 0; // penalty agg
+          row[17] = 1; // shuffle agg
       }
 
-      cellData.push({ "col": 9, "val": 0 }); // hidden
-      cellData.push({ "col": 11, "val": cleanQ }); // Name
-      cellData.push({ "col": 13, "val": 0 }); // Penalty
-      cellData.push({ "col": 15, "val": "html" }); // Format
-      cellData.push({ "col": 16, "val": questionHtml }); // Question Text HTML
-      cellData.push({ "col": 17, "val": 1 }); // Shuffle
-      cellData.push({ "col": 19, "val": true }); // Single choice?
+      row[8] = 0; // hidden
+      row[10] = cleanQ; // Name
+      row[12] = 0; // Penalty
+      row[14] = "html"; // Format
+      row[15] = questionHtml; // Question Text HTML
+      row[16] = 1; // Shuffle
+      row[18] = "true"; // Single choice (Excel needs string/boolean representation)
 
-      rows.push({
-        "index": currentRowIndex,
-        "cells": cellData
-      });
-
-      currentRowIndex++;
+      data.push(row);
     });
   });
 
-  const output = {
-    "info": {
-      "name": "Wooclap",
-      "totalRows": rows.length,
-      "totalCols": 20
-    },
-    "rows": rows
-  };
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Wooclap");
+
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
 
   return {
-    filename: `${title}_wooclap.json`,
-    content: JSON.stringify(output, null, 2),
-    mimeType: 'application/json'
+    filename: `${title}_wooclap.xlsx`,
+    content: wbout,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    isBase64: true
   };
 };
 

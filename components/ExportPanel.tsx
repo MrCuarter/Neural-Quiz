@@ -25,27 +25,26 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
 
   // Define allowed types per platform. Null or '*' means all types are "okay" or generic.
   const formats = [
-    { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: "The Master Format. Includes media links, feedback, and extended attributes. Best for backups.", logo: null, allowedTypes: ['*'] },
-    { id: ExportFormat.KAHOOT, name: "Kahoot (XLSX)", desc: "Official Excel Template format. Ready for direct upload to Kahoot.", logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
-    { id: ExportFormat.WOOCLAP, name: "Wooclap (JSON)", desc: "Special JSON format for importing into Wooclap events.", logo: "https://upload.wikimedia.org/wikipedia/commons/a/a2/Wooclap_Logo.jpg", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.PLICKERS, name: "Plickers (Text)", desc: "Text format optimized for Plickers import. Questions + Correct Answer first.", logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
-    { id: ExportFormat.BAAMBOOZLE, name: "Baamboozle", desc: "Via Kahoot/Quizlet. Requires Premium to import from URL.", logo: "https://i.postimg.cc/3dwdrNFw/Baamboozle.png", allowedTypes: ['*'] },
-    { id: ExportFormat.SOCRATIVE, name: "Socrative (XLSX)", desc: "Official Socrative template. Includes instructions, question type headers, and correct answer marking.", logo: "https://i.postimg.cc/ZCD0Wmwy/Socrative.png", allowedTypes: ['Multiple Choice', 'True/False', 'Short Answer'] },
-    { id: ExportFormat.QUIZALIZE, name: "Quizalize (CSV)", desc: "Official Quizalize spreadsheet format. Upload directly to Quizalize.", logo: "https://i.postimg.cc/ZCD0WmwB/Quizalize.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer'] },
-    { id: ExportFormat.IDOCEO, name: "iDoceo (XLSX)", desc: "Official iDoceo Connect template. Includes feedbacks and correct answer indices.", logo: "https://i.postimg.cc/2VX31Y0S/i-Doceo.png", allowedTypes: ['Multiple Choice', 'True/False'] },
-    { id: ExportFormat.BLOOKET, name: "Blooket (CSV)", desc: "Official Blooket spreadsheet template format (CSV).", logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.GENIALLY, name: "Genially (XLSX)", desc: "Genially Question Bank format with letter-based answers.", logo: "https://i.postimg.cc/rKpKysNw/Genially.png", allowedTypes: ['Multiple Choice', 'True/False'] },
-    { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit (Pack)", desc: "Official Gimkit formats. Choose between Classic (Multiple Choice) or Text Input.", logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.WORDWALL, name: "Wordwall (Text)", desc: "Simple text format (Tab separated). Ready to copy-paste into Wordwall editor.", logo: "https://i.postimg.cc/3dbWkht2/Wordwall.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.FLIPPITY, name: "Flippity (Game)", desc: "Generates Excel (.xlsx) file for Flippity Quiz Show. Supports '6 Questions' or '30 Questions' mode.", logo: "https://i.postimg.cc/jdTHMZvS/Flippity.png", allowedTypes: ['*'] },
-    { id: ExportFormat.SANDBOX, name: "Sandbox Educación", desc: "Formato texto simple: Pregunta + Correcta + Incorrectas (separadas por |).", logo: "https://i.postimg.cc/hf3hXn2X/Sandbox.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.QUIZLET_QA, name: "Quizlet (Flash)", desc: "Flashcard text format. Term + Definition pairs. Perfect for study sets.", logo: "https://i.postimg.cc/Cz6dR0cZ/Quizlet.png", allowedTypes: ['*'] },
-    { id: ExportFormat.DECKTOYS_QA, name: "Deck.Toys (Study)", desc: "Study Set format. Term + Definition pairs for Deck.Toys activities.", logo: "https://i.postimg.cc/PPqPfJQP/Decktoys.png", allowedTypes: ['*'] },
-    { id: ExportFormat.WAYGROUND, name: "Wayground (XLSX)", desc: "Wayground compatible Excel sheet including explanations and image links.", logo: "https://i.postimg.cc/HVPjrm6X/Wayground.png", allowedTypes: ['*'] },
-    { id: ExportFormat.CSV_GENERIC, name: "CSV (Generic)", desc: "Standard comma-separated. Compatible with Excel/Sheets.", logo: null, allowedTypes: ['*'] },
-    { id: ExportFormat.AIKEN, name: "Aiken (LMS)", desc: "Plain text format for Moodle, Blackboard, Canvas.", logo: null, allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.GIFT, name: "GIFT (Moodle)", desc: "Advanced Moodle format (symbols for matching).", logo: null, allowedTypes: ['*'] },
-    { id: ExportFormat.JSON, name: "JSON (Raw)", desc: "Data backup or developer use.", logo: null, allowedTypes: ['*'] },
+    { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
+    { id: ExportFormat.KAHOOT, name: "Kahoot (XLSX)", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
+    { id: ExportFormat.WOOCLAP, name: "Wooclap (XLSX)", desc: t.fmt_wooclap, logo: "https://i.postimg.cc/SKc8L982/Wooclap.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.PLICKERS, name: "Plickers (Text)", desc: t.fmt_plickers, logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.BAAMBOOZLE, name: "Baamboozle", desc: t.fmt_baamboozle, logo: "https://i.postimg.cc/3dwdrNFw/Baamboozle.png", allowedTypes: ['*'] },
+    { id: ExportFormat.SOCRATIVE, name: "Socrative (XLSX)", desc: t.fmt_socrative, logo: "https://i.postimg.cc/ZCD0Wmwy/Socrative.png", allowedTypes: ['Multiple Choice', 'True/False', 'Short Answer'] },
+    { id: ExportFormat.QUIZALIZE, name: "Quizalize (CSV)", desc: t.fmt_quizalize, logo: "https://i.postimg.cc/ZCD0WmwB/Quizalize.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer'] },
+    { id: ExportFormat.IDOCEO, name: "iDoceo (XLSX)", desc: t.fmt_idoceo, logo: "https://i.postimg.cc/2VX31Y0S/i-Doceo.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.BLOOKET, name: "Blooket (CSV)", desc: t.fmt_blooket, logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.GENIALLY, name: "Genially (XLSX)", desc: t.fmt_genially, logo: "https://i.postimg.cc/rKpKysNw/Genially.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit (Pack)", desc: t.fmt_gimkit_classic, logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.WORDWALL, name: "Wordwall (Text)", desc: t.fmt_wordwall, logo: "https://i.postimg.cc/3dbWkht2/Wordwall.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.FLIPPITY, name: "Flippity (Game)", desc: t.fmt_flippity, logo: "https://i.postimg.cc/jdTHMZvS/Flippity.png", allowedTypes: ['*'] },
+    { id: ExportFormat.SANDBOX, name: "Sandbox Educación", desc: t.fmt_sandbox, logo: "https://i.postimg.cc/hf3hXn2X/Sandbox.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.QUIZLET_QA, name: "Quizlet (Flash)", desc: t.fmt_quizlet, logo: "https://i.postimg.cc/Cz6dR0cZ/Quizlet.png", allowedTypes: ['*'] },
+    { id: ExportFormat.DECKTOYS_QA, name: "Deck.Toys (Study)", desc: t.fmt_decktoys, logo: "https://i.postimg.cc/PPqPfJQP/Decktoys.png", allowedTypes: ['*'] },
+    { id: ExportFormat.WAYGROUND, name: "Wayground (XLSX)", desc: t.fmt_wayground, logo: "https://i.postimg.cc/HVPjrm6X/Wayground.png", allowedTypes: ['*'] },
+    { id: ExportFormat.AIKEN, name: "Aiken (LMS)", desc: t.fmt_aiken, logo: "https://i.postimg.cc/SKc8L98N/LMS.png", allowedTypes: ['Multiple Choice'] },
+    { id: ExportFormat.GIFT, name: "GIFT (Moodle)", desc: t.fmt_gift, logo: "https://i.postimg.cc/JhjJ3XJ0/Moodle.png", allowedTypes: ['*'] },
+    { id: ExportFormat.JSON, name: "JSON (Raw)", desc: t.fmt_json, logo: "https://i.postimg.cc/zfTWwhWG/JSON.png", allowedTypes: ['*'] },
   ];
 
   // Calculate Incompatible Questions
@@ -145,8 +144,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   };
 
   const handleCopy = () => {
-    if (selectedFormat === ExportFormat.FLIPPITY) {
-        alert("Flippity export is a binary Excel file. Please use Download.");
+    if (selectedFormat === ExportFormat.FLIPPITY || selectedFormat === ExportFormat.WOOCLAP) {
+        alert("This format export is a binary Excel file. Please use Download.");
         return;
     }
 
@@ -192,7 +191,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
 
   const currentExport = (() => {
     try {
-        if (selectedFormat === ExportFormat.FLIPPITY) return { content: "", isBase64: true }; 
+        if (selectedFormat === ExportFormat.FLIPPITY || selectedFormat === ExportFormat.WOOCLAP) return { content: "", isBase64: true }; 
         return exportQuiz(getPreparedQuiz(), selectedFormat);
     } catch(e) {
         return { content: "Error generating preview.", isBase64: false };
@@ -238,7 +237,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
         <h2 className="text-3xl md:text-4xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500 uppercase">
           {t.export_data}
         </h2>
-        <p className="text-gray-400 font-mono-cyber">Select destination format for data extraction.</p>
+        <p className="text-gray-400 font-mono-cyber">{t.export_subtitle}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -287,7 +286,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
         })}
       </div>
 
-      <CyberCard title="PREVIEW & ACTION" className="mt-8">
+      <CyberCard title={t.preview_action} className="mt-8">
         <div className="flex flex-col gap-6">
 
           {/* Compatibility Check */}

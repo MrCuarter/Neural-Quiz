@@ -5,7 +5,9 @@ import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { HelpView } from './components/HelpView'; // New Import
+import { HelpView } from './components/HelpView';
+import { PrivacyView } from './components/PrivacyView'; // Import
+import { TermsView } from './components/TermsView'; // Import
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
 import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info, FileType } from 'lucide-react';
@@ -17,7 +19,7 @@ import { getRandomMessage, getDetectionMessage } from './services/messageService
 import * as XLSX from 'xlsx';
 
 // Types
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help';
+type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -498,7 +500,7 @@ const App: React.FC = () => {
 
   const Stepper = () => {
     let step = 1;
-    if (view === 'home' || view === 'create_menu' || view === 'convert_upload' || view === 'help') step = 1;
+    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms'].includes(view)) step = 1;
     if (view === 'create_ai' || view === 'convert_analysis') step = 2;
     if (view === 'create_manual') step = 3;
     if (view === 'convert_result') step = 4;
@@ -510,7 +512,7 @@ const App: React.FC = () => {
         { num: 4, label: 'EXPORT' }
     ];
 
-    if (view === 'home' || view === 'help') return null;
+    if (['home', 'help', 'privacy', 'terms'].includes(view)) return null;
 
     return (
         <div className="flex justify-center mb-8 font-mono text-xs tracking-wider">
@@ -900,7 +902,7 @@ const App: React.FC = () => {
       <Header 
           language={language} 
           setLanguage={setLanguage} 
-          onHelp={() => setView('help')} // Hook up help button
+          onHelp={() => setView('help')} 
       />
 
       <main className="container mx-auto px-4 pb-20 relative z-10 pt-8 flex-1 w-full max-w-7xl">
@@ -917,6 +919,8 @@ const App: React.FC = () => {
         <Stepper />
         
         {view === 'help' && <HelpView onBack={() => setView('home')} t={t} />}
+        {view === 'privacy' && <PrivacyView onBack={() => setView('home')} />}
+        {view === 'terms' && <TermsView onBack={() => setView('home')} />}
 
         {view === 'home' && renderHome()}
         {view === 'create_menu' && renderCreateMenu()}
@@ -952,7 +956,7 @@ const App: React.FC = () => {
       </main>
 
       {/* New Footer */}
-      <Footer />
+      <Footer onPrivacy={() => setView('privacy')} onTerms={() => setView('terms')} />
 
     </div>
   );
