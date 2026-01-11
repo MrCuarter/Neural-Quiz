@@ -6,14 +6,20 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
     try {
         // Set worker (using the same version as in index.html importmap)
         // Ensure we access the GlobalWorkerOptions correctly even if the import structure varies
-        const lib = pdfjsLib.default || pdfjsLib;
+        // Cast pdfjsLib to any to safely access 'default' which might not exist on the type definition depending on loader
+        const lib = (pdfjsLib as any).default || pdfjsLib;
         
         if (lib.GlobalWorkerOptions) {
-            lib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+            // Using cdnjs for the worker is more reliable than esm.sh for WorkerGlobalScope execution
+            // because it serves a standard script bundle with correct CORS headers for importScripts usage.
+            lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
 
         const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = lib.getDocument({ data: arrayBuffer });
+        
+        // Pass data as Uint8Array to ensure compatibility with the worker
+        const loadingTask = lib.getDocument({ data: new Uint8Array(arrayBuffer) });
+        
         const pdf = await loadingTask.promise;
         
         let fullText = "";

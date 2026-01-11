@@ -547,7 +547,12 @@ const App: React.FC = () => {
 
   const renderHome = () => (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8 animate-in zoom-in-95 duration-500">
-       <div className="text-center space-y-4 mb-8">
+       <div className="text-center space-y-4 mb-8 flex flex-col items-center">
+         <img 
+            src="https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png" 
+            alt="Neural Quiz Logo" 
+            className="w-24 h-24 mb-4 object-contain drop-shadow-[0_0_15px_rgba(6,182,212,0.5)] animate-pulse-glow" 
+         />
          <h1 className="text-4xl md:text-7xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 tracking-tight drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]">
            NEURAL QUIZ
          </h1>

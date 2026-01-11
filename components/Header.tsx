@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Globe, FlaskConical, Sprout, Map, BrainCircuit, HelpCircle } from 'lucide-react';
+import { Globe, FlaskConical, Sprout, Map, HelpCircle } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
 
 interface HeaderProps {
@@ -29,7 +29,11 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp })
             
             {/* 1. LOGO DE LA APP */}
             <a href="https://neuralquiz.mistercuarter.es" className="flex items-center gap-3 cursor-pointer group decoration-0">
-                 <BrainCircuit className="w-8 h-8 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
+                 <img 
+                    src="https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png" 
+                    alt="Neural Quiz Logo" 
+                    className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" 
+                 />
                  <h1 className="text-lg font-bold text-white font-mono tracking-tighter hidden sm:block">
                     NEURAL<span className="text-cyan-400">_QUIZ</span>
                  </h1>

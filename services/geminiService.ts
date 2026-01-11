@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question } from "../types";
 
@@ -49,7 +50,7 @@ const getAI = () => {
 const questionSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    text: { type: Type.STRING, description: "The question text. If there is a shared context/stimulus, prepend it to this text." },
+    text: { type: Type.STRING, description: "The question text. Clean text only, NO URLs." },
     options: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
@@ -57,7 +58,8 @@ const questionSchema: Schema = {
     },
     correctAnswerIndex: { type: Type.INTEGER, description: "The index (0-3) of the correct answer" },
     feedback: { type: Type.STRING, description: "Brief explanation of why the answer is correct." },
-    type: { type: Type.STRING, description: "The specific type of this question (e.g. 'Multiple Choice', 'Fill in the Blank')." }
+    type: { type: Type.STRING, description: "The specific type of this question (e.g. 'Multiple Choice', 'Fill in the Blank')." },
+    imageUrl: { type: Type.STRING, description: "The direct URL of an image associated with this question (e.g. ending in .png, .jpg or from postimg.cc)." }
   },
   required: ["text", "options", "correctAnswerIndex"]
 };
@@ -140,7 +142,8 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       rawOptions: Array.isArray(q.options) ? q.options : [],
       correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
       feedback: q.feedback || "",
-      questionType: q.type || "Multiple Choice"
+      questionType: q.type || "Multiple Choice",
+      imageUrl: q.imageUrl || ""
     }));
 
   } catch (error: any) {
@@ -178,8 +181,14 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       
       4. **MATHML/LATEX**:
          - Convert <math> or LaTeX to readable text strings.
+
+      5. **IMAGE URL EXTRACTION (CRITICAL)**:
+         - If you see a URL ending in .png, .jpg, .jpeg, or hosted on postimg.cc, imgur.com, etc. appearing in the same row/block as a question:
+         - **EXTRACT IT to the 'imageUrl' field.**
+         - **DO NOT** leave the URL inside the 'text' field. The 'text' field must be clean of links.
+         - Example: If text is "8 + 7 = ? https://img.com/a.png", then text="8 + 7 = ?" and imageUrl="https://img.com/a.png".
          
-      5. **OUTPUT**:
+      6. **OUTPUT**:
          - Translate all content to ${language}.
          - Ensure exactly 4 options. If original has 2 (True/False), add empty strings.
          - If the source is Flashcards (Term/Definition), convert them to Multiple Choice:
@@ -214,7 +223,8 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       rawOptions: Array.isArray(q.options) ? q.options : [],
       correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
       feedback: q.feedback || "",
-      questionType: q.type || "Multiple Choice"
+      questionType: q.type || "Multiple Choice",
+      imageUrl: q.imageUrl || ""
     }));
   } catch (error: any) {
     console.error("Gemini Parse Error:", error);
@@ -306,7 +316,8 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
 
         // Map back to Question objects while preserving original IDs if possible
         return items.map((aq: any, index: number) => {
-             const originalQ = questions[index] || { id: Math.random().toString(36).substring(2,9) }; 
+             // Cast to any to handle cases where fallback object lacks Question properties like imageUrl
+             const originalQ: any = questions[index] || { id: Math.random().toString(36).substring(2,9) }; 
              
              const rawOptions = Array.isArray(aq.options) ? aq.options : [];
              // Create options
@@ -323,7 +334,8 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
                  options: newOptions,
                  correctOptionId: newOptions[correctIndex]?.id || "",
                  questionType: aq.questionType,
-                 feedback: aq.feedback
+                 feedback: aq.feedback,
+                 imageUrl: aq.imageUrl || originalQ.imageUrl
              };
         });
 
