@@ -43,17 +43,17 @@ const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
         name: 'Universal / Generic', 
         types: Object.values(QUESTION_TYPES) 
     },
-    [ExportFormat.GENIALLY]: { 
-        name: 'Genially', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED] 
-    },
-    [ExportFormat.WAYGROUND]: { 
-        name: 'Wayground', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.DRAW] 
+    [ExportFormat.GOOGLE_FORMS]: {
+        name: 'Google Forms',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.MULTI_SELECT]
     },
     [ExportFormat.KAHOOT]: { 
-        name: 'Kahoot', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP] 
+        name: 'Kahoot!', 
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.POLL] 
+    },
+    [ExportFormat.SOCRATIVE]: { 
+        name: 'Socrative', 
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.OPEN_ENDED] 
     },
     [ExportFormat.BLOOKET]: { 
         name: 'Blooket', 
@@ -61,11 +61,55 @@ const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
     },
     [ExportFormat.GIMKIT_CLASSIC]: {
         name: 'Gimkit',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.FILL_GAP]
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED]
     },
     [ExportFormat.QUIZALIZE]: {
         name: 'Quizalize',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP]
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.OPEN_ENDED]
+    },
+    [ExportFormat.WOOCLAP]: {
+        name: 'Wooclap',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.MULTI_SELECT]
+    },
+    [ExportFormat.GENIALLY]: { 
+        name: 'Genially', 
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE] 
+    },
+    [ExportFormat.WAYGROUND]: { 
+        name: 'Wayground', 
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.DRAW] 
+    },
+    [ExportFormat.PLICKERS]: {
+        name: 'Plickers',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE]
+    },
+    [ExportFormat.WORDWALL]: {
+        name: 'Wordwall',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE]
+    },
+    [ExportFormat.IDOCEO]: {
+        name: 'iDoceo',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE]
+    },
+    [ExportFormat.FLIPPITY]: {
+        name: 'Flippity',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED]
+    },
+    [ExportFormat.QUIZLET_QA]: {
+        name: 'Quizlet / Deck.Toys',
+        types: [QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.MULTIPLE_CHOICE]
+    },
+    [ExportFormat.BAAMBOOZLE]: {
+        name: 'Baamboozle',
+        types: [QUESTION_TYPES.OPEN_ENDED]
+    },
+    [ExportFormat.SANDBOX]: {
+        name: 'Sandbox Education',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE]
+    },
+    [ExportFormat.AIKEN]: {
+        name: 'Moodle / LMS (Aiken)',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE]
     }
 };
 
@@ -671,12 +715,16 @@ const App: React.FC = () => {
                 onChange={e => setGenParams({...genParams, topic: e.target.value})}
               />
               <CyberInput 
-                label={t.count_label} 
+                label={`${t.count_label} (Max 60)`} 
                 type="number"
                 min={1}
-                max={20}
+                max={60}
                 value={genParams.count}
-                onChange={e => setGenParams({...genParams, count: parseInt(e.target.value) || 5})}
+                onChange={e => {
+                  let val = parseInt(e.target.value) || 1;
+                  if (val > 60) val = 60;
+                  setGenParams({...genParams, count: val});
+                }}
               />
               <CyberInput 
                  label={t.age_label}
