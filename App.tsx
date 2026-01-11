@@ -215,7 +215,7 @@ const App: React.FC = () => {
              }
           } catch (e: any) {
              console.error("Error reading file", file.name, e);
-             alert(`Error reading ${file.name}: ${e.message}`);
+             alert(`${t.alert_read_error} ${file.name}: ${e.message}`);
           }
       }
 
@@ -245,7 +245,7 @@ const App: React.FC = () => {
 
   const handleCreateAI = async () => {
     if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) {
-      alert("Please enter a topic, paste context text, or add a URL.");
+      alert(t.alert_topic);
       return;
     }
     
@@ -293,7 +293,7 @@ const App: React.FC = () => {
       
       setView('create_manual'); 
     } catch (e) {
-      alert("AI Generation failed. Please try again.");
+      alert(t.alert_fail);
     } finally {
       setIsGenerating(false);
     }
@@ -384,7 +384,7 @@ const App: React.FC = () => {
         const questions = await processingPromise;
 
         if (questions.length === 0) {
-            throw new Error("No questions extracted.");
+            throw new Error(t.alert_no_questions);
         }
 
         const elapsedNow = Date.now() - startTime;
@@ -426,9 +426,13 @@ const App: React.FC = () => {
     setAnalysisProgress(0);
     
     try {
+      // HANDLE EXCEL AND CSV (Using ArrayBuffer to fix encoding issues)
       if (file.name.match(/\.(xlsx|xls|csv)$/i)) {
         const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer);
+        
+        // Ensure we pass a typed array (Uint8Array) to XLSX.read
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
         
         // 1. Try Deterministic Parsing First
         const strictQuestions = detectAndParseStructure(workbook);
@@ -436,25 +440,29 @@ const App: React.FC = () => {
         if (strictQuestions && strictQuestions.length > 0) {
             await performAnalysis("", file.name.split('.')[0], true, strictQuestions);
         } else {
-             // 2. Fallback to AI
+             // 2. Fallback to AI (Convert sheets to text)
              let contentToAnalyze = "";
              workbook.SheetNames.forEach(name => {
                  contentToAnalyze += `\n--- SHEET: ${name} ---\n`;
+                 // Use CSV output for AI consumption
                  contentToAnalyze += XLSX.utils.sheet_to_csv(workbook.Sheets[name]);
              });
              await performAnalysis(contentToAnalyze, file.name.split('.')[0]);
         }
-      } else if (file.name.toLowerCase().endsWith('.pdf')) {
+      } 
+      // HANDLE PDF
+      else if (file.name.toLowerCase().endsWith('.pdf')) {
          const pdfText = await extractTextFromPDF(file);
          await performAnalysis(pdfText, file.name);
-      } else {
-         // Text file
+      } 
+      // HANDLE TEXT
+      else {
          const content = await file.text();
          await performAnalysis(content, file.name.split('.')[0]);
       }
 
     } catch (e: any) {
-      alert("File Read Error: " + e.message);
+      alert(`${t.alert_read_error}: ${e.message}`);
       clearAnalysisInterval();
     } finally {
         // Reset input
@@ -464,7 +472,7 @@ const App: React.FC = () => {
 
   const handlePasteAnalysis = async () => {
       if (!textToConvert.trim()) {
-          alert("Please paste some text first.");
+          alert(t.alert_paste_first);
           return;
       }
       // Simple heuristic cleanup for PDF copy-paste
@@ -477,7 +485,7 @@ const App: React.FC = () => {
 
   const handleUrlAnalysis = async () => {
     if (!urlToConvert.trim()) {
-        alert("Please enter a valid URL.");
+        alert(t.alert_valid_url);
         return;
     }
     
@@ -560,7 +568,10 @@ const App: React.FC = () => {
              </div>
              <div className="text-center">
                <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-cyan-300">{t.create_quiz}</h2>
-               <p className="font-mono text-gray-400 text-sm">{t.create_quiz_desc}</p>
+               <p className="font-mono text-gray-400 text-sm mb-2">{t.create_quiz_desc}</p>
+               <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
+                  {t.create_quiz_help}
+               </p>
              </div>
            </div>
          </button>
@@ -576,7 +587,10 @@ const App: React.FC = () => {
              </div>
              <div className="text-center">
                <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-pink-300">{t.convert_quiz}</h2>
-               <p className="font-mono text-gray-400 text-sm">{t.convert_quiz_desc}</p>
+               <p className="font-mono text-gray-400 text-sm mb-2">{t.convert_quiz_desc}</p>
+               <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
+                  {t.convert_quiz_help}
+               </p>
              </div>
            </div>
          </button>
@@ -728,7 +742,7 @@ const App: React.FC = () => {
              </div>
 
              <CyberTextArea 
-                placeholder="...or paste text from a website, PDF, or document here manually..."
+                placeholder={t.paste_placeholder}
                 value={genParams.context}
                 onChange={e => setGenParams({...genParams, context: e.target.value})}
                 className="h-32"
@@ -770,7 +784,7 @@ const App: React.FC = () => {
 
       <div className="text-center space-y-2 mb-6">
         <h2 className="text-3xl font-cyber text-pink-400">{t.upload_source}</h2>
-        <p className="text-gray-400 font-mono">Extract questions from existing files, text, or URLs.</p>
+        <p className="text-gray-400 font-mono">{t.upload_source_subtitle}</p>
       </div>
 
       <CyberCard className="border-pink-500/30">
@@ -781,19 +795,19 @@ const App: React.FC = () => {
                 onClick={() => setConvertTab('upload')}
                 className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors min-w-[120px] ${convertTab === 'upload' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
             >
-                <FileUp className="w-4 h-4" /> UPLOAD
+                <FileUp className="w-4 h-4" /> {t.tab_upload}
             </button>
             <button 
                 onClick={() => setConvertTab('paste')}
                 className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors min-w-[120px] ${convertTab === 'paste' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
             >
-                <ClipboardPaste className="w-4 h-4" /> PASTE
+                <ClipboardPaste className="w-4 h-4" /> {t.tab_paste}
             </button>
             <button 
                 onClick={() => setConvertTab('url')}
                 className={`flex-1 py-3 font-mono font-bold flex items-center justify-center gap-2 transition-colors min-w-[120px] ${convertTab === 'url' ? 'text-pink-400 border-b-2 border-pink-400 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}
             >
-                <LinkIcon className="w-4 h-4" /> URL
+                <LinkIcon className="w-4 h-4" /> {t.tab_url}
             </button>
         </div>
 
@@ -803,8 +817,8 @@ const App: React.FC = () => {
                     onClick={() => fileInputRef.current?.click()}>
                     <Upload className="w-16 h-16 text-pink-500 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-white mb-2">{t.drop_file}</h3>
-                    <p className="text-sm text-gray-500 font-mono">Supports: .CSV, .XLSX, .TXT, .PDF</p>
-                    <p className="text-xs text-gray-600 font-mono mt-2">Auto-detection for Kahoot, Socrative, Blooket templates.</p>
+                    <p className="text-sm text-gray-500 font-mono">{t.supports_fmt}</p>
+                    <p className="text-xs text-gray-600 font-mono mt-2">{t.autodetect_fmt}</p>
                     <input 
                         type="file" 
                         ref={fileInputRef}
@@ -819,12 +833,11 @@ const App: React.FC = () => {
                 <div className="bg-pink-950/10 border border-pink-900/50 p-3 rounded flex items-start gap-3">
                     <Info className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
                     <p className="text-xs text-pink-200 font-mono">
-                        For PDF files: Open your PDF, select all text (Ctrl+A), copy it (Ctrl+C), and paste it below. 
-                        The AI will extract the questions automatically.
+                        {t.paste_instr}
                     </p>
                 </div>
                 <CyberTextArea 
-                    placeholder="Paste your raw text, PDF content, or webpage content here..."
+                    placeholder={t.paste_placeholder}
                     className="h-64 font-mono text-sm"
                     value={textToConvert}
                     onChange={(e) => setTextToConvert(e.target.value)}
@@ -835,7 +848,7 @@ const App: React.FC = () => {
                     onClick={handlePasteAnalysis}
                     disabled={!textToConvert.trim()}
                 >
-                    <Bot className="w-4 h-4" /> ANALYZE TEXT WITH AI
+                    <Bot className="w-4 h-4" /> {t.analyze_btn}
                 </CyberButton>
             </div>
         ) : (
@@ -844,16 +857,15 @@ const App: React.FC = () => {
                     <Globe className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
                     <div className="space-y-1">
                         <p className="text-xs text-pink-200 font-mono">
-                            Paste a public URL from Kahoot, Wayground, Gimkit, etc. 
-                            We will attempt to fetch the page content for the AI to analyze.
+                            {t.url_instr}
                         </p>
                         <p className="text-[10px] text-pink-400 font-mono">
-                            Note: Some sites block direct access. If this fails, please copy the text from the site manually and use the Paste tab.
+                            {t.url_hint}
                         </p>
                     </div>
                 </div>
                 <CyberInput 
-                    placeholder="https://create.kahoot.it/details/..."
+                    placeholder={t.url_placeholder}
                     value={urlToConvert}
                     onChange={(e) => setUrlToConvert(e.target.value)}
                 />
@@ -863,7 +875,7 @@ const App: React.FC = () => {
                     onClick={handleUrlAnalysis}
                     disabled={!urlToConvert.trim()}
                 >
-                    <Bot className="w-4 h-4" /> SCAN URL WITH AI
+                    <Bot className="w-4 h-4" /> {t.scan_btn}
                 </CyberButton>
             </div>
         )}

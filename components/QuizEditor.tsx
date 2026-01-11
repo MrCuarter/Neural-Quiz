@@ -4,7 +4,8 @@ import { Quiz, Question, Option } from '../types';
 import { CyberButton, CyberInput, CyberCard } from './ui/CyberUI';
 import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { generateQuizQuestions } from '../services/geminiService';
-import { parseUniversalCSV } from '../services/importService';
+import { detectAndParseStructure } from '../services/importService'; // Changed import
+import * as XLSX from 'xlsx'; // Import XLSX
 
 interface QuizEditorProps {
   quiz: Quiz;
@@ -113,7 +114,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }));
       setAiTopic('');
     } catch (e) {
-      alert("AI Generation failed. Check your API Key or try again.");
+      alert(t.alert_fail);
     } finally {
       setIsGenerating(false);
     }
@@ -124,12 +125,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
     if (!file) return;
 
     const reader = new FileReader();
+    
+    // Use ArrayBuffer to handle all encodings (Fixes UTF-8/ANSI issues)
+    reader.readAsArrayBuffer(file);
+    
     reader.onload = (event) => {
       try {
-        const text = event.target?.result as string;
-        const newQuestions = parseUniversalCSV(text);
-        if (newQuestions.length === 0) {
-          alert("No valid questions found in CSV.");
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        const newQuestions = detectAndParseStructure(workbook);
+        
+        if (!newQuestions || newQuestions.length === 0) {
+          alert(t.alert_no_valid_csv);
           return;
         }
         setQuiz(prev => ({
@@ -138,10 +146,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
         }));
         if (fileInputRef.current) fileInputRef.current.value = "";
       } catch (err: any) {
-        alert("Import Error: " + err.message);
+        alert(`${t.alert_import_error}: ${err.message}`);
       }
     };
-    reader.readAsText(file);
   };
 
   return (
@@ -235,7 +242,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                             {!isExpanded && (
                                 <div className="flex-1 flex items-center gap-2">
                                     <span className={`font-bold font-mono ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>
-                                        {q.text || "Empty Question..."}
+                                        {q.text || "..."}
                                     </span>
                                     {!isValid && <AlertCircle className="w-4 h-4 text-red-500" />}
                                 </div>

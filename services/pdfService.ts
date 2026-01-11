@@ -5,10 +5,16 @@ import * as pdfjsLib from 'pdfjs-dist';
 export const extractTextFromPDF = async (file: File): Promise<string> => {
     try {
         // Set worker (using the same version as in index.html importmap)
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        // Ensure we access the GlobalWorkerOptions correctly even if the import structure varies
+        const lib = pdfjsLib.default || pdfjsLib;
+        
+        if (lib.GlobalWorkerOptions) {
+            lib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        }
 
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const loadingTask = lib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
         
         let fullText = "";
         
@@ -22,6 +28,6 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
         return fullText;
     } catch (error: any) {
         console.error("PDF Extraction Error:", error);
-        throw new Error("Could not read PDF. Ensure it is not password protected.");
+        throw new Error(`Could not read PDF. Ensure it is a valid PDF file. Details: ${error.message}`);
     }
 };

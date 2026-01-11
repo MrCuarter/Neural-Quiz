@@ -348,7 +348,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
             <div className="flex flex-col sm:flex-row gap-4 p-4 bg-black/40 border border-cyan-900/50 rounded-lg">
               {/* ... (Gimkit logic same as before) ... */}
               <div className="flex-1">
-                <p className="text-cyan-400 font-mono-cyber text-sm mb-2 uppercase">Select Gimkit Mode:</p>
+                <p className="text-cyan-400 font-mono-cyber text-sm mb-2 uppercase">{t.gimkit_mode}</p>
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setSelectedFormat(ExportFormat.GIMKIT_CLASSIC)}
@@ -359,7 +359,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                     }`}
                   >
                     <List className="w-6 h-6" />
-                    <span className="text-xs font-bold font-mono">CLASSIC (MC)</span>
+                    <span className="text-xs font-bold font-mono">{t.mode_classic}</span>
                   </button>
 
                   <button 
@@ -371,7 +371,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                     }`}
                   >
                     <Keyboard className="w-6 h-6" />
-                    <span className="text-xs font-bold font-mono">TEXT INPUT</span>
+                    <span className="text-xs font-bold font-mono">{t.mode_text}</span>
                   </button>
                 </div>
               </div>
@@ -384,7 +384,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                 {/* ... (Flippity logic same as before) ... */}
                 <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
-                  <p className="text-orange-400 font-mono-cyber text-sm mb-2 uppercase">Configuración de Flippity:</p>
+                  <p className="text-orange-400 font-mono-cyber text-sm mb-2 uppercase">{t.flippity_config}</p>
                   <div className="flex gap-4">
                     <button 
                       onClick={() => setFlippityMode('6')}
@@ -416,14 +416,14 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
               {/* Categories Section */}
               <div className="mt-4 border-t border-gray-700 pt-4">
                    <div className="flex justify-between items-center mb-2">
-                       <p className="text-xs text-orange-300 font-mono uppercase">Game Categories (Row 1):</p>
+                       <p className="text-xs text-orange-300 font-mono uppercase">{t.cat_row1}</p>
                        <CyberButton 
                           variant="secondary" 
                           onClick={handleGenerateCategories} 
                           disabled={isGeneratingCats}
                           className="py-1 px-3 text-[10px] h-8"
                         >
-                          <Wand2 className="w-3 h-3" /> {isGeneratingCats ? 'GENERATING...' : 'AI GENERATE'}
+                          <Wand2 className="w-3 h-3" /> {isGeneratingCats ? t.cat_generating : t.cat_gen}
                        </CyberButton>
                    </div>
                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -448,26 +448,26 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                      <div className="mb-4 p-4 bg-purple-950/30 rounded-full border border-purple-500/50">
                          <Check className="w-12 h-12 text-purple-400" />
                      </div>
-                     <h3 className="text-xl font-cyber text-white mb-2">GOOGLE FORM CREATED!</h3>
-                     <p className="text-gray-400 mb-6">Your quiz is ready in your Google Drive.</p>
+                     <h3 className="text-xl font-cyber text-white mb-2">{t.google_success_title}</h3>
+                     <p className="text-gray-400 mb-6">{t.google_success_desc}</p>
                      <a 
                         href={googleFormLink} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded font-bold transition-all shadow-[0_0_20px_rgba(147,51,234,0.4)]"
                      >
-                         OPEN FORM <ExternalLink className="w-4 h-4" />
+                         {t.open_form} <ExternalLink className="w-4 h-4" />
                      </a>
                  </div>
              ) : currentExport.isBase64 && !isGoogle ? (
                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
                  <AlertTriangle className="w-8 h-8 opacity-50" />
-                 <p>{t.preview_unavailable}</p>
+                 <p>{t.preview_binary_unavailable}</p>
                </div>
              ) : isGoogle ? (
                  <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
                      <img src="https://www.gstatic.com/images/branding/product/1x/forms_2020q4_48dp.png" className="w-16 h-16 opacity-50 grayscale group-hover:grayscale-0" />
-                     <p className="max-w-xs text-center">Preview unavailable. Click the button below to connect your Google account and generate the form.</p>
+                     <p className="max-w-xs text-center">{t.google_preview_unavailable}</p>
                  </div>
              ) : (
                 isCSV ? renderCSVTable(currentExport.content) : (

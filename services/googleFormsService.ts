@@ -96,10 +96,24 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
   const formId = formData.formId;
   const responderUri = formData.responderUri; // URL to share
 
-  // B. PREPARE QUESTIONS (BATCH UPDATE)
-  // Mapping local Question format to Google Forms JSON format
-  
-  const requests = questions.map((q, index) => {
+  // B. PREPARE BATCH REQUEST
+  // CRITICAL: The request to make it a Quiz MUST come before adding questions with grading.
+  const requests: any[] = [];
+
+  // 1. Convert Form to Quiz Mode (First priority)
+  requests.push({
+    updateSettings: {
+      settings: {
+        quizSettings: {
+          isQuiz: true
+        }
+      },
+      updateMask: "quizSettings.isQuiz"
+    }
+  });
+
+  // 2. Add Questions
+  questions.forEach((q, index) => {
     const correctOpt = q.options.find(o => o.id === q.correctOptionId);
     
     // Fallback if no options (e.g. open ended input)
@@ -116,7 +130,7 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
         formOptions.push({ value: "Option 1" });
     }
 
-    return {
+    requests.push({
       createItem: {
         item: {
           title: q.text,
@@ -141,20 +155,8 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
         },
         location: { index: index }
       }
-    };
+    });
   });
-
-  // Convert Form to Quiz Mode (to enable grading)
-  requests.push({
-    updateSettings: {
-      settings: {
-        quizSettings: {
-          isQuiz: true
-        }
-      },
-      updateMask: "quizSettings.isQuiz"
-    }
-  } as any);
 
   // C. SEND BATCH REQUEST (POST /forms/{id}:batchUpdate)
   const updateRes = await fetch(`https://forms.googleapis.com/v1/forms/${formId}:batchUpdate`, {
@@ -168,7 +170,13 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
 
   if (!updateRes.ok) {
       const err = await updateRes.text();
-      throw new Error(`Error populating questions: ${err}`);
+      // Try to parse error for better message
+      try {
+          const errJson = JSON.parse(err);
+          throw new Error(`Google API Error: ${errJson.error.message}`);
+      } catch (e) {
+          throw new Error(`Error populating questions: ${err}`);
+      }
   }
 
   return responderUri;
