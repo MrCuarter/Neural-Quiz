@@ -140,6 +140,7 @@ const App: React.FC = () => {
     urls: ''
   });
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState(''); // New status message for create mode
   const [dragActive, setDragActive] = useState(false);
   const contextFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -294,6 +295,13 @@ const App: React.FC = () => {
     }
     
     setIsGenerating(true);
+    setGenerationStatus(getRandomMessage('start'));
+
+    // Message rotation for generation
+    const genInterval = setInterval(() => {
+        setGenerationStatus(getRandomMessage('generate_ai'));
+    }, 4000);
+
     try {
       const langMap: Record<string, string> = {
           'es': 'Spanish', 'en': 'English', 'fr': 'French', 'it': 'Italian', 'de': 'German'
@@ -340,6 +348,7 @@ const App: React.FC = () => {
       alert(t.alert_fail);
     } finally {
       setIsGenerating(false);
+      clearInterval(genInterval);
     }
   };
 
@@ -351,7 +360,9 @@ const App: React.FC = () => {
       }
   };
 
-  const performAnalysis = async (content: string, sourceName: string, isAlreadyStructured: boolean = false, preParsedQuestions: Question[] = []) => {
+  interface ImageInput { data: string; mimeType: string; }
+
+  const performAnalysis = async (content: string, sourceName: string, isAlreadyStructured: boolean = false, preParsedQuestions: Question[] = [], imageInput?: ImageInput) => {
     setView('convert_analysis');
     setAnalysisProgress(0);
     setAnalysisStatus(getRandomMessage('start'));
@@ -374,7 +385,9 @@ const App: React.FC = () => {
                 };
                 const selectedLang = langMap[language] || 'Spanish';
                 
-                const generatedQs = await parseRawTextToQuiz(content, selectedLang);
+                // Pass image if available
+                const generatedQs = await parseRawTextToQuiz(content, selectedLang, imageInput);
+                
                 return generatedQs.map(gq => {
                   const qId = uuid();
                   const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
@@ -470,6 +483,25 @@ const App: React.FC = () => {
     setAnalysisProgress(0);
     
     try {
+      // HANDLE IMAGES (OCR)
+      if (file.type.startsWith('image/')) {
+         const reader = new FileReader();
+         reader.readAsDataURL(file);
+         reader.onload = async () => {
+             const base64String = (reader.result as string).split(',')[1];
+             const imageInput: ImageInput = {
+                 data: base64String,
+                 mimeType: file.type
+             };
+             // Pass empty content string, relies on image
+             await performAnalysis("Image Content", file.name, false, [], imageInput);
+         };
+         reader.onerror = (error) => {
+             throw new Error("Failed to read image file.");
+         }
+         return; // Logic continues in onload
+      }
+
       // HANDLE EXCEL AND CSV (Using ArrayBuffer to fix encoding issues)
       if (file.name.match(/\.(xlsx|xls|csv)$/i)) {
         const arrayBuffer = await file.arrayBuffer();
@@ -591,7 +623,7 @@ const App: React.FC = () => {
 
   const renderHome = () => (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8 animate-in zoom-in-95 duration-500">
-       <div className="text-center space-y-4 mb-8 flex flex-col items-center">
+       <div className="text-center space-y-4 mb-8 flex flex-col items-center max-w-2xl">
          <img 
             src="https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png" 
             alt="Neural Quiz Logo" 
@@ -603,46 +635,79 @@ const App: React.FC = () => {
          <p className="text-base md:text-xl font-mono-cyber text-gray-400 tracking-widest">
            {t.app_subtitle}
          </p>
+         
+         {/* Description Paragraph */}
+         <div className="mt-6 p-6 bg-cyan-950/20 border border-cyan-500/30 rounded-lg backdrop-blur-sm relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-2 opacity-20">
+                 <BrainCircuit className="w-16 h-16 text-cyan-400" />
+             </div>
+             <p className="text-gray-300 font-mono text-sm md:text-base leading-relaxed relative z-10">
+                 {t.home_description}
+             </p>
+         </div>
        </div>
 
        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
-         <button 
-           onClick={() => setView('create_menu')}
-           className="group relative bg-black/40 border border-cyan-500/30 p-12 hover:bg-cyan-950/20 transition-all hover:scale-[1.02] hover:border-cyan-400 overflow-hidden"
-         >
-           <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-           <div className="flex flex-col items-center gap-6 relative z-10">
-             <div className="p-6 rounded-full bg-cyan-950/50 border border-cyan-500/50 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all">
-               <BrainCircuit className="w-16 h-16 text-cyan-400" />
-             </div>
-             <div className="text-center">
-               <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-cyan-300">{t.create_quiz}</h2>
-               <p className="font-mono text-gray-400 text-sm mb-2">{t.create_quiz_desc}</p>
-               <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
-                  {t.create_quiz_help}
-               </p>
-             </div>
-           </div>
-         </button>
+         
+         {/* Create Column */}
+         <div className="flex flex-col gap-2">
+            <button 
+                onClick={() => setView('create_menu')}
+                className="w-full group relative bg-black/40 border border-cyan-500/30 p-12 hover:bg-cyan-950/20 transition-all hover:scale-[1.02] hover:border-cyan-400 overflow-hidden"
+            >
+                <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
+                <div className="flex flex-col items-center gap-6 relative z-10">
+                    <div className="p-6 rounded-full bg-cyan-950/50 border border-cyan-500/50 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all">
+                        <BrainCircuit className="w-16 h-16 text-cyan-400" />
+                    </div>
+                    <div className="text-center">
+                        <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-cyan-300">{t.create_quiz}</h2>
+                        <p className="font-mono text-gray-400 text-sm mb-2">{t.create_quiz_desc}</p>
+                        <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
+                            {t.create_quiz_help}
+                        </p>
+                    </div>
+                </div>
+            </button>
+            <a 
+                href="https://mistercuarter.es/privacy-policy" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs font-mono text-cyan-600 hover:text-cyan-400 text-center uppercase tracking-widest border border-transparent hover:border-cyan-900/50 py-2 rounded transition-colors"
+            >
+                Política de privacidad
+            </a>
+         </div>
 
-         <button 
-           onClick={() => setView('convert_upload')}
-           className="group relative bg-black/40 border border-pink-500/30 p-12 hover:bg-pink-950/20 transition-all hover:scale-[1.02] hover:border-pink-400 overflow-hidden"
-         >
-           <div className="absolute inset-0 bg-pink-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-           <div className="flex flex-col items-center gap-6 relative z-10">
-             <div className="p-6 rounded-full bg-pink-950/50 border border-pink-500/50 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all">
-               <FileUp className="w-16 h-16 text-pink-400" />
-             </div>
-             <div className="text-center">
-               <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-pink-300">{t.convert_quiz}</h2>
-               <p className="font-mono text-gray-400 text-sm mb-2">{t.convert_quiz_desc}</p>
-               <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
-                  {t.convert_quiz_help}
-               </p>
-             </div>
-           </div>
-         </button>
+         {/* Convert Column */}
+         <div className="flex flex-col gap-2">
+            <button 
+                onClick={() => setView('convert_upload')}
+                className="w-full group relative bg-black/40 border border-pink-500/30 p-12 hover:bg-pink-950/20 transition-all hover:scale-[1.02] hover:border-pink-400 overflow-hidden"
+            >
+                <div className="absolute inset-0 bg-pink-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
+                <div className="flex flex-col items-center gap-6 relative z-10">
+                    <div className="p-6 rounded-full bg-pink-950/50 border border-pink-500/50 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all">
+                        <FileUp className="w-16 h-16 text-pink-400" />
+                    </div>
+                    <div className="text-center">
+                        <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-pink-300">{t.convert_quiz}</h2>
+                        <p className="font-mono text-gray-400 text-sm mb-2">{t.convert_quiz_desc}</p>
+                        <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
+                            {t.convert_quiz_help}
+                        </p>
+                    </div>
+                </div>
+            </button>
+            <a 
+                href="https://mistercuarter.es/condiciones" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs font-mono text-pink-600 hover:text-pink-400 text-center uppercase tracking-widest border border-transparent hover:border-pink-900/50 py-2 rounded transition-colors"
+            >
+                Condiciones del servicio
+            </a>
+         </div>
        </div>
     </div>
   );
@@ -824,6 +889,13 @@ const App: React.FC = () => {
            >
              {t.initiate_gen}
            </CyberButton>
+           
+           {isGenerating && (
+                <div className="text-center font-mono text-xs text-purple-400 animate-pulse mt-2">
+                    {generationStatus}
+                </div>
+           )}
+
         </div>
       </CyberCard>
     </div>
@@ -876,7 +948,7 @@ const App: React.FC = () => {
                         type="file" 
                         ref={fileInputRef}
                         className="hidden"
-                        accept=".csv,.xlsx,.xls,.txt,.pdf"
+                        accept=".csv,.xlsx,.xls,.txt,.pdf,.png,.jpg,.jpeg,.webp"
                         onChange={handleFileUpload}
                     />
                 </div>

@@ -31,7 +31,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   // Define allowed types per platform. Null or '*' means all types are "okay" or generic.
   const formats = [
     { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
-    { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://www.gstatic.com/images/branding/product/1x/forms_2020q4_48dp.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.KAHOOT, name: "Kahoot (XLSX)", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.WOOCLAP, name: "Wooclap (XLSX)", desc: t.fmt_wooclap, logo: "https://i.postimg.cc/SKc8L982/Wooclap.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.PLICKERS, name: "Plickers (Text)", desc: t.fmt_plickers, logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
@@ -466,7 +466,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                </div>
              ) : isGoogle ? (
                  <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
-                     <img src="https://www.gstatic.com/images/branding/product/1x/forms_2020q4_48dp.png" className="w-16 h-16 opacity-50 grayscale group-hover:grayscale-0" />
+                     <img src="https://i.postimg.cc/T3HGdbMd/Forms.png" className="w-16 h-16 opacity-50 grayscale group-hover:grayscale-0" />
                      <p className="max-w-xs text-center">{t.google_preview_unavailable}</p>
                  </div>
              ) : (
@@ -496,7 +496,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
             >
               {isGoogle ? (
                   <>
-                    <img src="https://www.gstatic.com/images/branding/product/1x/forms_2020q4_48dp.png" className="w-5 h-5 bg-white rounded-full p-0.5" />
+                    <img src="https://i.postimg.cc/T3HGdbMd/Forms.png" className="w-5 h-5 bg-white rounded-full p-0.5" />
                     {t.connect_create}
                   </>
               ) : (

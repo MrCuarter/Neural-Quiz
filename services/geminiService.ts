@@ -53,14 +53,14 @@ const questionSchema: Schema = {
     options: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: "A list of exactly 4 possible answers. For True/False, provide 'True' and 'False' and 2 empty strings."
+      description: "A list of exactly 4 possible answers. For True/False, provide 'True' and 'False' and 2 empty strings. For Open Ended, provide 4 empty strings or sample answers."
     },
     correctAnswerIndex: { type: Type.INTEGER, description: "The index (0-3) of the correct answer" },
-    feedback: { type: Type.STRING, description: "Brief explanation of why the answer is correct." },
-    type: { type: Type.STRING, description: "The specific type of this question (e.g. 'Multiple Choice', 'Fill in the Blank')." },
+    feedback: { type: Type.STRING, description: "Brief explanation or the correct text answer for Open Ended questions." },
+    type: { type: Type.STRING, description: "The specific type of this question." },
     imageUrl: { type: Type.STRING, description: "The direct URL of an image associated with this question (e.g. ending in .png, .jpg or from postimg.cc)." }
   },
-  required: ["text", "options", "correctAnswerIndex"]
+  required: ["text", "options", "correctAnswerIndex", "type"]
 };
 
 const quizSchema: Schema = {
@@ -89,7 +89,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
 
     let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
     prompt += `\nTarget Audience Age: ${age}.`;
-    prompt += `\nQuestion Types: Please generate a mix of the following types: ${types.join(', ')}.`;
+    prompt += `\nREQUIRED QUESTION TYPES: You MUST generate a mix of these specific types: ${types.join(', ')}. Do NOT default to only Multiple Choice if other types are requested.`;
     prompt += `\nOUTPUT LANGUAGE: ${language}. Ensure all questions, options, and feedback are in ${language}.`;
     
     // Add Context
@@ -104,14 +104,19 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       prompt += `\n\nREFERENCE WEB PAGES/URLS (Use these as source material if accessible, or as context for the topic):\n${urls.join('\n')}`;
     }
 
-    prompt += `\n\nIMPORTANT RULES:
-    1. Ensure each question has exactly 4 options. 
-    2. If True/False, use 'Verdadero', 'Falso', '', '' (translated to target lang).
-    3. If 'Fill in the Blank' or 'Fill in the gaps':
-       - The 'text' must contain the gap represented by 5 underscores: '_____'.
-       - The 'options' should contain the correct word/phrase and 3 distractors.
-    4. If 'Multi-Select' or 'Checkbox':
-       - Since the output format requires one correct index, pick the *most* correct or primary answer, but ensure options allows for multiple plausible ones if the user manually changes the mode later.
+    prompt += `\n\nIMPORTANT RULES FOR TYPES:
+    1. 'Multiple Choice': Exactly 4 options, one correct.
+    2. 'True/False': Options must be 'True', 'False', '', '' (Translate to target language).
+    3. 'Fill in the Blank': Text must have '_____'. Options: Correct word + 3 distractors.
+    4. 'Open Ended' / 'Short Answer': 
+       - Set 'type' to 'Open Ended'.
+       - Put the correct/suggested answer in the 'feedback' field.
+       - Options can be empty strings ["", "", "", ""] OR sample answers.
+       - 'correctAnswerIndex' can be 0.
+    5. 'Multi-Select' or 'Checkbox':
+       - Since the output format requires one correct index, pick the *most* correct or primary answer, but ensure options allows for multiple plausible ones.
+    
+    DISTRIBUTE THE TYPES ACCORDING TO THE USER REQUEST (${types.join(', ')}).
     `;
 
     const response = await ai.models.generateContent({
@@ -120,7 +125,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are an expert educational content creator. Create engaging, accurate questions suitable for the specified age group. IMPORTANT: When writing in Spanish, YOU MUST use standard opening and closing question marks (¿?) correctly. Ensure strict UTF-8 character encoding. Output must be in ${language}.`,
+        systemInstruction: `You are an expert educational content creator. Create engaging, accurate questions suitable for the specified age group. IMPORTANT: When writing in Spanish, YOU MUST use standard opening and closing question marks (¿?) correctly. Ensure strict UTF-8 character encoding. Output must be in ${language}. FORCE VARIETY IN QUESTION TYPES if requested.`,
         tools: urls && urls.length > 0 ? [{googleSearch: {}}] : undefined // Enable search if URLs provided (optional hint)
       },
     });
@@ -155,15 +160,32 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
   }
 };
 
-export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish'): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
+interface ImageInput {
+  data: string; // Base64
+  mimeType: string;
+}
+
+export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: ImageInput): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
   try {
     const ai = getAI();
     // Increase limit to handle massive HTML dumps from Jina
     const truncatedText = rawText.substring(0, 800000); 
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Perform a FORENSIC ANALYSIS on the following text to extract quiz data.
+    const contents: any[] = [];
+    if (image) {
+      contents.push({
+        inlineData: {
+          mimeType: image.mimeType,
+          data: image.data
+        }
+      });
+      contents.push({
+         text: "Extract questions from this image."
+      });
+    }
+
+    contents.push({
+       text: `Perform a FORENSIC ANALYSIS on the following text/data to extract quiz data.
       
       SOURCE MATERIAL:
       ${truncatedText}
@@ -175,8 +197,9 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
          - LOOK DEEP for JSON objects buried in script tags (e.g., 'window.quizData', '__NEXT_DATA__', 'hydration', 'term', 'definition').
          - Quizlet/Kahoot often hide questions in these JSON blobs inside the HTML. EXTRACT THEM.
       
-      2. **HANDLING JINA MARKDOWN**:
-         - If the input is from Jina Reader, it will be text-heavy. Look for repeated patterns like "Term" / "Definition" or "Question" / "Answer".
+      2. **HANDLING JINA MARKDOWN / IMAGES**:
+         - If input is an image, perform OCR and structure the questions found.
+         - If input is text, look for repeated patterns like "Term" / "Definition".
       
       3. **STIMULUS & CONTEXT**:
          - If a paragraph precedes a question (e.g., "Read the text below..."), merge it into the 'text' field of the question.
@@ -198,11 +221,16 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
            - Correct Option = Definition
            - Distractors = Generate 3 plausible wrong definitions from OTHER terms in the set.
 
-      `,
+      `
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: contents, // Pass array for multimodal
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a Forensic Data Extraction AI. You don't just read text; you look for structured data buried inside HTML, JSON blobs, and Markdown artifacts. You are an expert at reverse-engineering Quizlet, Kahoot, and Blooket data structures from raw page dumps. Output Language: ${language}.`,
+        systemInstruction: `You are a Forensic Data Extraction AI. You don't just read text; you look for structured data buried inside HTML, JSON blobs, and Markdown artifacts. You can also read images (OCR) to extract questions. Output Language: ${language}.`,
       },
     });
 

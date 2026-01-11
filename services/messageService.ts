@@ -10,6 +10,16 @@ const messages = {
         "Cargando la matriz de conocimiento...",
         "Estableciendo enlace neural..."
     ],
+    generate_ai: [
+        "Invocando a la musa digital...",
+        "Mr. Cuarter está redactando las preguntas...",
+        "Mezclando conceptos y café virtual...",
+        "Asegurando que las respuestas falsas parezcan verdaderas...",
+        "Consultando la biblioteca de Alejandría digital...",
+        "Evitando preguntas aburridas a toda costa...",
+        "Calibrando la dificultad para que sufran (un poco)...",
+        "Generando opciones: A, B, C y 'Todas las anteriores'...",
+    ],
     detect_kahoot: [
         "¡Ajá! Veo formas de colores y música pegadiza... ¡Es un Kahoot!",
         "Detectando arquitectura Kahoot. Mr. Cuarter aprueba esto.",
@@ -50,6 +60,14 @@ const messages = {
         "Intentando entender tu letra (digital)...",
         "Buscando signos de interrogación..."
     ],
+    detect_image: [
+        "Activando córtex visual...",
+        "Leyendo píxeles como si fueran letras...",
+        "Descifrando jeroglíficos en la imagen...",
+        "Aplicando OCR cuántico...",
+        "¿Es eso una mancha de café o un acento?",
+        "Extrayendo texto de la captura..."
+    ],
     progress: [
         "¡Casi lo tenemos! Puliendo los píxeles...",
         "La IA está pensando fuerte...",
@@ -83,6 +101,9 @@ export const getRandomMessage = (category: keyof typeof messages): string => {
 export const getDetectionMessage = (filename: string, content: string): string => {
     const lowerName = filename.toLowerCase();
     const lowerContent = content.toLowerCase();
+
+    // Image detection
+    if (lowerName.match(/\.(png|jpg|jpeg|webp)$/)) return getRandomMessage('detect_image');
 
     if (lowerName.includes('kahoot') || lowerContent.includes('kahoot')) return getRandomMessage('detect_kahoot');
     if (lowerName.includes('blooket') || lowerContent.includes('blooket')) return getRandomMessage('detect_blooket');
