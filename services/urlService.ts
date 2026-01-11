@@ -1,144 +1,111 @@
 
-// ROBUST URL SERVICE V6 (The "Plan Omega" Architecture)
-// Strategy: Specialized adapters for each platform that mimic their internal API calls.
-// This bypasses the need to "render" the visual page.
+// ROBUST URL SERVICE (The "Plan Omega" Architecture)
+// Solves CORS and SPA Rendering by delegating fetching to specialized external agents.
 
-// High-availability CORS proxies
-const PROXY_GENERATORS = [
-    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}&disableCache=${Date.now()}`,
-    (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    (url: string) => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(url)}`,
-    // Fallback to Jina if specific APIs fail
-    (url: string) => `https://r.jina.ai/${url}` 
-];
+// LIST OF AGENTS
+// 1. Jina Reader: Acts as a "Serverless Browser". Renders JS and returns Markdown. Best for AI.
+// 2. CorsProxy: Tunnels raw HTML request. Good for static sites or API endpoints.
+// 3. AllOrigins: Backup tunnel.
 
-// Helper: Try to fetch a URL using rotation
-const fetchWithRotation = async (targetUrl: string, description: string): Promise<string | null> => {
-    for (let i = 0; i < PROXY_GENERATORS.length; i++) {
-        const proxyUrl = PROXY_GENERATORS[i](targetUrl);
-        // Special case for Jina (it's not a proxy wrapper, it's a direct service)
-        const finalUrl = proxyUrl.includes('r.jina.ai') ? proxyUrl : proxyUrl;
-        
-        console.log(`🔄 Attempt ${i + 1} [${description}]:`, finalUrl);
-        
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-            const response = await fetch(finalUrl, { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                const text = await response.text();
-                // Basic validation
-                if (text.length > 50 && !text.includes("Access Denied") && !text.includes("Proxy Error")) {
-                    console.log(`✅ Success: ${description}`);
-                    return text;
-                }
-            }
-        } catch (e) {
-            console.warn(`❌ Failed: ${finalUrl}`);
-        }
+const AGENTS = [
+    // Agent Alpha: Jina (Renders the page, returns clean Markdown)
+    {
+        name: "Agent Jina (Reader)",
+        getUrl: (target: string) => `https://r.jina.ai/${target}`,
+        headers: { 'X-No-Cache': 'true' }
+    },
+    // Agent Beta: CORS Proxy IO (Raw HTML Tunnel)
+    {
+        name: "Agent Proxy (Tunnel)",
+        getUrl: (target: string) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
+        headers: {}
+    },
+    // Agent Gamma: AllOrigins (JSONP style)
+    {
+        name: "Agent Origins (Backup)",
+        getUrl: (target: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
+        headers: {}
     }
-    return null;
-};
+];
 
 export const fetchUrlContent = async (url: string): Promise<string> => {
     let targetUrl = url.trim();
     if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
 
-    console.log(`⚡ Neural Scan Omega: ${targetUrl}`);
+    console.log(`⚡ NEURAL SCAN INITIATED: ${targetUrl}`);
 
-    // --- ADAPTER 1: KAHOOT (API) ---
+    // --- STRATEGY 1: API SNIPING (If we detect a known ID) ---
+    // If we can construct a direct API call, we bypass the visual web entirely.
+    
+    // Kahoot API Sniper
     if (targetUrl.includes('kahoot')) {
         const idMatch = targetUrl.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
         if (idMatch) {
             const id = idMatch[0];
-            // Primary and Secondary API endpoints for Kahoot
-            const endpoints = [
-                `https://create.kahoot.it/rest/kahoots/${id}`,
-                `https://play.kahoot.it/rest/kahoots/${id}`
-            ];
-
-            for (const endpoint of endpoints) {
-                const data = await fetchWithRotation(endpoint, "Kahoot API");
-                if (data && (data.includes('questions') || data.includes('quiz'))) {
-                    return `--- KAHOOT API JSON ---\n${data}`;
+            console.log("🎯 Kahoot UUID Detected. Attempting API injection...");
+            const apiTarget = `https://create.kahoot.it/rest/kahoots/${id}`;
+            // Send the API URL to our Proxy Agent
+            try {
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiTarget)}`;
+                const response = await fetch(proxyUrl);
+                if (response.ok) {
+                    const json = await response.text();
+                    if (json.includes("questions")) return `--- KAHOOT API JSON ---\n${json}`;
                 }
-            }
+            } catch(e) { console.warn("API Sniper missed, falling back to brute force."); }
         }
     }
 
-    // --- ADAPTER 2: GIMKIT (API) ---
-    if (targetUrl.includes('gimkit.com')) {
-        const idMatch = targetUrl.match(/[a-f0-9]{24}/);
-        if (idMatch) {
-            const id = idMatch[0];
-            const endpoint = `https://www.gimkit.com/api/kits/${id}`;
-            const data = await fetchWithRotation(endpoint, "Gimkit API");
-            if (data && (data.includes('kit') || data.includes('questions'))) {
-                return `--- GIMKIT API JSON ---\n${data}`;
-            }
-        }
-    }
+    // --- STRATEGY 2: AGENT ROTATION (Brute Force) ---
+    // We try each agent until one returns valid content.
 
-    // --- ADAPTER 3: QUIZLET (Next.js Hydration Data) ---
-    // Quizlet doesn't have a public API anymore, but they inject the data into the HTML
-    // inside a <script id="__NEXT_DATA__"> tag. We extract that.
-    if (targetUrl.includes('quizlet.com')) {
-        // We fetch the raw HTML of the page
-        const html = await fetchWithRotation(targetUrl, "Quizlet HTML");
-        if (html) {
-            // Try to find the Next.js data blob
-            const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/);
-            if (nextDataMatch && nextDataMatch[1]) {
-                return `--- QUIZLET DATA JSON ---\n${nextDataMatch[1]}`;
-            }
+    for (const agent of AGENTS) {
+        console.log(`🔄 Deploying ${agent.name}...`);
+        
+        try {
+            const fetchUrl = agent.getUrl(targetUrl);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for heavy rendering
+
+            const response = await fetch(fetchUrl, { 
+                headers: agent.headers,
+                signal: controller.signal 
+            });
             
-            // Fallback: Legacy Quizlet window data
-            const windowDataMatch = html.match(/window\.Quizlet\.setPageData\s*=\s*(.*?);/);
-            if (windowDataMatch && windowDataMatch[1]) {
-                return `--- QUIZLET DATA JSON ---\n${windowDataMatch[1]}`;
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                console.warn(`❌ ${agent.name} failed with status: ${response.status}`);
+                continue;
             }
 
-            // Fallback 2: Jina Reader output if raw HTML parsing failed
-            if (html.includes("Terms in this set")) {
-                return `--- RAW HTML DUMP ---\n${html}`;
+            const text = await response.text();
+
+            // Validation: Did we actually get content or just a "Access Denied" page?
+            if (text.length < 500) {
+                 console.warn(`⚠️ ${agent.name} returned insufficient data.`);
+                 continue;
             }
+            if (text.includes("Access Denied") || text.includes("Cloudflare") || text.includes("Just a moment...")) {
+                console.warn(`🛡️ ${agent.name} was blocked by WAF.`);
+                continue;
+            }
+
+            console.log(`✅ ${agent.name} retrieved ${text.length} bytes.`);
+            
+            // Success! Return the data tagged with the source type for Gemini
+            if (agent.name.includes("Jina")) {
+                return `--- JINA READER OUTPUT (MARKDOWN) ---\n${text}`;
+            } else {
+                return `--- RAW HTML DUMP ---\n${text}`;
+            }
+
+        } catch (error: any) {
+            console.warn(`💀 ${agent.name} died: ${error.message}`);
         }
-    }
-
-    // --- ADAPTER 4: BLOOKET (API) ---
-    // Public Blookets can sometimes be accessed via API if we have the ID
-    if (targetUrl.includes('blooket.com')) {
-        const idMatch = targetUrl.match(/[a-f0-9]{24}/);
-        if (idMatch) {
-            const id = idMatch[0];
-            const endpoint = `https://api.blooket.com/api/games?gameId=${id}`;
-            const data = await fetchWithRotation(endpoint, "Blooket API");
-            if (data && data.includes('questions')) {
-                 return `--- BLOOKET API JSON ---\n${data}`;
-            }
-        }
-    }
-
-    // --- FALLBACK: JINA READER (Universal) ---
-    // If no specific adapter worked (or for generic sites like Wikipedia)
-    const jinaUrl = `https://r.jina.ai/${targetUrl}`;
-    const jinaData = await fetchWithRotation(jinaUrl, "Jina Universal Reader");
-    
-    if (jinaData && jinaData.length > 200) {
-        return `--- JINA READER MARKDOWN ---\n${jinaData}`;
-    }
-
-    // --- FINAL FALLBACK: RAW HTML ---
-    const rawHtml = await fetchWithRotation(targetUrl, "Raw HTML Fallback");
-    if (rawHtml && rawHtml.length > 500) {
-        return `--- RAW HTML DUMP ---\n${rawHtml.substring(0, 400000)}`;
     }
 
     throw new Error(
-        "PROTOCOL FAILURE: No se pudo extraer información de esta URL. " +
-        "La web puede requerir inicio de sesión o estar bloqueada geográficamente."
+        "MISSION FAILED: All agents were intercepted. The target URL is heavily guarded (Auth/WAF). Please manually copy the text/HTML from the page and use the 'Paste' tab."
     );
 };

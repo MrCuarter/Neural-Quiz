@@ -3,20 +3,29 @@ import { Question } from "../types";
 
 // Helper to safely retrieve API Key from various environment configurations
 const getAPIKey = (): string => {
-  // 1. Check process.env (Standard)
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    return process.env.API_KEY;
-  }
+  let key = "";
+  
+  // 1. Check process.env (Standard in many bundlers)
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      console.log("🔑 API Key found in process.env.API_KEY");
+      return process.env.API_KEY;
+    }
+  } catch(e) {}
   
   // 2. Check Vite / Modern Browsers (import.meta.env)
-  // We check both VITE_API_KEY (standard convention) and API_KEY
   try {
-    // @ts-ignore
-    if (import.meta && import.meta.env) {
-      // @ts-ignore
-      if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
-      // @ts-ignore
-      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+    // Cast import.meta to any to avoid TypeScript errors regarding 'env' property
+    const meta = import.meta as any;
+    if (meta && meta.env) {
+      if (meta.env.VITE_API_KEY) {
+        console.log("🔑 API Key found in VITE_API_KEY");
+        return meta.env.VITE_API_KEY;
+      }
+      if (meta.env.API_KEY) {
+        console.log("🔑 API Key found in API_KEY");
+        return meta.env.API_KEY;
+      }
     }
   } catch (e) {
     // Ignore errors if import.meta is not defined
@@ -29,7 +38,10 @@ const getAPIKey = (): string => {
 const getAI = () => {
   const apiKey = getAPIKey();
   if (!apiKey) {
-    console.error("⚠️ API KEY MISSING: Please set 'API_KEY' or 'VITE_API_KEY' in your environment variables.");
+    console.error("⚠️ API KEY MISSING: The application could not find an API key.");
+    console.error("Please ensure you have set 'API_KEY' (or 'VITE_API_KEY') in your environment variables file (.env).");
+    // We throw here to stop execution before the SDK throws a generic error
+    throw new Error("API Key configuration missing. Check console for details.");
   }
   return new GoogleGenAI({ apiKey: apiKey });
 };
@@ -37,7 +49,7 @@ const getAI = () => {
 const questionSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    text: { type: Type.STRING, description: "The question text. MUST be in the target language." },
+    text: { type: Type.STRING, description: "The question text. If there is a shared context/stimulus, prepend it to this text." },
     options: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
@@ -131,49 +143,55 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       questionType: q.type || "Multiple Choice"
     }));
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Generation Error:", error);
-    throw new Error("Failed to generate quiz content. Check API Key configuration.");
+    // Propagate error message to UI
+    throw new Error(error.message || "Failed to generate quiz content.");
   }
 };
 
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish'): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
   try {
     const ai = getAI();
-    // Allow massive limit for raw HTML dumps or big JSON
-    const truncatedText = rawText.substring(0, 500000); 
+    // Increase limit to handle massive HTML dumps from Jina
+    const truncatedText = rawText.substring(0, 800000); 
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analyze the following content and extract quiz questions.
+      contents: `Perform a FORENSIC ANALYSIS on the following text to extract quiz data.
       
-      DATA SOURCE TYPES:
+      SOURCE MATERIAL:
+      ${truncatedText}
       
-      1. **KAHOOT API JSON**: Look for "questions" array. 
-         - question: "question" field.
-         - choices: "choices" array (answer, correct: boolean).
+      --- MISSION CRITICAL INSTRUCTIONS ---
+      
+      1. **DETECTING HIDDEN DATA (Next.js/React)**:
+         - The text might contain raw HTML or Markdown.
+         - LOOK DEEP for JSON objects buried in script tags (e.g., 'window.quizData', '__NEXT_DATA__', 'hydration', 'term', 'definition').
+         - Quizlet/Kahoot often hide questions in these JSON blobs inside the HTML. EXTRACT THEM.
+      
+      2. **HANDLING JINA MARKDOWN**:
+         - If the input is from Jina Reader, it will be text-heavy. Look for repeated patterns like "Term" / "Definition" or "Question" / "Answer".
+      
+      3. **STIMULUS & CONTEXT**:
+         - If a paragraph precedes a question (e.g., "Read the text below..."), merge it into the 'text' field of the question.
+      
+      4. **MATHML/LATEX**:
+         - Convert <math> or LaTeX to readable text strings.
          
-      2. **GIMKIT API JSON**: Look for "kit" -> "questions" array.
-         - question: "text" field.
-         - answers: "answers" array (text, correct: boolean).
-         
-      3. **QUIZLET DATA JSON**: Look for "term" and "definition" pairs inside the props.
-         - Convert Term -> Question, Definition -> Answer (Multiple Choice).
-         - Generate 3 plausible distractors for each question using definitions from other terms in the set.
-         
-      4. **RAW HTML/MARKDOWN**: Parse visually.
+      5. **OUTPUT**:
+         - Translate all content to ${language}.
+         - Ensure exactly 4 options. If original has 2 (True/False), add empty strings.
+         - If the source is Flashcards (Term/Definition), convert them to Multiple Choice:
+           - Question = Term
+           - Correct Option = Definition
+           - Distractors = Generate 3 plausible wrong definitions from OTHER terms in the set.
 
-      INSTRUCTIONS:
-      - Extract all valid questions.
-      - TRANSLATE to ${language} if the source is in another language.
-      - Output exactly 4 options per question.
-      - If only "Term" and "Definition" exist (Quizlet), create Multiple Choice questions by using other definitions as distractors.
-
-      CONTENT TO ANALYZE:\n${truncatedText}`,
+      `,
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a specialized Data Extraction AI. Your capability includes parsing complex JSON structures from Kahoot, Gimkit, and Quizlet Next.js hydration data. Prioritize exact data extraction over generation. Output language: ${language}.`,
+        systemInstruction: `You are a Forensic Data Extraction AI. You don't just read text; you look for structured data buried inside HTML, JSON blobs, and Markdown artifacts. You are an expert at reverse-engineering Quizlet, Kahoot, and Blooket data structures from raw page dumps. Output Language: ${language}.`,
       },
     });
 
@@ -198,9 +216,9 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       feedback: q.feedback || "",
       questionType: q.type || "Multiple Choice"
     }));
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Parse Error:", error);
-    throw new Error("Failed to analyze content.");
+    throw new Error(error.message || "Failed to analyze content.");
   }
 };
 

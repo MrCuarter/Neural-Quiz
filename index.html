@@ -4,7 +4,52 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Neural Quiz Converter</title>
+    
+    <!-- Console Noise Suppression -->
+    <script>
+      (function() {
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        console.warn = function(...args) {
+          if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+          originalWarn.apply(console, args);
+        };
+
+        console.error = function(...args) {
+          // Suppress known extension errors
+          if (args[0] && typeof args[0] === 'string') {
+            if (args[0].includes('message channel closed') || 
+                args[0].includes('camera capture') ||
+                args[0].includes('Extension context invalidated')) {
+              return;
+            }
+          }
+          // Suppress specific promise rejections from extensions
+          if (args[0] && args[0].message && (
+             args[0].message.includes('message channel closed') ||
+             args[0].message.includes('quicTransport')
+          )) {
+            return;
+          }
+          originalError.apply(console, args);
+        };
+      })();
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              cyber: ['Orbitron', 'sans-serif'],
+              'mono-cyber': ['Share Tech Mono', 'monospace'],
+            }
+          }
+        }
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
