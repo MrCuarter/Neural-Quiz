@@ -8,10 +8,11 @@ import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, A
 
 interface ExportPanelProps {
   quiz: Quiz;
-  setQuiz?: React.Dispatch<React.SetStateAction<Quiz>>; // Optional to maintain compatibility if used elsewhere without setQuiz
+  setQuiz?: React.Dispatch<React.SetStateAction<Quiz>>; 
+  t: any; // Add translation prop
 }
 
-export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
+export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) => {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>(ExportFormat.UNIVERSAL_CSV);
   const [copied, setCopied] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
@@ -26,6 +27,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
   const formats = [
     { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: "The Master Format. Includes media links, feedback, and extended attributes. Best for backups.", logo: null, allowedTypes: ['*'] },
     { id: ExportFormat.KAHOOT, name: "Kahoot (XLSX)", desc: "Official Excel Template format. Ready for direct upload to Kahoot.", logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
+    { id: ExportFormat.WOOCLAP, name: "Wooclap (JSON)", desc: "Special JSON format for importing into Wooclap events.", logo: "https://upload.wikimedia.org/wikipedia/commons/a/a2/Wooclap_Logo.jpg", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.PLICKERS, name: "Plickers (Text)", desc: "Text format optimized for Plickers import. Questions + Correct Answer first.", logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.BAAMBOOZLE, name: "Baamboozle", desc: "Via Kahoot/Quizlet. Requires Premium to import from URL.", logo: "https://i.postimg.cc/3dwdrNFw/Baamboozle.png", allowedTypes: ['*'] },
     { id: ExportFormat.SOCRATIVE, name: "Socrative (XLSX)", desc: "Official Socrative template. Includes instructions, question type headers, and correct answer marking.", logo: "https://i.postimg.cc/ZCD0Wmwy/Socrative.png", allowedTypes: ['Multiple Choice', 'True/False', 'Short Answer'] },
@@ -35,7 +37,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
     { id: ExportFormat.GENIALLY, name: "Genially (XLSX)", desc: "Genially Question Bank format with letter-based answers.", logo: "https://i.postimg.cc/rKpKysNw/Genially.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit (Pack)", desc: "Official Gimkit formats. Choose between Classic (Multiple Choice) or Text Input.", logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.WORDWALL, name: "Wordwall (Text)", desc: "Simple text format (Tab separated). Ready to copy-paste into Wordwall editor.", logo: "https://i.postimg.cc/3dbWkht2/Wordwall.png", allowedTypes: ['Multiple Choice'] },
-    { id: ExportFormat.FLIPPITY, name: "Flippity (Game)", desc: "Generates Excel (.xlsx) file for Flippity Quiz Show. Supports '6 Questions' or '30 Questions' mode.", logo: null, allowedTypes: ['*'] },
+    { id: ExportFormat.FLIPPITY, name: "Flippity (Game)", desc: "Generates Excel (.xlsx) file for Flippity Quiz Show. Supports '6 Questions' or '30 Questions' mode.", logo: "https://i.postimg.cc/jdTHMZvS/Flippity.png", allowedTypes: ['*'] },
     { id: ExportFormat.SANDBOX, name: "Sandbox Educación", desc: "Formato texto simple: Pregunta + Correcta + Incorrectas (separadas por |).", logo: "https://i.postimg.cc/hf3hXn2X/Sandbox.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.QUIZLET_QA, name: "Quizlet (Flash)", desc: "Flashcard text format. Term + Definition pairs. Perfect for study sets.", logo: "https://i.postimg.cc/Cz6dR0cZ/Quizlet.png", allowedTypes: ['*'] },
     { id: ExportFormat.DECKTOYS_QA, name: "Deck.Toys (Study)", desc: "Study Set format. Term + Definition pairs for Deck.Toys activities.", logo: "https://i.postimg.cc/PPqPfJQP/Decktoys.png", allowedTypes: ['*'] },
@@ -51,16 +53,14 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
      const currentFormat = formats.find(f => f.id === selectedFormat);
      if (!currentFormat || !currentFormat.allowedTypes || currentFormat.allowedTypes.includes('*')) return [];
 
-     // Special handling for Gimkit Text Mode
-     if (selectedFormat === ExportFormat.GIMKIT_TEXT) return []; // Assuming text is compatible
+     if (selectedFormat === ExportFormat.GIMKIT_TEXT) return [];
 
      return quiz.questions.filter(q => {
-         const type = q.questionType || 'Multiple Choice'; // Default to MC if undefined
+         const type = q.questionType || 'Multiple Choice';
          return !currentFormat.allowedTypes.includes(type);
      });
   }, [quiz, selectedFormat]);
 
-  // Fix Logic
   const handleAutoFix = async () => {
       if (!setQuiz) return;
       if (incompatibleQuestions.length === 0) return;
@@ -86,21 +86,19 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
               });
               return { ...prev, questions: newQs };
           });
-          alert(`Successfully adapted ${adaptedQuestions.length} questions!`);
+          alert("Success!");
       } catch (error) {
-          alert("Failed to adapt questions. Please try again or edit manually.");
+          alert("Failed to adapt questions.");
       } finally {
           setIsFixing(false);
       }
   };
 
 
-  // Logic to prepare quiz for export based on Flippity Selection
   const getPreparedQuiz = (): Quiz => {
     if (selectedFormat !== ExportFormat.FLIPPITY) return quiz;
 
     if (flippityMode === '6' && flippitySelection.length > 0) {
-       // Filter and Order based on selection
        const orderedQuestions: Question[] = [];
        flippitySelection.forEach(id => {
          const q = quiz.questions.find(q => q.id === id);
@@ -108,22 +106,18 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
        });
        return { ...quiz, questions: orderedQuestions };
     }
-    
-    // Default 30 mode (just pass through, export service slices first 30)
     return quiz;
   };
 
   const handleDownload = () => {
     try {
       const quizToExport = getPreparedQuiz();
-      // Pass extra options for Flippity
       const exportOptions = selectedFormat === ExportFormat.FLIPPITY ? { categories: flippityCategories } : undefined;
       
       const { filename, content, mimeType, isBase64 } = exportQuiz(quizToExport, selectedFormat, exportOptions);
       
       let blob: Blob;
       if (isBase64) {
-        // Decode base64 to binary
         const binaryString = window.atob(content);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -132,7 +126,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
         }
         blob = new Blob([bytes], { type: mimeType });
       } else {
-        // Text/CSV Files: Add Byte Order Mark (BOM) for Excel compatibility with UTF-8
         const bom = '\uFEFF';
         blob = new Blob([bom + content], { type: `${mimeType};charset=utf-8` });
       }
@@ -151,8 +144,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
     }
   };
 
-  // Note: Copy functionality for Flippity now relies on text parsing which is not implemented for the Excel binary.
-  // We disable copy for Flippity or show an alert.
   const handleCopy = () => {
     if (selectedFormat === ExportFormat.FLIPPITY) {
         alert("Flippity export is a binary Excel file. Please use Download.");
@@ -179,7 +170,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
         if (prev.includes(id)) {
             return prev.filter(x => x !== id);
         } else {
-            if (prev.length >= 6) return prev; // Max 6
+            if (prev.length >= 6) return prev; 
             return [...prev, id];
         }
     });
@@ -199,10 +190,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
       setFlippityCategories(newCats);
   };
 
-  // Get current export for preview
   const currentExport = (() => {
     try {
-        if (selectedFormat === ExportFormat.FLIPPITY) return { content: "", isBase64: true }; // Skip preview for Flippity
+        if (selectedFormat === ExportFormat.FLIPPITY) return { content: "", isBase64: true }; 
         return exportQuiz(getPreparedQuiz(), selectedFormat);
     } catch(e) {
         return { content: "Error generating preview.", isBase64: false };
@@ -215,15 +205,13 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
   const isFlippity = selectedFormat === ExportFormat.FLIPPITY;
   const isCSV = selectedFormat.includes('CSV') || selectedFormat === ExportFormat.QUIZALIZE || selectedFormat === ExportFormat.BLOOKET;
 
-  // Simple CSV parser for preview
   const renderCSVTable = (csv: string) => {
-    const lines = csv.split('\n').slice(0, 10); // Limit to 10 rows for preview
+    const lines = csv.split('\n').slice(0, 10);
     return (
         <div className="overflow-x-auto">
             <table className="min-w-full text-xs font-mono text-left border-collapse">
                 <tbody>
                     {lines.map((line, i) => {
-                        // Simple CSV split (not handling quoted commas perfectly for preview, but good enough)
                         const cells = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
                         return (
                             <tr key={i} className={i === 0 ? "bg-gray-800 text-cyan-400 font-bold" : "border-b border-gray-800 hover:bg-white/5"}>
@@ -245,17 +233,16 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in zoom-in-95 duration-300">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in zoom-in-95 duration-300 w-full">
       <div className="text-center space-y-2">
-        <h2 className="text-4xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500 uppercase">
-          Export Protocol
+        <h2 className="text-3xl md:text-4xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500 uppercase">
+          {t.export_data}
         </h2>
         <p className="text-gray-400 font-mono-cyber">Select destination format for data extraction.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {formats.map(fmt => {
-           // Highlight parent if child is selected (for Gimkit or Quizlet or DeckToys)
            const isActive = selectedFormat === fmt.id || 
                             (fmt.id === ExportFormat.GIMKIT_CLASSIC && isGimkit) ||
                             (fmt.id === ExportFormat.QUIZLET_QA && isQuizlet) ||
@@ -278,7 +265,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
               )}
               
               <div className="flex-1 p-4 flex flex-col justify-center min-w-0">
-                <h3 className={`font-cyber text-lg truncate mb-1 ${isActive ? 'text-cyan-300' : 'text-gray-300 group-hover:text-cyan-200'}`}>
+                <h3 className={`font-cyber text-sm md:text-lg truncate mb-1 ${isActive ? 'text-cyan-300' : 'text-gray-300 group-hover:text-cyan-200'}`}>
                     {fmt.name}
                 </h3>
                 <p className="text-[10px] text-gray-500 font-mono leading-tight line-clamp-3">
@@ -287,7 +274,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
               </div>
               
               {fmt.logo && (
-                <div className="w-24 h-full bg-white/5 flex items-center justify-center p-2 shrink-0 border-l border-white/5">
+                <div className="w-20 md:w-24 h-full bg-white/5 flex items-center justify-center p-2 shrink-0 border-l border-white/5">
                      <img 
                         src={fmt.logo} 
                         alt={`${fmt.name} Logo`} 
@@ -308,12 +295,12 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
              <div className="bg-red-950/30 border border-red-500 rounded p-4 animate-pulse">
                 <div className="flex items-center gap-3 mb-2 text-red-400 font-cyber font-bold">
                     <AlertTriangle className="w-6 h-6" />
-                    <h3>PLATFORM INCOMPATIBILITY DETECTED</h3>
+                    <h3>{t.platform_incompatibility}</h3>
                 </div>
                 <p className="text-xs text-red-200 font-mono mb-4">
-                    The selected platform "{formats.find(f => f.id === selectedFormat)?.name}" does not support some of your question types.
+                    {t.incompatible_desc}
                     <br/>
-                    <strong>Incompatible:</strong> {incompatibleQuestions.length} questions (Type: {incompatibleQuestions[0].questionType || 'Unknown'}).
+                    <strong>Incompatible:</strong> {incompatibleQuestions.length} questions.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                    <div className="flex-1 text-xs font-mono text-gray-400 border border-gray-700 p-2 rounded max-h-20 overflow-y-auto">
@@ -328,7 +315,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
                           isLoading={isFixing}
                           className="text-xs py-2 h-auto whitespace-nowrap"
                        >
-                           <Wrench className="w-4 h-4" /> AUTO-FIX WITH AI
+                           <Wrench className="w-4 h-4" /> {t.autofix}
                        </CyberButton>
                    )}
                 </div>
@@ -351,7 +338,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
                   >
                     <List className="w-6 h-6" />
                     <span className="text-xs font-bold font-mono">CLASSIC (MC)</span>
-                    <span className="text-[10px] text-center opacity-70">Question + 1 Correct + 3 Incorrect</span>
                   </button>
 
                   <button 
@@ -364,75 +350,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
                   >
                     <Keyboard className="w-6 h-6" />
                     <span className="text-xs font-bold font-mono">TEXT INPUT</span>
-                    <span className="text-[10px] text-center opacity-70">Question + Answer Typed by User</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Sub-options for Quizlet */}
-          {isQuizlet && (
-            <div className="flex flex-col sm:flex-row gap-4 p-4 bg-black/40 border border-cyan-900/50 rounded-lg">
-              <div className="flex-1">
-                <p className="text-cyan-400 font-mono-cyber text-sm mb-2 uppercase">Orden de Tarjetas:</p>
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => setSelectedFormat(ExportFormat.QUIZLET_QA)}
-                    className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${
-                      selectedFormat === ExportFormat.QUIZLET_QA
-                      ? 'bg-cyan-900/50 border-cyan-400 text-cyan-200' 
-                      : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    <span className="text-xs font-bold font-mono">PREGUNTA → RESPUESTA</span>
-                    <span className="text-[10px] text-center opacity-70">Término: Pregunta / Definición: Respuesta</span>
-                  </button>
-
-                  <button 
-                    onClick={() => setSelectedFormat(ExportFormat.QUIZLET_AQ)}
-                    className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${
-                      selectedFormat === ExportFormat.QUIZLET_AQ
-                      ? 'bg-cyan-900/50 border-cyan-400 text-cyan-200' 
-                      : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    <span className="text-xs font-bold font-mono">RESPUESTA → PREGUNTA</span>
-                    <span className="text-[10px] text-center opacity-70">Término: Respuesta / Definición: Pregunta</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Sub-options for Deck.Toys */}
-          {isDeckToys && (
-            <div className="flex flex-col sm:flex-row gap-4 p-4 bg-black/40 border border-cyan-900/50 rounded-lg">
-              <div className="flex-1">
-                <p className="text-cyan-400 font-mono-cyber text-sm mb-2 uppercase">Orden de Importación:</p>
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => setSelectedFormat(ExportFormat.DECKTOYS_QA)}
-                    className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${
-                      selectedFormat === ExportFormat.DECKTOYS_QA
-                      ? 'bg-cyan-900/50 border-cyan-400 text-cyan-200' 
-                      : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    <span className="text-xs font-bold font-mono">PREGUNTA → RESPUESTA</span>
-                    <span className="text-[10px] text-center opacity-70">Term: Pregunta / Def: Respuesta</span>
-                  </button>
-
-                  <button 
-                    onClick={() => setSelectedFormat(ExportFormat.DECKTOYS_AQ)}
-                    className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${
-                      selectedFormat === ExportFormat.DECKTOYS_AQ
-                      ? 'bg-cyan-900/50 border-cyan-400 text-cyan-200' 
-                      : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    <span className="text-xs font-bold font-mono">RESPUESTA → PREGUNTA</span>
-                    <span className="text-[10px] text-center opacity-70">Term: Respuesta / Def: Pregunta</span>
                   </button>
                 </div>
               </div>
@@ -456,7 +373,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
                     >
                       <Grid3X3 className="w-6 h-6" />
                       <span className="text-xs font-bold font-mono">6 QUESTIONS</span>
-                      <span className="text-[10px] text-center opacity-70">Select 6 specific questions</span>
                     </button>
 
                     <button 
@@ -469,7 +385,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
                     >
                       <List className="w-6 h-6" />
                       <span className="text-xs font-bold font-mono">30 QUESTIONS</span>
-                      <span className="text-[10px] text-center opacity-70">Standard full board</span>
                     </button>
                   </div>
                 </div>
@@ -500,44 +415,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
                       ))}
                    </div>
               </div>
-
-              {flippityMode === '30' && (
-                <div className="flex items-center gap-2 text-yellow-500 text-xs font-mono bg-yellow-900/20 p-2 rounded border border-yellow-700/50 mt-2">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>NOTE: Uses first 30 questions sequentially. Please reorder questions in Editor if needed!</span>
-                </div>
-              )}
-
-              {flippityMode === '6' && (
-                <div className="space-y-2 mt-2">
-                    <p className="text-xs text-orange-300 font-mono uppercase">Select 6 Questions (Column 1-6):</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar border border-gray-800 p-2 rounded bg-black/50">
-                        {quiz.questions.map((q, idx) => {
-                            const selectedIndex = flippitySelection.indexOf(q.id);
-                            const isSelected = selectedIndex !== -1;
-                            return (
-                                <div 
-                                    key={q.id} 
-                                    onClick={() => toggleFlippitySelection(q.id)}
-                                    className={`p-2 rounded border flex items-center gap-2 cursor-pointer transition-all text-xs font-mono ${
-                                        isSelected 
-                                        ? 'bg-orange-900/60 border-orange-500 text-orange-100' 
-                                        : 'bg-gray-900/50 border-gray-700 text-gray-400 hover:bg-gray-800'
-                                    }`}
-                                >
-                                    <div className={`w-5 h-5 flex items-center justify-center rounded-full border ${isSelected ? 'border-orange-400 bg-orange-500 text-black font-bold' : 'border-gray-600'}`}>
-                                        {isSelected ? selectedIndex + 1 : ''}
-                                    </div>
-                                    <span className="truncate">{idx + 1}. {q.text}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {flippitySelection.length !== 6 && (
-                        <p className="text-red-400 text-xs text-right font-mono">Selected: {flippitySelection.length} / 6</p>
-                    )}
-                </div>
-              )}
             </div>
           )}
 
@@ -546,8 +423,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
              {currentExport.isBase64 ? (
                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
                  <AlertTriangle className="w-8 h-8 opacity-50" />
-                 <p>BINARY FILE CONTENT (XLSX)</p>
-                 <p>PREVIEW UNAVAILABLE</p>
+                 <p>{t.preview_unavailable}</p>
                </div>
              ) : (
                 isCSV ? renderCSVTable(currentExport.content) : (
@@ -557,52 +433,18 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz }) => {
                 )
              )}
           </div>
-
-          {/* Instructions Logic (kept from previous code) */}
-          {/* Wordwall Instructions */}
-          {selectedFormat === ExportFormat.WORDWALL && (
-            <div className="bg-blue-950/40 border border-blue-500/30 p-4 rounded-lg text-blue-100 text-sm space-y-3 animate-in slide-in-from-top-2 relative overflow-hidden">
-               {/* Decorative background element */}
-               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-
-               <div className="flex items-center gap-2 font-bold text-cyan-400 font-mono-cyber">
-                 <Info className="w-5 h-5" /> 
-                 <span>¡TRUCO PARA WORDWALL! 🚀</span>
-               </div>
-               
-               <p className="text-gray-300">
-                 ¡Es súper fácil! Solo tienes que <strong>COPIAR</strong> el texto de arriba y seguir estos pasos:
-               </p>
-               
-               <ol className="list-decimal list-inside space-y-2 ml-1 text-gray-300">
-                 <li>Ve a tu cuenta de <strong>Wordwall</strong> y crea una actividad tipo <strong>"Cuestionario"</strong>.</li>
-                 <li>Haz clic en la <strong>Pregunta 1</strong> y pega el texto <span className="text-xs bg-black/50 px-1 py-0.5 rounded border border-gray-700 font-mono">(Ctrl+V)</span>.</li>
-                 <li>
-                   Verás que se marcan todas las respuestas <strong>A</strong> como correctas... 
-                   <span className="text-pink-400 font-bold ml-1">¡No te asustes! 😱</span>
-                 </li>
-                 <li>Wordwall las barajará automáticamente cuando juegues.</li>
-               </ol>
-               
-               <div className="pt-2 border-t border-blue-500/20">
-                 <p className="font-mono text-xs text-cyan-300 text-center uppercase tracking-wider">
-                   ✨ ¡Podrás crear montones de juegos diferentes en segundos! 🎮
-                 </p>
-               </div>
-            </div>
-          )}
           
           {/* Copy/Download Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-end mt-4">
             {!currentExport.isBase64 && (
               <CyberButton variant="secondary" onClick={handleCopy} className="flex items-center justify-center gap-2">
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'COPIED TO CLIPBOARD' : 'COPY TO CLIPBOARD'}
+                {copied ? t.copied : t.copy_clipboard}
               </CyberButton>
             )}
             <CyberButton onClick={handleDownload} className="flex items-center justify-center gap-2">
               <FileDown className="w-4 h-4" />
-              DOWNLOAD FILE
+              {t.download_file}
             </CyberButton>
           </div>
         </div>

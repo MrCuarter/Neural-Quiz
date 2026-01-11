@@ -1,9 +1,11 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat } from './types';
 import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { HelpView } from './components/HelpView'; // New Import
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
 import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info, FileType } from 'lucide-react';
@@ -15,7 +17,7 @@ import { getRandomMessage, getDetectionMessage } from './services/messageService
 import * as XLSX from 'xlsx';
 
 // Types
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result';
+type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -351,29 +353,21 @@ const App: React.FC = () => {
     progressIntervalRef.current = window.setInterval(() => {
        const elapsed = Date.now() - startTime;
        
-       // Calculate target progress based on time
-       // 0-8s: Move linearly up to 80%
-       // 8s+: Asymptotically approach 99%
-       
        let targetP = 0;
        if (elapsed < MIN_DURATION) {
            targetP = (elapsed / MIN_DURATION) * 80;
        } else {
-           // Slow creep from 80 to 99
-           // We use a formula that never quite hits 100
            const extraTime = elapsed - MIN_DURATION;
            const creep = 19 * (1 - Math.exp(-extraTime / 10000)); // takes ~30s more to reach 99
            targetP = 80 + creep;
        }
        
-       // Only move forward
        if (targetP > currentVirtualProgress) {
            currentVirtualProgress = targetP;
        }
        
        setAnalysisProgress(currentVirtualProgress);
 
-       // Message Logic based on simple time checkpoints
        if (elapsed > 1000 && elapsed < 1200) {
            setAnalysisStatus(getDetectionMessage(sourceName, content));
        } else if (elapsed > 4000 && elapsed < 4200) {
@@ -391,13 +385,11 @@ const App: React.FC = () => {
             throw new Error("No questions extracted.");
         }
 
-        // Wait if we finished too fast (enforce min duration)
         const elapsedNow = Date.now() - startTime;
         if (elapsedNow < MIN_DURATION) {
             await new Promise(r => setTimeout(r, MIN_DURATION - elapsedNow));
         }
 
-        // Final Success State
         clearAnalysisInterval();
         setAnalysisProgress(100);
         setAnalysisStatus(getRandomMessage('success'));
@@ -410,17 +402,14 @@ const App: React.FC = () => {
 
         setTimeout(() => {
             setView('create_manual');
-        }, 1500); // Show 100% for 1.5s
+        }, 1500); 
 
     } catch (error: any) {
-        // Handle Error Gracefully
         clearAnalysisInterval();
         setAnalysisProgress(0);
         setAnalysisStatus(getRandomMessage('error'));
-        
         console.error(error);
         
-        // Wait a few seconds for user to read the error message before resetting
         setTimeout(() => {
             setView('convert_upload');
         }, 4000);
@@ -490,19 +479,14 @@ const App: React.FC = () => {
         return;
     }
     
-    // START ANIMATION IMMEDIATELY (Fake start)
-    // We start the view change here so the user sees something happening while fetching
     setView('convert_analysis');
     setAnalysisStatus("Iniciando escaneo de red neural...");
     setAnalysisProgress(5);
 
     try {
         const content = await fetchUrlContent(urlToConvert);
-        // Handover to the main analysis loop (which will continue the animation)
-        // We pass the URL as sourceName so detect_messages works
         await performAnalysis(content, urlToConvert);
     } catch (e: any) {
-        // Show error in the UI via the status message, not alert
         setAnalysisStatus(getRandomMessage('error'));
         setTimeout(() => {
             setView('convert_upload');
@@ -510,15 +494,11 @@ const App: React.FC = () => {
     }
   };
 
-  const resetHome = () => {
-    setView('home');
-  };
-
   // --- Components ---
 
   const Stepper = () => {
     let step = 1;
-    if (view === 'home' || view === 'create_menu' || view === 'convert_upload') step = 1;
+    if (view === 'home' || view === 'create_menu' || view === 'convert_upload' || view === 'help') step = 1;
     if (view === 'create_ai' || view === 'convert_analysis') step = 2;
     if (view === 'create_manual') step = 3;
     if (view === 'convert_result') step = 4;
@@ -530,7 +510,7 @@ const App: React.FC = () => {
         { num: 4, label: 'EXPORT' }
     ];
 
-    if (view === 'home') return null;
+    if (view === 'home' || view === 'help') return null;
 
     return (
         <div className="flex justify-center mb-8 font-mono text-xs tracking-wider">
@@ -558,15 +538,15 @@ const App: React.FC = () => {
   const renderHome = () => (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8 animate-in zoom-in-95 duration-500">
        <div className="text-center space-y-4 mb-8">
-         <h1 className="text-6xl md:text-7xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 tracking-tight drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+         <h1 className="text-4xl md:text-7xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 tracking-tight drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]">
            NEURAL QUIZ
          </h1>
-         <p className="text-xl font-mono-cyber text-gray-400 tracking-widest">
+         <p className="text-base md:text-xl font-mono-cyber text-gray-400 tracking-widest">
            {t.app_subtitle}
          </p>
        </div>
 
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
          <button 
            onClick={() => setView('create_menu')}
            className="group relative bg-black/40 border border-cyan-500/30 p-12 hover:bg-cyan-950/20 transition-all hover:scale-[1.02] hover:border-cyan-400 overflow-hidden"
@@ -603,7 +583,7 @@ const App: React.FC = () => {
   );
 
   const renderCreateMenu = () => (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-right-10 duration-300">
+    <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-right-10 duration-300 w-full">
       <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2 mb-4">
         <ArrowLeft className="w-4 h-4" /> {t.back_hub}
       </CyberButton>
@@ -637,9 +617,9 @@ const App: React.FC = () => {
   );
 
   const renderCreateAI = () => (
-    <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 w-full">
       <CyberButton variant="ghost" onClick={() => setView('create_menu')} className="pl-0 gap-2">
-        <ArrowLeft className="w-4 h-4" /> BACK
+        <ArrowLeft className="w-4 h-4" /> {t.back}
       </CyberButton>
 
       <CyberCard title={t.neural_config}>
@@ -665,7 +645,7 @@ const App: React.FC = () => {
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <CyberInput 
                 label={t.topic_label} 
-                placeholder="e.g. Quantum Physics, Roman History"
+                placeholder={t.gen_placeholder}
                 value={genParams.topic}
                 onChange={e => setGenParams({...genParams, topic: e.target.value})}
               />
@@ -679,7 +659,7 @@ const App: React.FC = () => {
               />
               <CyberInput 
                  label={t.age_label}
-                 placeholder="e.g. 10 years, University, Expert"
+                 placeholder="e.g. 10 years, University"
                  value={genParams.age}
                  onChange={e => setGenParams({...genParams, age: e.target.value})}
               />
@@ -710,7 +690,7 @@ const App: React.FC = () => {
                {genParams.types.some(t => !PLATFORM_SPECS[targetPlatform].types.includes(t)) && (
                    <div className="flex items-center gap-2 text-yellow-500 text-xs font-mono mt-2 animate-pulse">
                        <AlertTriangle className="w-4 h-4" />
-                       <span>Warning: You have selected question types not natively supported by {PLATFORM_SPECS[targetPlatform].name}.</span>
+                       <span>{t.incompatible_desc}</span>
                    </div>
                )}
            </div>
@@ -740,7 +720,7 @@ const App: React.FC = () => {
                  />
                  <UploadCloud className={`w-10 h-10 ${dragActive ? 'text-pink-400' : 'text-gray-500'}`} />
                  <div>
-                    <p className="text-sm text-gray-300 font-bold">DRAG & DROP DOCUMENTS HERE</p>
+                    <p className="text-sm text-gray-300 font-bold">{t.drop_file}</p>
                     <p className="text-xs text-gray-500 font-mono">(.txt, .md, .csv, .json, .pdf)</p>
                  </div>
              </div>
@@ -781,7 +761,7 @@ const App: React.FC = () => {
   );
 
   const renderConvertUpload = () => (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in zoom-in-95 duration-300">
+    <div className="max-w-2xl mx-auto space-y-8 animate-in zoom-in-95 duration-300 w-full">
       <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2 mb-4">
         <ArrowLeft className="w-4 h-4" /> {t.back_hub}
       </CyberButton>
@@ -914,12 +894,16 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen relative text-gray-200 selection:bg-cyan-500/30 transition-colors duration-300 flex flex-col">
+    <div className="min-h-screen relative text-gray-200 selection:bg-cyan-500/30 transition-colors duration-300 flex flex-col overflow-x-hidden">
       
       {/* New Header */}
-      <Header language={language} setLanguage={setLanguage} />
+      <Header 
+          language={language} 
+          setLanguage={setLanguage} 
+          onHelp={() => setView('help')} // Hook up help button
+      />
 
-      <main className="container mx-auto px-4 pb-20 relative z-10 pt-8 flex-1">
+      <main className="container mx-auto px-4 pb-20 relative z-10 pt-8 flex-1 w-full max-w-7xl">
         <div className="flex justify-end mb-4">
              <button 
                 onClick={toggleTheme}
@@ -932,13 +916,15 @@ const App: React.FC = () => {
 
         <Stepper />
         
+        {view === 'help' && <HelpView onBack={() => setView('home')} t={t} />}
+
         {view === 'home' && renderHome()}
         {view === 'create_menu' && renderCreateMenu()}
         {view === 'create_ai' && renderCreateAI()}
         {view === 'create_manual' && (
           <div className="animate-in fade-in duration-500">
              <div className="flex justify-between items-center mb-6">
-                <CyberButton variant="ghost" onClick={() => setView('create_menu')}><ArrowLeft className="w-4 h-4 mr-2"/> BACK</CyberButton>
+                <CyberButton variant="ghost" onClick={() => setView('create_menu')}><ArrowLeft className="w-4 h-4 mr-2"/> {t.back}</CyberButton>
                 <h2 className="font-cyber text-2xl text-cyan-400">{t.manual_override}</h2>
              </div>
              
@@ -947,13 +933,14 @@ const App: React.FC = () => {
                   quiz={quiz} 
                   setQuiz={setQuiz} 
                   onExport={scrollToExport}
-                  showImportOptions={quiz.questions.length === 0} 
+                  showImportOptions={quiz.questions.length === 0}
+                  t={t} 
                 />
                 
                 {quiz.questions.length > 0 && (
                    <div ref={exportSectionRef} className="border-t border-gray-800 pt-12">
                       <h3 className="text-2xl font-cyber text-center mb-8 text-white">{t.export_data}</h3>
-                      <ExportPanel quiz={quiz} setQuiz={setQuiz} />
+                      <ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} />
                    </div>
                 )}
              </div>

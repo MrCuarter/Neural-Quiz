@@ -39,6 +39,7 @@ export enum ExportFormat {
   WORDWALL = 'WORDWALL', // Wordwall Text
   FLIPPITY = 'FLIPPITY', // Flippity (6 or 30 Qs)
   SANDBOX = 'SANDBOX', // Sandbox Education (Text)
+  WOOCLAP = 'WOOCLAP', // Wooclap JSON
   QUIZLET_QA = 'QUIZLET_QA', // Question [TAB] Answer
   QUIZLET_AQ = 'QUIZLET_AQ', // Answer [TAB] Question
   DECKTOYS_QA = 'DECKTOYS_QA', // DeckToys Question -> Answer

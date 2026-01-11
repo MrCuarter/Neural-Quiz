@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Quiz, Question, Option } from '../types';
 import { CyberButton, CyberInput, CyberCard } from './ui/CyberUI';
@@ -10,9 +11,10 @@ interface QuizEditorProps {
   setQuiz: React.Dispatch<React.SetStateAction<Quiz>>;
   onExport: () => void;
   showImportOptions?: boolean;
+  t: any; // Translation object
 }
 
-export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, showImportOptions = true }) => {
+export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, showImportOptions = true, t }) => {
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   const [aiTopic, setAiTopic] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -42,7 +44,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
   const removeQuestion = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if(confirm('Are you sure you want to delete this question?')) {
+    if(confirm(t.delete_confirm)) {
         setQuiz(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) }));
         if (expandedQuestionId === id) setExpandedQuestionId(null);
     }
@@ -147,11 +149,11 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       
       {showImportOptions && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <CyberCard title="AI GENERATOR CORE" className="border-pink-500/30 bg-pink-950/10">
+          <CyberCard title={t.ai_generator_core} className="border-pink-500/30 bg-pink-950/10">
             <div className="flex flex-col gap-4">
               <CyberInput 
-                label="Generate Questions from Topic" 
-                placeholder="e.g. 'Cyberpunk History', 'Quantum Physics'"
+                label={t.topic_label}
+                placeholder={t.gen_placeholder}
                 value={aiTopic}
                 onChange={(e) => setAiTopic(e.target.value)}
                 className="border-pink-500/50 focus:border-pink-500 text-pink-100 placeholder:text-pink-800"
@@ -162,15 +164,15 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                 isLoading={isGenerating}
                 className="bg-pink-600 border-pink-500 text-white hover:bg-pink-500 w-full"
               >
-                GENERATE (GEMINI)
+                {t.generate_btn}
               </CyberButton>
             </div>
           </CyberCard>
 
-          <CyberCard title="UNIVERSAL IMPORT" className="border-purple-500/30 bg-purple-950/10">
+          <CyberCard title={t.universal_import} className="border-purple-500/30 bg-purple-950/10">
             <div className="flex flex-col gap-4 h-full justify-end">
               <p className="text-xs font-mono text-purple-300">
-                Compatible with "Universal CSV" format. Imports questions, correct answers, media links, and timers.
+                {t.import_desc}
               </p>
               <input 
                 type="file" 
@@ -184,7 +186,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full border-purple-500 text-purple-300 hover:bg-purple-900/30 flex items-center justify-center gap-2"
               >
-                <Upload className="w-4 h-4" /> UPLOAD CSV
+                <Upload className="w-4 h-4" /> {t.upload_csv}
               </CyberButton>
             </div>
           </CyberCard>
@@ -194,16 +196,16 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       {/* Manual Editor */}
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-center border-b border-gray-800 pb-4 gap-4">
-          <h2 className="text-2xl font-cyber text-cyan-400">QUESTIONS DATABASE [{quiz.questions.length}]</h2>
+          <h2 className="text-2xl font-cyber text-cyan-400">{t.questions_db} [{quiz.questions.length}]</h2>
           
           <div className="flex items-center gap-4 w-full md:w-auto">
              <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2">
-               <Plus className="w-4 h-4" /> ADD MANUAL
+               <Plus className="w-4 h-4" /> {t.add_manual}
              </CyberButton>
              
              {quiz.questions.length > 0 && (
                 <CyberButton variant="secondary" onClick={onExport} className="flex-1 md:flex-none flex items-center gap-2 animate-pulse-glow">
-                  <Download className="w-4 h-4" /> GO TO EXPORT
+                  <Download className="w-4 h-4" /> {t.go_export}
                 </CyberButton>
              )}
           </div>
@@ -211,7 +213,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
         {quiz.questions.length === 0 ? (
           <div className="text-center py-20 text-gray-600 font-mono-cyber border-2 border-dashed border-gray-800 rounded-lg">
-            NO DATA DETECTED. INITIATE PROTOCOL BY ADDING QUESTIONS OR UPLOADING CSV.
+            {t.no_data}
           </div>
         ) : (
           <div className="grid gap-4">
@@ -238,7 +240,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                     {!isValid && <AlertCircle className="w-4 h-4 text-red-500" />}
                                 </div>
                             )}
-                            {isExpanded && <span className="font-cyber text-cyan-400 text-lg">EDITING Q-{index+1}</span>}
+                            {isExpanded && <span className="font-cyber text-cyan-400 text-lg">{t.editing} Q-{index+1}</span>}
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -261,12 +263,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                             {!isValid && (
                                 <div className="bg-red-950/20 border border-red-500/30 p-2 rounded text-red-400 text-xs font-mono flex items-center gap-2">
                                     <AlertCircle className="w-4 h-4" />
-                                    Warning: Question is incomplete. Please add text, at least 2 options, and select a correct answer.
+                                    {t.warning_incomplete}
                                 </div>
                             )}
 
                             <CyberInput 
-                                placeholder="Enter question text..." 
+                                placeholder={t.enter_question}
                                 value={q.text}
                                 onChange={(e) => updateQuestion(q.id, { text: e.target.value })}
                                 className="text-lg font-bold"
@@ -277,7 +279,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                 <LinkIcon className="w-4 h-4 text-gray-500" />
                                 <input 
                                 type="text" 
-                                placeholder="Image/Media URL (Optional)"
+                                placeholder={t.media_url}
                                 value={q.imageUrl || ''}
                                 onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })}
                                 className="bg-transparent w-full text-xs font-mono text-gray-400 focus:outline-none focus:text-cyan-300"
@@ -290,7 +292,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                     <button 
                                     onClick={() => updateQuestion(q.id, { correctOptionId: opt.id })}
                                     className={`flex-shrink-0 transition-colors ${opt.id === q.correctOptionId ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}`}
-                                    title="Mark as correct"
+                                    title={t.mark_correct}
                                     >
                                     {opt.id === q.correctOptionId ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
                                     </button>
@@ -299,14 +301,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                     value={opt.text}
                                     onChange={(e) => updateOption(q.id, opt.id, e.target.value)}
                                     className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300"
-                                    placeholder={`Option ${i + 1}`}
+                                    placeholder={`${t.option_placeholder} ${i + 1}`}
                                     />
                                 </div>
                                 ))}
                             </div>
 
                             <div className="flex items-center justify-end gap-2 mt-2">
-                                <label className="text-xs font-mono text-gray-500">TIMER (SEC)</label>
+                                <label className="text-xs font-mono text-gray-500">{t.timer_sec}</label>
                                 <input 
                                 type="number" 
                                 value={q.timeLimit} 

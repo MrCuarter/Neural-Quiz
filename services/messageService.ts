@@ -4,7 +4,7 @@
 const messages = {
     start: [
         "Iniciando motores cuánticos...",
-        "Inyectando cafeína a la IA...",
+        "Consultando con Mr. Cuarter...",
         "Calentando los circuitos neuronales...",
         "Despertando al hámster del servidor...",
         "Cargando la matriz de conocimiento...",
@@ -12,7 +12,7 @@ const messages = {
     ],
     detect_kahoot: [
         "¡Ajá! Veo formas de colores y música pegadiza... ¡Es un Kahoot!",
-        "Detectando arquitectura Kahoot. Preparando el podio...",
+        "Detectando arquitectura Kahoot. Mr. Cuarter aprueba esto.",
         "Extrayendo diversión del formato Kahoot...",
         "Decodificando el ADN de ese Kahoot...",
         "¡Un clásico! Procesando estructura Kahoot...",
@@ -22,7 +22,7 @@ const messages = {
         "¿Es eso un blook? Detectando formato Blooket...",
         "Robando oro... digo, procesando Blooket...",
         "Analizando modo Tower Defense... Es un Blooket.",
-        "Hackeando el mainframe de Blooket...",
+        "Hackeando el mainframe de Blooket (con permiso de Mr. Cuarter)...",
         "Identificando estructura de juego cripto...",
         "¡Blooket detectado! Extrayendo preguntas..."
     ],
@@ -39,14 +39,14 @@ const messages = {
         "Leyendo entre líneas (literalmente)... Es un PDF.",
         "Usando visión de rayos X en este PDF...",
         "Convirtiendo tinta digital a datos...",
-        "Aplanando el documento para análisis...",
-        "Reciclando PDF a formato inteligente..."
+        "Aplanando el documento para análisis forense...",
+        "Mr. Cuarter está traduciendo este PDF antiguo..."
     ],
     detect_generic: [
         "Analizando patrones de texto...",
         "Buscando preguntas en el caos...",
         "Estructurando datos no estructurados...",
-        "Aplicando lógica difusa al contenido...",
+        "Mr. Cuarter está aplicando lógica difusa...",
         "Intentando entender tu letra (digital)...",
         "Buscando signos de interrogación..."
     ],
@@ -56,7 +56,7 @@ const messages = {
         "Ordenando las respuestas correctas...",
         "Generando distractores convincentes...",
         "Comprobando la ortografía interdimensional...",
-        "Alineando los chakras de los datos..."
+        "Mr. Cuarter está revisando el resultado final..."
     ],
     success: [
         "¡BOOM! ¡Lo tenemos!",
