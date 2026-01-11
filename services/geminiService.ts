@@ -1,48 +1,14 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question } from "../types";
 
-// Helper to safely retrieve API Key from various environment configurations
-const getAPIKey = (): string => {
-  let key = "";
-  
-  // 1. Check process.env (Standard in many bundlers)
-  try {
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      console.log("🔑 API Key found in process.env.API_KEY");
-      return process.env.API_KEY;
-    }
-  } catch(e) {}
-  
-  // 2. Check Vite / Modern Browsers (import.meta.env)
-  try {
-    // Cast import.meta to any to avoid TypeScript errors regarding 'env' property
-    const meta = import.meta as any;
-    if (meta && meta.env) {
-      if (meta.env.VITE_API_KEY) {
-        console.log("🔑 API Key found in VITE_API_KEY");
-        return meta.env.VITE_API_KEY;
-      }
-      if (meta.env.API_KEY) {
-        console.log("🔑 API Key found in API_KEY");
-        return meta.env.API_KEY;
-      }
-    }
-  } catch (e) {
-    // Ignore errors if import.meta is not defined
-  }
-
-  return "";
-};
-
 // Helper to safely get the AI instance only when needed
 const getAI = () => {
-  const apiKey = getAPIKey();
+  const apiKey = process.env.API_KEY;
   if (!apiKey) {
     console.error("⚠️ API KEY MISSING: The application could not find an API key.");
-    console.error("Please ensure you have set 'API_KEY' (or 'VITE_API_KEY') in your environment variables file (.env).");
+    console.error("Please ensure you have set 'API_KEY' in your .env file.");
     // We throw here to stop execution before the SDK throws a generic error
-    throw new Error("API Key configuration missing. Check console for details.");
+    throw new Error("Configuration Error: API Key missing. Please check your .env file.");
   }
   return new GoogleGenAI({ apiKey: apiKey });
 };

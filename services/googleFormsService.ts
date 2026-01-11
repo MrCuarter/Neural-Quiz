@@ -5,16 +5,22 @@ import { Question } from "../types";
 // Safe retrieval of Client ID
 const getClientId = () => {
     // 1. Try Environment Variables (Vite / Process)
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+    try {
         // @ts-ignore
-        return import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    }
-    // @ts-ignore
-    if (typeof process !== 'undefined' && process.env && process.env.VITE_GOOGLE_CLIENT_ID) {
-        // @ts-ignore
-        return process.env.VITE_GOOGLE_CLIENT_ID;
-    }
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            if (import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+                // @ts-ignore
+                return import.meta.env.VITE_GOOGLE_CLIENT_ID;
+            }
+        }
+    } catch(e) {}
+
+    try {
+        if (typeof process !== 'undefined' && process.env) {
+            if (process.env.VITE_GOOGLE_CLIENT_ID) return process.env.VITE_GOOGLE_CLIENT_ID;
+        }
+    } catch(e) {}
 
     // 2. Fallback Hardcoded ID (Matches the one provided by user)
     // This ensures functionality works even if .env isn't loaded correctly in some environments.
