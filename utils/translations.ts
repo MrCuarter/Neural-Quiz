@@ -3,6 +3,7 @@ export type Language = 'es' | 'en' | 'fr' | 'it' | 'de';
 
 export const translations = {
   es: {
+    // ... existing ...
     app_subtitle: "SISTEMA DE CONVERSIÓN UNIVERSAL",
     home_description: "Neural Quiz es tu navaja suiza digital. ¿Tienes unas directrices vagas? La IA te crea el examen. ¿Tienes un PDF aburrido, una web o incluso una foto de un examen arrugado? Lo transformamos en un Kahoot, Google Form o lo que necesites en segundos. Tú pones la fuente, Neural Quiz hace la magia y exporta a cualquier plataforma educativa actual.",
     create_quiz: "CREAR QUIZ",
@@ -129,7 +130,7 @@ export const translations = {
     fmt_quizalize: "Hoja de cálculo oficial (CSV). Subida directa.",
     fmt_idoceo: "Plantilla iDoceo Connect. Incluye feedback y opciones.",
     fmt_blooket: "Plantilla oficial de importación Blooket (CSV).",
-    fmt_genially: "Banco de preguntas Genially. Respuestas con letras.",
+    fmt_genially: "Banco de preguntas Genially. Soporta Ordenar, Huecos, Elección...",
     fmt_gimkit_classic: "Formatos oficiales. Elige entre Clásico o Texto.",
     fmt_wordwall: "Texto simple. Copia y pega en el editor de Wordwall.",
     fmt_flippity: "Genera el Excel para Flippity Quiz Show.",
@@ -156,10 +157,11 @@ export const translations = {
     // Question Types
     type_mc: "Opción Múltiple",
     type_tf: "Verdadero / Falso",
-    type_short: "Respuesta Corta / Rellenar Hueco",
+    type_short: "Respuesta Corta / Rellenar Huecos",
     type_open: "Abierta / Opinión",
     type_poll: "Encuesta",
     type_draw: "Dibujo",
+    type_order: "Ordenar",
 
     // Editor UI
     add_gen_ai: "GENERAR CON IA",
@@ -170,13 +172,16 @@ export const translations = {
     q_distractors: "RESPUESTAS INCORRECTAS",
     q_tf_true: "Verdadero",
     q_tf_false: "Falso",
-    q_short_desc: "El estudiante debe escribir esto exactamente.",
+    q_short_desc: "Escribe la palabra exacta.",
+    q_fill_gap_desc: "Escribe en el enunciado algo como 'Las plantas usan __ y __'. Luego añade las respuestas que van en cada hueco en orden.",
+    q_order_desc: "Introduce los elementos EN EL ORDEN CORRECTO (1º, 2º, 3º...). La plataforma los desordenará al jugar.",
     q_open_desc: "Esta pregunta no tiene corrección automática. Se usa para debates o textos largos.",
     ai_modal_title: "ASISTENTE GENERATIVO",
     ai_modal_add: "AÑADIR AL QUIZ",
     ai_modal_close: "CANCELAR"
   },
   en: {
+    // ... existing ...
     app_subtitle: "UNIVERSAL CONVERTER SYSTEM",
     home_description: "Neural Quiz is your digital Swiss Army knife. Vague guidelines? AI creates the exam. Boring PDF, website, or crumbled exam photo? We transform it into a Kahoot, Google Form, or whatever you need in seconds. You provide the source, Neural Quiz does the magic and exports to any current educational platform.",
     create_quiz: "CREATE QUIZ",
@@ -303,7 +308,7 @@ export const translations = {
     fmt_quizalize: "Official Spreadsheet (CSV). Direct upload.",
     fmt_idoceo: "iDoceo Connect template. Includes feedback.",
     fmt_blooket: "Official Blooket import template (CSV).",
-    fmt_genially: "Genially Question Bank. Letter-based answers.",
+    fmt_genially: "Genially Question Bank. Supports Ordering, Gaps, Choice...",
     fmt_gimkit_classic: "Official formats. Choose Classic or Text Input.",
     fmt_wordwall: "Simple Text. Copy-paste into Wordwall editor.",
     fmt_flippity: "Generates Excel for Flippity Quiz Show.",
@@ -334,6 +339,7 @@ export const translations = {
     type_open: "Open Ended / Opinion",
     type_poll: "Poll",
     type_draw: "Draw",
+    type_order: "Order",
 
     // Editor UI
     add_gen_ai: "GENERATE WITH AI",
@@ -345,17 +351,23 @@ export const translations = {
     q_tf_true: "True",
     q_tf_false: "False",
     q_short_desc: "Student must type this exactly.",
+    q_fill_gap_desc: "Use '__' in text to denote gaps (e.g. 'Water is H__O'). Then list the answers in order.",
+    q_order_desc: "Enter items in the CORRECT ORDER (1st, 2nd, 3rd...). The platform will shuffle them.",
     q_open_desc: "This question has no automatic grading. Used for debates or long texts.",
     ai_modal_title: "GENERATIVE ASSISTANT",
     ai_modal_add: "ADD TO QUIZ",
     ai_modal_close: "CANCEL"
   },
-  // Other languages omitted for brevity but should follow the same pattern
   fr: {
     // ... existing fr translations ...
     home_description: "Neural Quiz est votre couteau suisse numérique. Vous avez des directives vagues ? L'IA crée l'examen. Un PDF ennuyeux, un site web ou même une photo d'un examen froissé ? Nous le transformons en Kahoot ou Google Form en quelques secondes. Vous fournissez la source, Neural Quiz fait la magie.",
     supports_fmt: "Supporte : .CSV, .XLSX, .TXT, .PDF, .PNG, .JPG",
     autodetect_fmt: "Détection auto et OCR pour images.",
+    q_type_label: "TYPE DE QUESTION",
+    type_mc: "Choix Multiple",
+    type_order: "Ordonner",
+    q_order_desc: "Entrez les éléments dans l'ORDRE CORRECT. La plateforme les mélangera.",
+    q_fill_gap_desc: "Utilisez '__' pour les trous. Listez ensuite les réponses dans l'ordre.",
     // ...
   }
 } as any;

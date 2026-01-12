@@ -63,11 +63,12 @@ export interface GeneratedFile {
 export const QUESTION_TYPES = {
     MULTIPLE_CHOICE: 'Multiple Choice',
     TRUE_FALSE: 'True/False',
-    FILL_GAP: 'Fill in the Blank',
+    FILL_GAP: 'Fill in the Blank', // Used for Short Answer too
     OPEN_ENDED: 'Open Ended',
     MULTI_SELECT: 'Multi-Select (Checkbox)',
     POLL: 'Poll',
-    DRAW: 'Draw'
+    DRAW: 'Draw',
+    ORDER: 'Order / Sort' // New Type
 };
 
 export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
@@ -105,7 +106,15 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     },
     [ExportFormat.GENIALLY]: { 
         name: 'Genially', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE] 
+        types: [
+            QUESTION_TYPES.MULTIPLE_CHOICE, // Elección única
+            QUESTION_TYPES.MULTI_SELECT,    // Elección múltiple
+            QUESTION_TYPES.TRUE_FALSE,      // Verdadero o falso
+            QUESTION_TYPES.ORDER,           // Ordenar
+            QUESTION_TYPES.FILL_GAP,        // Rellenar huecos / Respuesta corta
+            QUESTION_TYPES.OPEN_ENDED,      // Respuesta abierta
+            QUESTION_TYPES.POLL             // Encuesta
+        ] 
     },
     [ExportFormat.WAYGROUND]: { 
         name: 'Wayground', 
