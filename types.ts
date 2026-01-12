@@ -1,4 +1,5 @@
 
+
 export interface Option {
   id: string;
   text: string;
@@ -16,12 +17,52 @@ export interface Question {
   audioUrl?: string;
   feedback?: string;
   questionType?: string; // e.g., "Multiple Choice"
+  
+  // FORENSIC ANALYSIS FIELDS
+  reconstructed?: boolean;
+  sourceEvidence?: string;
+  imageReconstruction?: "direct" | "partial" | "inferred" | "none";
+
+  // ENHANCE AI FIELDS
+  explanation?: string;
+  confidenceScore?: number; // 0-1
+  qualityFlags?: {
+      ambiguous?: boolean;
+      needsHumanReview?: boolean;
+      duplicateOptions?: boolean;
+  };
+  
+  // DATA INTEGRITY FLAGS (New)
+  needsEnhanceAI?: boolean;
+  enhanceReason?: string;
 }
 
 export interface Quiz {
   title: string;
   description: string;
   questions: Question[];
+}
+
+export interface KahootDiscoveryReport {
+    method: 'api_card' | 'api_rest' | 'html_next_data' | 'html_apollo' | 'fallback_ai';
+    endpointUsed?: string;
+    questionsFound: number;
+    hasChoices: boolean;
+    hasCorrectFlags: boolean;
+    hasImages: boolean;
+    proxyUsed?: string;
+}
+
+export interface KahootCardResponse {
+    kahoot?: {
+        title?: string;
+        questions?: any[];
+    };
+    card?: {
+        title?: string;
+    };
+    questions?: any[];
+    title?: string;
 }
 
 export enum ExportFormat {

@@ -14,7 +14,8 @@ import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, File
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
-import { fetchUrlContent } from './services/urlService';
+import { fetchUrlContent, extractKahootUUID } from './services/urlService';
+import { analyzeKahootUrl } from './services/kahootService';
 import { getRandomMessage, getDetectionMessage } from './services/messageService';
 import * as XLSX from 'xlsx';
 
@@ -398,7 +399,7 @@ const App: React.FC = () => {
              setTempQuestions(questions);
              setTempQuizInfo({
                  title: sourceName,
-                 description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI'
+                 desc: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI'
              });
              // Delay slightly so the user sees "Success" before the modal
              setTimeout(() => setShowMissingAnswersModal(true), 1000);
@@ -589,6 +590,46 @@ const App: React.FC = () => {
         return;
     }
     
+    // --- SPECIAL KAHOOT FLOW (Bypass AI) ---
+    const kahootUUID = extractKahootUUID(urlToConvert);
+    
+    if (kahootUUID) {
+        setView('convert_analysis');
+        setAnalysisStatus(getRandomMessage('detect_kahoot'));
+        setAnalysisProgress(30);
+        
+        try {
+            const kahootResult = await analyzeKahootUrl(urlToConvert);
+            setAnalysisProgress(80);
+            
+            if (kahootResult) {
+                const { quiz: quizData, report } = kahootResult;
+                
+                // Check if quality is acceptable
+                const missingAnswers = quizData.questions.some(q => q.needsEnhanceAI);
+                
+                if (missingAnswers) {
+                    setTempQuestions(quizData.questions);
+                    setTempQuizInfo({ title: quizData.title, desc: 'Imported from Kahoot (Private/Protected)' });
+                    setAnalysisStatus(getRandomMessage('error')); 
+                    setTimeout(() => setShowMissingAnswersModal(true), 1000);
+                } else {
+                    setAnalysisProgress(100);
+                    setAnalysisStatus(getRandomMessage('success'));
+                    setQuiz(quizData);
+                    setTimeout(() => setView('create_manual'), 1000);
+                }
+                return; // EXIT FUNCTION, DO NOT CALL AI
+            } else {
+                throw new Error("Kahoot Deep Discovery returned no result.");
+            }
+        } catch (e) {
+            console.warn("Direct Kahoot Fetch Failed, falling back to AI...", e);
+            // Fallthrough to AI logic below
+        }
+    }
+
+    // --- STANDARD AI FLOW ---
     setView('convert_analysis');
     setAnalysisStatus("Iniciando escaneo de red neural...");
     setAnalysisProgress(5);

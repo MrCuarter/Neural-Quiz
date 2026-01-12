@@ -1,9 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle } from 'lucide-react';
-import { generateQuizQuestions } from '../services/geminiService';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch } from 'lucide-react';
+import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import * as XLSX from 'xlsx';
 
@@ -23,6 +22,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [aiTopic, setAiTopic] = useState('');
   const [aiCount, setAiCount] = useState(3);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -173,6 +173,23 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
     const hasCorrect = ids.length > 0 && q.options.some(o => ids.includes(o.id));
     const hasOptions = q.options.filter(o => o.text.trim().length > 0).length >= 2;
     return hasText && hasCorrect && hasOptions;
+  };
+
+  const handleEnhanceQuestion = async (q: Question) => {
+      setEnhancingId(q.id);
+      try {
+          // In a real scenario, you'd pass the actual document context here if available in state
+          const enhancedQ = await enhanceQuestion(q, quiz.description || "", "es");
+          
+          setQuiz(prev => ({
+              ...prev,
+              questions: prev.questions.map(oldQ => oldQ.id === q.id ? { ...enhancedQ, id: oldQ.id } : oldQ)
+          }));
+      } catch (e) {
+          alert("Could not enhance question.");
+      } finally {
+          setEnhancingId(null);
+      }
   };
 
   const fixFillGap = (qId: string) => {
@@ -328,6 +345,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
             const isValid = validateQuestion(q);
             const isExpanded = expandedQuestionId === q.id;
             const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
+            const needsEnhance = (!isValid && q.options.length < 2) || (q.options.length > 0 && !q.correctOptionId);
+            const isEnhancing = enhancingId === q.id;
+
             const getTypeIcon = (type?: string) => {
                 if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />;
                 if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />;
@@ -348,11 +368,24 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                   <div className="p-1.5 bg-gray-900 rounded border border-gray-700 text-cyan-500">{getTypeIcon(q.questionType)}</div>
                                   <span className={`font-bold font-mono truncate ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>{q.text || t.enter_question}</span>
                                   {!isValid && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                                  {q.qualityFlags?.needsHumanReview && <span title="Needs Human Review"><Eye className="w-4 h-4 text-yellow-500 shrink-0 animate-pulse" /></span>}
+                                  {q.reconstructed && <span title="Reconstructed by AI"><FileSearch className="w-4 h-4 text-purple-400 shrink-0" /></span>}
                               </div>
                           )}
                           {isExpanded && <div className="flex items-center gap-2 text-cyan-400"><span className="font-cyber text-lg">{t.editing} Q-{index+1}</span></div>}
                       </div>
                       <div className="flex items-center gap-2">
+                          {needsEnhance && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleEnhanceQuestion(q); }} 
+                                    disabled={isEnhancing}
+                                    className="p-2 bg-purple-900/40 text-purple-300 hover:text-white border border-purple-500/50 hover:bg-purple-600 rounded transition-colors flex items-center gap-2 text-xs font-bold"
+                                    title="Auto-Fix with AI"
+                                >
+                                    <Wand2 className={`w-4 h-4 ${isEnhancing ? 'animate-spin' : ''}`} />
+                                    {isEnhancing ? 'FIXING...' : 'ENHANCE'}
+                                </button>
+                          )}
                           <button onClick={(e) => removeQuestion(q.id, e)} className="p-2 text-gray-600 hover:text-red-500 transition-colors rounded hover:bg-red-950/20"><Trash2 className="w-5 h-5" /></button>
                           <div className="p-2 text-cyan-500">{isExpanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}</div>
                       </div>
@@ -360,6 +393,16 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
                   {isExpanded && (
                       <div className="space-y-6 mt-6 border-t border-gray-800 pt-6 animate-in slide-in-from-top-2 cursor-default" onClick={e => e.stopPropagation()}>
+                          
+                          {/* QUALITY FLAGS BANNER */}
+                          {(q.reconstructed || q.qualityFlags?.needsHumanReview) && (
+                              <div className="flex items-center gap-4 p-2 bg-purple-950/20 border-l-4 border-purple-500 rounded text-xs font-mono text-purple-200">
+                                  {q.reconstructed && <span className="flex items-center gap-1"><FileSearch className="w-3 h-3"/> Reconstructed by AI</span>}
+                                  {q.qualityFlags?.needsHumanReview && <span className="flex items-center gap-1 text-yellow-300"><Eye className="w-3 h-3"/> Needs Review</span>}
+                                  {q.sourceEvidence && <span className="text-gray-500 italic ml-auto truncate max-w-[200px]">Evidence: {q.sourceEvidence}</span>}
+                              </div>
+                          )}
+
                           <div className="flex flex-col md:flex-row gap-4">
                               <div className="flex-1">
                                   <CyberSelect label={t.q_type_label} options={allowedTypes.map(type => ({ value: type, label: getTranslatedType(type) }))} value={q.questionType || QUESTION_TYPES.MULTIPLE_CHOICE} onChange={(e) => handleTypeChange(q.id, e.target.value)} />
@@ -372,9 +415,38 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
                           <div className="space-y-2">
                               <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
-                              <div className="flex items-center gap-2 bg-gray-900/50 p-2 rounded border border-gray-800 focus-within:border-cyan-500/50 transition-colors">
-                                  <LinkIcon className="w-4 h-4 text-gray-500" />
-                                  <input type="text" placeholder={t.media_url} value={q.imageUrl || ''} onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })} className="bg-transparent w-full text-xs font-mono text-gray-400 focus:outline-none focus:text-cyan-300" />
+                              
+                              {/* MEDIA URL & PREVIEW SECTION */}
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2 bg-gray-900/50 p-2 rounded border border-gray-800 focus-within:border-cyan-500/50 transition-colors">
+                                    <LinkIcon className="w-4 h-4 text-gray-500" />
+                                    <input type="text" placeholder={t.media_url} value={q.imageUrl || ''} onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })} className="bg-transparent w-full text-xs font-mono text-gray-400 focus:outline-none focus:text-cyan-300" />
+                                </div>
+                                
+                                {q.imageUrl && (
+                                    <div className="relative mt-2 group w-full md:w-48 aspect-video bg-black/50 rounded border border-gray-700 overflow-hidden self-start">
+                                        <div className="absolute inset-0 flex items-center justify-center text-gray-600">
+                                            <ImageIcon className="w-6 h-6" />
+                                        </div>
+                                        <img 
+                                            src={q.imageUrl} 
+                                            alt="Preview" 
+                                            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+                                            onError={(e) => {
+                                                // Hide broken images to avoid ugly UI
+                                                (e.target as HTMLImageElement).style.opacity = '0';
+                                            }}
+                                        />
+                                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button 
+                                                onClick={() => updateQuestion(q.id, { imageUrl: '' })}
+                                                className="bg-red-900/80 text-red-200 p-1 rounded-full hover:bg-red-700"
+                                            >
+                                                <XCircle className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                               </div>
                           </div>
 
@@ -388,7 +460,10 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       {q.options.length === 0 && (
                                           <div className="col-span-2 text-center py-4">
                                               <p className="text-yellow-500 font-mono text-sm mb-2">No options detected.</p>
-                                              <CyberButton variant="secondary" onClick={() => ensureOptions(q)} className="text-xs py-1">Initialize Options</CyberButton>
+                                              <div className="flex justify-center gap-4">
+                                                  <CyberButton variant="secondary" onClick={() => ensureOptions(q)} className="text-xs py-1">Initialize Options</CyberButton>
+                                                  <CyberButton variant="neural" onClick={() => handleEnhanceQuestion(q)} isLoading={isEnhancing} className="text-xs py-1"><Wand2 className="w-3 h-3 mr-1"/> Auto-Fix (AI)</CyberButton>
+                                              </div>
                                           </div>
                                       )}
                                       

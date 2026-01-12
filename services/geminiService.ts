@@ -41,7 +41,12 @@ const questionSchema: Schema = {
     correctAnswerIndices: { type: Type.ARRAY, items: { type: Type.INTEGER } },
     feedback: { type: Type.STRING },
     type: { type: Type.STRING },
-    imageUrl: { type: Type.STRING }
+    imageUrl: { type: Type.STRING, description: "URL of the image if present." },
+    
+    // Forensic Analysis Fields
+    reconstructed: { type: Type.BOOLEAN, description: "True if the question, answers or image were inferred rather than read directly." },
+    sourceEvidence: { type: Type.STRING, description: "Brief explanation of how the data was found (e.g. 'Found in JSON', 'Inferred from context')." },
+    imageReconstruction: { type: Type.STRING, enum: ["direct", "partial", "inferred", "none"], description: "How the image URL was obtained." }
   },
   required: ["text", "options", "type"]
 };
@@ -50,6 +55,40 @@ const quizSchema: Schema = {
   type: Type.ARRAY,
   items: questionSchema,
   description: "A list of quiz questions."
+};
+
+// ENHANCE AI SCHEMA
+const enhanceSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        text: { type: Type.STRING, description: "Refined question text if needed." },
+        options: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    text: { type: Type.STRING },
+                    isCorrect: { type: Type.BOOLEAN },
+                    rationale: { type: Type.STRING }
+                },
+                required: ["text", "isCorrect"]
+            }
+        },
+        explanation: { type: Type.STRING, description: "1-2 sentences explaining the answer." },
+        reconstructed: { type: Type.BOOLEAN },
+        sourceEvidence: { type: Type.STRING, description: "Max 240 chars. Quote context or 'semantic inference'." },
+        qualityFlags: {
+            type: Type.OBJECT,
+            properties: {
+                ambiguous: { type: Type.BOOLEAN },
+                needsHumanReview: { type: Type.BOOLEAN },
+                duplicateOptions: { type: Type.BOOLEAN }
+            }
+        },
+        imageUrl: { type: Type.STRING, nullable: true },
+        confidenceGlobal: { type: Type.NUMBER, description: "0 to 1" }
+    },
+    required: ["options", "reconstructed"]
 };
 
 interface GenParams {
@@ -140,7 +179,7 @@ const sanitizeQuestion = (q: any, allowedTypes: string[], language: string): any
         correctIndex = 0; 
     }
 
-    return { ...q, text, type, options, correctAnswerIndex: correctIndex, correctAnswerIndices: q.correctAnswerIndices };
+    return { ...q, text, type, options, correctAnswerIndex: correctIndex, correctAnswerIndices: q.correctAnswerIndices, reconstructed: q.reconstructed, sourceEvidence: q.sourceEvidence, imageReconstruction: q.imageReconstruction };
 };
 
 export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number, correctIndices?: number[] })[]> => {
@@ -206,7 +245,10 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
         correctIndices: q.correctAnswerIndices || [q.correctAnswerIndex],
         feedback: q.feedback || "",
         questionType: q.type,
-        imageUrl: q.imageUrl || ""
+        imageUrl: q.imageUrl || "",
+        reconstructed: q.reconstructed,
+        sourceEvidence: q.sourceEvidence,
+        imageReconstruction: q.imageReconstruction
       };
     });
 
@@ -216,7 +258,6 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
   }
 };
 
-// ... (Rest of file exports unchanged, but ensuring parseRawTextToQuiz uses the same sanitizer) ...
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: any): Promise<any[]> => {
     const ai = getAI();
     const truncatedText = rawText.substring(0, 800000); 
@@ -225,13 +266,37 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       contents.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
       contents.push({ text: "Extract questions from this image." });
     }
-    contents.push({
-       text: `FORENSIC ANALYSIS. Source: ${truncatedText}. 
-       Output Lang: ${language}.
-       Detect Multi-Select (multiple correct answers) based on question phrasing (e.g. "Select ingredients").
-       Detect 'Order' questions.
-       Ensure grammatical concordance in Fill Gap.`
-    });
+    
+    // FORENSIC ANALYSIS PROMPT
+    const prompt = `You are a Quiz Reverse-Engineering Engine.
+    
+    Output Language: ${language}
+    
+    Your task is NOT to read the page like a human.
+    Your task is to reconstruct the internal quiz data model used by the platform.
+    
+    Source Content:
+    ${truncatedText}
+    
+    You must:
+    1. Identify each question block.
+    2. Locate ALL possible answer options.
+    3. Infer which option is correct using: structural signals, repeated patterns, hidden JSON, data attributes, or semantic analysis.
+    4. Extract the image associated with each question.
+       - CRITICAL FOR KAHOOT: If you see a UUID (e.g. "06d7e6e5-...") in an 'image' field, CONSTRUCT the URL: https://images-cdn.kahoot.it/{UUID}
+       - Search for 'image', 'bgImage', 'media', 'url'.
+    5. If answers are not directly visible, search the content for answer keys, validation logic, or "correct" flags.
+    6. If still missing, infer the correct answer by semantic analysis and mark 'reconstructed': true.
+    
+    Work as a forensic analyst. Do not stop at visible text. Assume important data is hidden in structure (JSON blocks, Script tags).
+    
+    Detect 'Multi-Select' if multiple answers are correct.
+    Detect 'Order' questions.
+    
+    Populate the 'sourceEvidence' field explaining where you found the data.
+    Populate 'imageReconstruction' with 'direct', 'partial' (if you built the URL), or 'none'.`;
+
+    contents.push({ text: prompt });
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -259,18 +324,104 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
             correctIndices: q.correctAnswerIndices || [q.correctAnswerIndex],
             feedback: q.feedback || "",
             questionType: q.type,
-            imageUrl: q.imageUrl || ""
+            imageUrl: q.imageUrl || "",
+            reconstructed: q.reconstructed,
+            sourceEvidence: q.sourceEvidence,
+            imageReconstruction: q.imageReconstruction
         };
     });
 };
 
-// NEW: ENHANCE EXISTING QUESTIONS (Fill Missing Answers)
+// ENHANCE AI MODULE
+export const enhanceQuestion = async (
+    q: Question, 
+    context: string, 
+    language: string
+): Promise<Question> => {
+    try {
+        const ai = getAI();
+        const prompt = `Input:
+language: "${language}"
+questionText: "${q.text}"
+sourceContext: "${context ? context.substring(0, 2000) : ''}"
+existingOptions: ${JSON.stringify(q.options.map(o => o.text))}
+imageCandidates: "${q.imageUrl || ''}"
+constraints:
+  • typeHint: "${q.questionType}"
+  • optionsTarget: ${q.options.length < 2 ? 4 : q.options.length}
+  • singleAnswer: ${q.questionType !== QUESTION_TYPES.MULTI_SELECT}
+  • difficulty: "medium"
+
+Task:
+Complete the question data.
+Rules:
+  • Keep the original intent of the question.
+  • If existingOptions are present, reuse them and only fix/complete.
+  • Generate plausible distractors that are close to the correct answer (near-miss), not random.
+  • Mark reconstructed=true if you had to infer anything not supported by sourceContext.
+  • Provide sourceEvidence as either a short quote from sourceContext or "semantic inference".
+  • For images: if imageCandidates exist, select the best match. If none, set url=null.
+`;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: enhanceSchema,
+                systemInstruction: `You are Enhance AI for quizzes. Your job is to complete missing quiz data with high precision and minimal invention.
+Priorities:
+  1. Use provided sourceContext as evidence. If evidence exists, follow it.
+  2. If evidence is missing, infer using general knowledge and clearly mark reconstructed=true.
+  3. Avoid duplicates, avoid multiple correct answers unless multiAnswer=true.
+  4. Return strict JSON.
+  5. Provide confidence scores 0-1.`
+            }
+        });
+
+        const data = JSON.parse(response.text || "{}");
+        if (!data.options) throw new Error("Enhance AI failed to generate options");
+
+        // Merge logic
+        const newOptions = data.options.map((o: any) => ({
+            id: Math.random().toString(36).substring(2, 9),
+            text: o.text
+        }));
+
+        const correctIndices: number[] = [];
+        data.options.forEach((o: any, idx: number) => {
+            if (o.isCorrect) correctIndices.push(idx);
+        });
+
+        const correctOptionIds = correctIndices.map(i => newOptions[i]?.id).filter(id => !!id);
+
+        return {
+            ...q,
+            text: data.text || q.text,
+            options: newOptions,
+            correctOptionId: correctOptionIds[0] || "",
+            correctOptionIds: correctOptionIds,
+            explanation: data.explanation,
+            feedback: data.explanation, // Map explanation to feedback
+            reconstructed: data.reconstructed,
+            sourceEvidence: data.sourceEvidence,
+            qualityFlags: data.qualityFlags,
+            confidenceScore: data.confidenceGlobal,
+            imageUrl: data.imageUrl || q.imageUrl || ""
+        };
+
+    } catch (e) {
+        console.error("Enhance Question Error", e);
+        return q;
+    }
+};
+
+// ... (existing exports) ...
 export const enhanceQuestionsWithOptions = async (questions: Question[], language: string = 'Spanish'): Promise<any[]> => {
+    // Legacy generic enhancement (batch)
     const ai = getAI();
-    
-    // Minimal structure to save tokens
+    // ... same content as before ...
     const qs = questions.map(q => ({ text: q.text, type: q.questionType }));
-    
     const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `I have a list of questions but the answers are missing. 
@@ -283,16 +434,12 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
             systemInstruction: "You are a teacher fixing a broken quiz. Preserve the exact original question text. Generate high-quality distractors."
         }
     });
-
     try {
         const data = JSON.parse(response.text || "[]");
         const items = Array.isArray(data) ? data : (data.questions || []);
-        
-        // Merge AI results with original data IDs
         return items.map((generated: any, index: number) => {
             const original = questions[index];
             const sanitized = sanitizeQuestion(generated, [original.questionType || QUESTION_TYPES.MULTIPLE_CHOICE], language);
-            
             return {
                 ...sanitized,
                 rawOptions: sanitized.options,
@@ -300,11 +447,7 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
                 correctIndices: sanitized.correctAnswerIndices
             };
         });
-
-    } catch (e) {
-        console.error("Enhancement failed", e);
-        return []; // Fallback handled by UI
-    }
+    } catch (e) { return []; }
 };
 
 export const generateQuizCategories = async (questions: string[]): Promise<string[]> => {
@@ -334,7 +477,6 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
              const originalQ: any = questions[index] || { id: Math.random().toString() }; 
              const newOptions = (aq.options || []).map((t:string) => ({ id: Math.random().toString(), text: t }));
              const sanitized = sanitizeQuestion({ ...aq, options: newOptions.map(o => o.text) }, allowedTypes, 'Spanish');
-             
              return {
                  ...originalQ,
                  text: sanitized.text || "Adapted",

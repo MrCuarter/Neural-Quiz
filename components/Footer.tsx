@@ -21,9 +21,9 @@ export const Footer: React.FC<FooterProps> = ({ onPrivacy, onTerms }) => {
               
               {/* Legal Links */}
               <div className="flex gap-4 text-[10px] font-mono text-gray-600">
-                 <button onClick={onPrivacy} className="hover:text-cyan-400 transition-colors uppercase">Política de Privacidad</button>
+                 <a href="https://mistercuarter.es/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors uppercase">Política de Privacidad</a>
                  <span className="text-gray-700">|</span>
-                 <button onClick={onTerms} className="hover:text-pink-400 transition-colors uppercase">Condiciones del Servicio</button>
+                 <a href="https://mistercuarter.es/condiciones" target="_blank" rel="noopener noreferrer" className="hover:text-pink-400 transition-colors uppercase">Condiciones del Servicio</a>
               </div>
           </div>
 

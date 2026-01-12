@@ -1,11 +1,8 @@
 
-// ROBUST URL SERVICE (The "Plan Omega" Architecture)
-// Solves CORS and SPA Rendering by delegating fetching to specialized external agents.
+import { extractTextFromPDF } from "./pdfService";
 
-// LIST OF AGENTS
-// 1. Jina Reader: Acts as a "Serverless Browser". Renders JS and returns Markdown. Best for AI.
-// 2. CorsProxy: Tunnels raw HTML request. Good for static sites or API endpoints.
-// 3. AllOrigins: Backup tunnel.
+// ROBUST URL SERVICE
+// Solves CORS and SPA Rendering by delegating fetching to specialized external agents.
 
 const AGENTS = [
     // Agent Alpha: Jina (Renders the page, returns clean Markdown)
@@ -14,7 +11,7 @@ const AGENTS = [
         getUrl: (target: string) => `https://r.jina.ai/${target}`,
         headers: { 'X-No-Cache': 'true' }
     },
-    // Agent Beta: CorsProxy (Raw HTML Tunnel) - Updated URL
+    // Agent Beta: CorsProxy (Raw HTML Tunnel)
     {
         name: "Agent Proxy (Tunnel)",
         getUrl: (target: string) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
@@ -28,80 +25,18 @@ const AGENTS = [
     }
 ];
 
-// Helper to format Kahoot JSON into clear text for Gemini
-const formatKahootData = (json: any): string => {
-    try {
-        const data = typeof json === 'string' ? JSON.parse(json) : json;
-        const questions = data.questions || data.kahoot?.questions;
-        
-        if (!questions || !Array.isArray(questions)) return JSON.stringify(data);
-
-        let output = `--- KAHOOT EXTRACTED DATA ---\n`;
-        output += `Title: ${data.title || 'Kahoot Quiz'}\n`;
-        output += `Total Questions: ${questions.length}\n\n`;
-
-        questions.forEach((q: any, index: number) => {
-            output += `Question ${index + 1}: ${q.question}\n`;
-            output += `Type: ${q.type}\n`;
-            output += `Time: ${q.time}ms\n`;
-            
-            if (q.choices && Array.isArray(q.choices)) {
-                output += `Options:\n`;
-                q.choices.forEach((c: any) => {
-                    // Mark correct answer explicitly for the AI
-                    const marker = c.correct ? "[x]" : "[ ]";
-                    output += `  ${marker} ${c.answer}\n`;
-                });
-            }
-            output += `\n----------------\n`;
-        });
-        
-        return output;
-    } catch (e) {
-        return `--- KAHOOT RAW JSON (Parsing Failed) ---\n${JSON.stringify(json)}`;
-    }
+export const extractKahootUUID = (url: string): string | null => {
+    const regex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const match = url.match(regex);
+    return match ? match[0] : null;
 };
 
+// Main Fetcher for General URLs (Not Kahoot specific)
 export const fetchUrlContent = async (url: string): Promise<string> => {
     let targetUrl = url.trim();
     if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
 
     console.log(`⚡ NEURAL SCAN INITIATED: ${targetUrl}`);
-
-    // --- STRATEGY 1: API SNIPING (If we detect a known ID) ---
-    // If we can construct a direct API call, we bypass the visual web entirely.
-    
-    // Kahoot API Sniper
-    if (targetUrl.includes('kahoot')) {
-        const idMatch = targetUrl.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
-        if (idMatch) {
-            const id = idMatch[0];
-            console.log("🎯 Kahoot UUID Detected. Attempting API injection...");
-            const apiTarget = `https://create.kahoot.it/rest/kahoots/${id}`;
-            
-            // Try multiple proxies for the API specifically because it's the highest quality source
-            const apiProxies = [
-                `https://corsproxy.io/?${encodeURIComponent(apiTarget)}`,
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(apiTarget)}`
-            ];
-
-            for (const proxyUrl of apiProxies) {
-                try {
-                    const response = await fetch(proxyUrl);
-                    if (response.ok) {
-                        const json = await response.json();
-                        if (json.questions || (json.kahoot && json.kahoot.questions)) {
-                            console.log("✅ Kahoot API HIT. Structuring data...");
-                            // We parse it HERE instead of letting AI struggle with raw JSON
-                            return formatKahootData(json);
-                        }
-                    }
-                } catch(e) { 
-                    console.warn("API Sniper proxy failed, trying next...", e); 
-                }
-            }
-        }
-    }
 
     // --- STRATEGY 2: AGENT ROTATION (Brute Force) ---
     // We try each agent until one returns valid content.
