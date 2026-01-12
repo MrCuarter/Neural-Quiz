@@ -59,22 +59,33 @@ const generateGeniallyXLSX = (quiz: Quiz, title: string): GeneratedFile => {
     // Filter out empty options to ensure valid csv logic unless it's fixed structure
     const validOptions = q.options;
 
+    // Helper to get correct letters
+    const getCorrectLetters = () => {
+        const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+            ? q.correctOptionIds 
+            : (q.correctOptionId ? [q.correctOptionId] : []);
+        
+        const indices: number[] = [];
+        validOptions.forEach((opt, idx) => {
+            if (correctIds.includes(opt.id)) indices.push(idx);
+        });
+        
+        return indices.map(i => String.fromCharCode(65 + i)).join(",");
+    };
+
     switch (q.questionType) {
         case QUESTION_TYPES.MULTIPLE_CHOICE:
             type = "Elección única";
-            const correctIndex = validOptions.findIndex(o => o.id === q.correctOptionId);
-            if (correctIndex !== -1) correctAnswer = String.fromCharCode(65 + correctIndex);
+            correctAnswer = getCorrectLetters();
             break;
         case QUESTION_TYPES.MULTI_SELECT:
             type = "Elección múltiple";
-            // Simple logic for now: assumes single correct ID in current data model, would need multi-ID support ideally
-            const mIdx = validOptions.findIndex(o => o.id === q.correctOptionId);
-            if (mIdx !== -1) correctAnswer = String.fromCharCode(65 + mIdx);
+            // Map multiple ids to "A,C"
+            correctAnswer = getCorrectLetters();
             break;
         case QUESTION_TYPES.TRUE_FALSE:
             type = "Verdadero o falso";
-            const tfIndex = validOptions.findIndex(o => o.id === q.correctOptionId);
-            if (tfIndex !== -1) correctAnswer = String.fromCharCode(65 + tfIndex);
+            correctAnswer = getCorrectLetters();
             break;
         case QUESTION_TYPES.ORDER:
             type = "Ordenar";
@@ -110,6 +121,7 @@ const generateGeniallyXLSX = (quiz: Quiz, title: string): GeneratedFile => {
 const generateUniversalCSV = (quiz: Quiz, title: string) => {
   const header = "Pregunta,Respuesta 1 (Correcta),Respuesta 2,Respuesta 3,Respuesta 4,Dirección de Imagen,Respuesta 5,Tipo,Tiempo,Feedback";
   const rows = quiz.questions.map(q => {
+    // Basic CSV fallback handles single correct better for standard columns
     const c = q.options.find(o => o.id === q.correctOptionId);
     const o = q.options.filter(o => o.id !== q.correctOptionId);
     return [

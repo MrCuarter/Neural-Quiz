@@ -8,7 +8,8 @@ export interface Question {
   id: string;
   text: string;
   options: Option[];
-  correctOptionId: string;
+  correctOptionId: string; // Deprecated but kept for backward compat (primary answer)
+  correctOptionIds?: string[]; // THE UPGRADE: Supports multiple correct answers
   timeLimit?: number; // seconds
   imageUrl?: string;
   videoUrl?: string;
@@ -61,14 +62,14 @@ export interface GeneratedFile {
 // SHARED CONSTANTS
 
 export const QUESTION_TYPES = {
-    MULTIPLE_CHOICE: 'Multiple Choice',
+    MULTIPLE_CHOICE: 'Multiple Choice', // Single correct
     TRUE_FALSE: 'True/False',
-    FILL_GAP: 'Fill in the Blank', // Used for Short Answer too
+    FILL_GAP: 'Fill in the Blank', 
     OPEN_ENDED: 'Open Ended',
-    MULTI_SELECT: 'Multi-Select (Checkbox)',
+    MULTI_SELECT: 'Multi-Select (Checkbox)', // Multiple correct
     POLL: 'Poll',
     DRAW: 'Draw',
-    ORDER: 'Order / Sort' // New Type
+    ORDER: 'Order / Sort'
 };
 
 export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {

@@ -42,10 +42,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
         { id: uuid(), text: '' },
       ],
       correctOptionId: '',
+      correctOptionIds: [],
       timeLimit: 20,
       questionType: QUESTION_TYPES.MULTIPLE_CHOICE
     };
     newQ.correctOptionId = newQ.options[0].id; 
+    newQ.correctOptionIds = [newQ.options[0].id];
     setQuiz(prev => ({ ...prev, questions: [...prev.questions, newQ] }));
     setExpandedQuestionId(newQ.id);
   };
@@ -98,6 +100,29 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }));
   };
 
+  const handleCorrectSelection = (q: Question, optionId: string) => {
+      if (q.questionType === QUESTION_TYPES.MULTI_SELECT) {
+          // Toggle Logic
+          let currentIds = q.correctOptionIds || [];
+          // Ensure we have array
+          if (currentIds.length === 0 && q.correctOptionId) currentIds = [q.correctOptionId];
+
+          if (currentIds.includes(optionId)) {
+              currentIds = currentIds.filter(id => id !== optionId);
+          } else {
+              currentIds = [...currentIds, optionId];
+          }
+          // Update both fields to be safe (correctOptionId gets first one as fallback)
+          updateQuestion(q.id, { 
+              correctOptionIds: currentIds,
+              correctOptionId: currentIds.length > 0 ? currentIds[0] : ""
+          });
+      } else {
+          // Single Logic
+          updateQuestion(q.id, { correctOptionId: optionId, correctOptionIds: [optionId] });
+      }
+  };
+
   const handleTypeChange = (qId: string, newType: string) => {
      const question = quiz.questions.find(q => q.id === qId);
      if (!question) return;
@@ -108,14 +133,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
          const trueId = uuid();
          updates.options = [{ id: trueId, text: t.q_tf_true }, { id: uuid(), text: t.q_tf_false }];
          updates.correctOptionId = trueId;
+         updates.correctOptionIds = [trueId];
      } else if (newType === QUESTION_TYPES.FILL_GAP || newType === QUESTION_TYPES.ORDER) {
-         // Keep existing texts if relevant, but often needs cleanup
-         // For fill gap, initially clear or keep if user is just switching back
-         // We'll let the user manage it or use the new validation UI to fix it
          updates.correctOptionId = ""; 
+         updates.correctOptionIds = [];
      } else if (newType === QUESTION_TYPES.OPEN_ENDED) {
          updates.options = [{ id: uuid(), text: '' }];
          updates.correctOptionId = "";
+         updates.correctOptionIds = [];
      }
      
      updateQuestion(qId, updates);
@@ -131,13 +156,15 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
     if (q.questionType === QUESTION_TYPES.OPEN_ENDED || q.questionType === QUESTION_TYPES.POLL) return hasText;
     if (q.questionType === QUESTION_TYPES.FILL_GAP) {
         const gapCount = (q.text.match(/__/g) || []).length;
-        // Strictly require gap count == options length
         return hasText && gapCount > 0 && q.options.length === gapCount && q.options.every(o => o.text.trim().length > 0);
     }
     if (q.questionType === QUESTION_TYPES.ORDER) {
         return hasText && q.options.length >= 2 && q.options.every(o => o.text.trim().length > 0);
     }
-    const hasCorrect = q.correctOptionId !== '' && q.options.some(o => o.id === q.correctOptionId);
+    
+    // Check multiple correct ids if available, else check single
+    const ids = q.correctOptionIds && q.correctOptionIds.length > 0 ? q.correctOptionIds : (q.correctOptionId ? [q.correctOptionId] : []);
+    const hasCorrect = ids.length > 0 && q.options.some(o => ids.includes(o.id));
     const hasOptions = q.options.filter(o => o.text.trim().length > 0).length >= 2;
     return hasText && hasCorrect && hasOptions;
   };
@@ -150,12 +177,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
               if (q.id !== qId) return q;
               const gapCount = (q.text.match(/__/g) || []).length;
               let newOptions = [...q.options];
-              
               if (newOptions.length > gapCount) {
-                  // Too many options, trim
                   newOptions = newOptions.slice(0, gapCount);
               } else {
-                  // Too few, add
                   while (newOptions.length < gapCount) {
                       newOptions.push({ id: uuid(), text: '' });
                   }
@@ -176,9 +200,15 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       const newQuestions: Question[] = generatedQs.map(gq => {
         const qId = uuid();
         const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
-        const correctIdx = (gq.correctIndex >= 0 && gq.correctIndex < options.length) ? gq.correctIndex : 0;
+        // Handle array of correct indices from AI
+        const indices = gq.correctIndices || [gq.correctIndex || 0];
+        const correctIds = indices.map(i => options[i]?.id).filter(id => !!id);
+        
         return {
-          id: qId, text: gq.text, options: options, correctOptionId: options[correctIdx].id, timeLimit: 30, questionType: gq.questionType, feedback: gq.feedback
+          id: qId, text: gq.text, options: options, 
+          correctOptionId: correctIds[0] || "", 
+          correctOptionIds: correctIds,
+          timeLimit: 30, questionType: gq.questionType, feedback: gq.feedback
         };
       });
       setQuiz(prev => ({ ...prev, questions: [...prev.questions, ...newQuestions] }));
@@ -324,17 +354,29 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                           {/* DYNAMIC ANSWER EDITOR */}
                           <div className="bg-black/20 p-4 rounded border border-gray-800/50">
                               
-                              {/* Standard Choice */}
+                              {/* Standard Choice & Multi Select */}
                               {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || !q.questionType) && (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      {q.options.map((opt, i) => (
-                                      <div key={opt.id} className="flex items-center gap-3 bg-black/30 p-2 rounded border border-gray-800 hover:border-gray-600 transition-colors group-focus-within:border-cyan-500">
-                                          <button onClick={() => updateQuestion(q.id, { correctOptionId: opt.id })} className={`flex-shrink-0 transition-colors ${opt.id === q.correctOptionId ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}`} title={t.mark_correct}>
-                                            {opt.id === q.correctOptionId ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
-                                          </button>
-                                          <input type="text" value={opt.text} onChange={(e) => updateOption(q.id, opt.id, e.target.value)} className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300" placeholder={`${t.option_placeholder} ${i + 1}`} />
-                                      </div>
-                                      ))}
+                                      {q.options.map((opt, i) => {
+                                          const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
+                                          const isSelected = isMulti 
+                                              ? (q.correctOptionIds || []).includes(opt.id)
+                                              : opt.id === q.correctOptionId;
+
+                                          return (
+                                          <div key={opt.id} className="flex items-center gap-3 bg-black/30 p-2 rounded border border-gray-800 hover:border-gray-600 transition-colors group-focus-within:border-cyan-500">
+                                              <button onClick={() => handleCorrectSelection(q, opt.id)} className={`flex-shrink-0 transition-colors ${isSelected ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}`} title={t.mark_correct}>
+                                                {/* Visual distinction for multi vs single */}
+                                                {isMulti ? (
+                                                    isSelected ? <CheckSquare className="w-6 h-6"/> : <div className="w-6 h-6 border-2 border-gray-600 rounded-sm" />
+                                                ) : (
+                                                    isSelected ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />
+                                                )}
+                                              </button>
+                                              <input type="text" value={opt.text} onChange={(e) => updateOption(q.id, opt.id, e.target.value)} className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300" placeholder={`${t.option_placeholder} ${i + 1}`} />
+                                          </div>
+                                          );
+                                      })}
                                   </div>
                               )}
 
@@ -342,7 +384,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               {q.questionType === QUESTION_TYPES.TRUE_FALSE && (
                                   <div className="flex gap-4">
                                       {q.options.slice(0, 2).map((opt) => (
-                                          <button key={opt.id} onClick={() => updateQuestion(q.id, { correctOptionId: opt.id })} className={`flex-1 p-6 rounded border transition-all flex flex-col items-center gap-2 ${opt.id === q.correctOptionId ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-black/30 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                          <button key={opt.id} onClick={() => updateQuestion(q.id, { correctOptionId: opt.id, correctOptionIds: [opt.id] })} className={`flex-1 p-6 rounded border transition-all flex flex-col items-center gap-2 ${opt.id === q.correctOptionId ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-black/30 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
                                               {opt.id === q.correctOptionId ? <CheckCircle2 className="w-8 h-8" /> : <Circle className="w-8 h-8" />}
                                               <span className="text-xl font-bold">{opt.text}</span>
                                           </button>

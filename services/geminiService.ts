@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question } from "../types";
 
-// ... (Existing getAPIKey and getAI helpers remain the same) ...
+// ... (getAPIKey and getAI unchanged) ...
 const getAPIKey = (): string => {
   try {
     // @ts-ignore
@@ -31,18 +31,24 @@ const getAI = () => {
 const questionSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    text: { type: Type.STRING, description: "The question text. Clean text only, NO URLs." },
+    text: { type: Type.STRING, description: "The question text." },
     options: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: "A list of answers. For 'Fill in the Blank', list ONLY the correct words for each gap."
+      description: "List of options. For Fill-Blank, ONLY correct words."
     },
-    correctAnswerIndex: { type: Type.INTEGER, description: "The index (0-3) of the correct answer. For 'Order' or 'Fill Gap', use 0." },
-    feedback: { type: Type.STRING, description: "Brief explanation." },
-    type: { type: Type.STRING, description: "The specific type of this question." },
-    imageUrl: { type: Type.STRING, description: "Image URL." }
+    // Supporting both single and multiple correct indices
+    correctAnswerIndex: { type: Type.INTEGER, description: "Index of primary correct answer." },
+    correctAnswerIndices: { 
+        type: Type.ARRAY, 
+        items: { type: Type.INTEGER },
+        description: "Array of indices for ALL correct answers (for Multi-Select)." 
+    },
+    feedback: { type: Type.STRING },
+    type: { type: Type.STRING },
+    imageUrl: { type: Type.STRING }
   },
-  required: ["text", "options", "correctAnswerIndex", "type"]
+  required: ["text", "options", "type"]
 };
 
 const quizSchema: Schema = {
@@ -61,32 +67,24 @@ interface GenParams {
   language?: string; 
 }
 
-export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number })[]> => {
+export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number, correctIndices?: number[] })[]> => {
   try {
     const ai = getAI();
     const { topic, count, types, age, context, urls, language = 'Spanish' } = params;
     const safeCount = Math.min(Math.max(count, 1), 100);
 
     let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
-    prompt += `\nTarget Audience Age: ${age}.`;
-    prompt += `\nREQUIRED QUESTION TYPES: You MUST generate a mix of these specific types: ${types.join(', ')}.`;
-    prompt += `\nOUTPUT LANGUAGE: ${language}.`;
+    prompt += `\nTarget Audience: ${age}.`;
+    prompt += `\nREQUIRED TYPES: ${types.join(', ')}.`;
+    prompt += `\nLanguage: ${language}.`;
     
-    if (context) prompt += `\n\nBase questions on this context:\n${context.substring(0, 30000)}`;
+    if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
     if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
 
-    prompt += `\n\nRULES FOR SPECIFIC TYPES:
-    1. 'Order' / 'Sort': 
-       - Set 'type' to 'Order'.
-       - In 'options', list the items in the **CORRECT CHRONOLOGICAL OR LOGICAL ORDER** (1st to last).
-    2. 'Fill in the Blank' / 'Fill Gap':
-       - Set 'type' to 'Fill in the Blank'.
-       - The 'text' MUST contain '__' (double underscore) where words are missing (e.g. "Water is made of __ and __").
-       - The 'options' MUST contain ONLY the missing words in sequence (e.g. ["Hydrogen", "Oxygen"]).
-       - **CRITICAL**: The number of items in 'options' MUST MATCH EXACTLY the number of '__' in 'text'. Do NOT include distractors.
-    3. 'Multiple Choice': 4 options, one correct.
-    4. 'True/False': Options 'True', 'False'.
-    5. 'Open Ended': 'type'='Open Ended', put suggested answer in 'feedback'.
+    prompt += `\n\nRULES:
+    1. 'Multi-Select': Set 'type'='Multi-Select'. Provide 4 options. **Populate 'correctAnswerIndices' with ALL correct option indices.**
+    2. 'Fill in the Blank': 'text' has '__'. 'options' has ONLY correct words matching gaps.
+    3. 'Order': 'options' in CORRECT sequence.
     `;
 
     const response = await ai.models.generateContent({
@@ -95,7 +93,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are an expert educational content creator. Output language: ${language}. Ensure Fill-in-the-Blank questions have exactly matching gaps and options.`,
+        systemInstruction: `Educational Content Generator. Output Lang: ${language}. Handle Multi-Select correctly.`,
       },
     });
 
@@ -113,22 +111,17 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       
       // SANITIZATION FOR FILL GAP
       if (q.type === 'Fill in the Blank' || q.type === 'Fill Gap') {
-          // Count gaps
           const gapCount = (q.text.match(/__/g) || []).length;
-          // Force options to match gap count
-          if (cleanedOptions.length > gapCount) {
-              cleanedOptions = cleanedOptions.slice(0, gapCount);
-          } else {
-              while (cleanedOptions.length < gapCount) {
-                  cleanedOptions.push("???"); // Placeholder if AI failed to provide enough answers
-              }
-          }
+          if (cleanedOptions.length > gapCount) cleanedOptions = cleanedOptions.slice(0, gapCount);
+          while (cleanedOptions.length < gapCount) cleanedOptions.push("???");
       }
 
       return {
         text: q.text || "Question Text Missing",
         rawOptions: cleanedOptions,
         correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+        // Map the new array field
+        correctIndices: Array.isArray(q.correctAnswerIndices) ? q.correctAnswerIndices : [q.correctAnswerIndex || 0],
         feedback: q.feedback || "",
         questionType: q.type || "Multiple Choice",
         imageUrl: q.imageUrl || ""
@@ -141,8 +134,8 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
   }
 };
 
-// ... (Rest of the file exports remain unchanged: parseRawTextToQuiz, generateQuizCategories, adaptQuestionsToPlatform) ...
-// Included purely to ensure file structure persists correctly in response
+// ... (Rest of file exports: parseRawTextToQuiz, generateQuizCategories, adaptQuestionsToPlatform) ...
+// Ensuring file integrity
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: any): Promise<any[]> => {
     const ai = getAI();
     const truncatedText = rawText.substring(0, 800000); 
@@ -153,10 +146,8 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
     }
     contents.push({
        text: `FORENSIC ANALYSIS. Source: ${truncatedText}. 
-       Detect hidden JSON. Detect PDF copy-paste. 
        Output Lang: ${language}.
-       Identify 'Order' questions if list implies sequence.
-       Identify 'Fill Gap' if text has blanks.`
+       Detect Multi-Select (multiple correct).`
     });
 
     const response = await ai.models.generateContent({
@@ -165,7 +156,6 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `Forensic Data Extraction AI. Output Language: ${language}.`,
       },
     });
     
@@ -178,6 +168,7 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       text: q.text || "Question Text Missing",
       rawOptions: Array.isArray(q.options) ? q.options : [],
       correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+      correctIndices: Array.isArray(q.correctAnswerIndices) ? q.correctAnswerIndices : [q.correctAnswerIndex || 0],
       feedback: q.feedback || "",
       questionType: q.type || "Multiple Choice",
       imageUrl: q.imageUrl || ""
@@ -215,6 +206,7 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
                  text: aq.text || "Adapted",
                  options: newOptions,
                  correctOptionId: newOptions[aq.correctAnswerIndex || 0]?.id || "",
+                 correctOptionIds: (aq.correctAnswerIndices || [aq.correctAnswerIndex || 0]).map((i: number) => newOptions[i]?.id),
                  questionType: aq.questionType
              };
         });
