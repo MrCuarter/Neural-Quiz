@@ -53,6 +53,23 @@ export interface KahootDiscoveryReport {
     proxyUsed?: string;
 }
 
+export interface UniversalDiscoveryReport {
+    platform: string;
+    methodUsed: string;
+    blockedByBot: boolean;
+    blockedEvidence?: string;
+    parseOk: boolean;
+    questionsFound: number;
+    hasChoices: boolean;
+    hasCorrectFlags: boolean;
+    hasImages: boolean;
+    missing?: {
+        options: boolean;
+        correct: boolean;
+        image: boolean;
+    };
+}
+
 export interface KahootCardResponse {
     kahoot?: {
         title?: string;
