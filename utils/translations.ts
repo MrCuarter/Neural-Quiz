@@ -81,6 +81,14 @@ export const translations = {
     autofix: "AUTOCORREGIR CON IA",
     incompatible_desc: "La plataforma seleccionada no soporta algunos de tus tipos de pregunta.",
     
+    // NEW: MISSING ANSWERS MODAL
+    missing_answers_title: "⚠️ DATOS INCOMPLETOS DETECTADOS",
+    missing_answers_desc: "He encontrado las preguntas, pero la fuente (Kahoot/Wayground/Web) está protegiendo las respuestas. Están vacías.",
+    missing_answers_ask: "¿Quieres que use Inteligencia Artificial para generar respuestas plausibles y marcar la correcta automáticamente?",
+    btn_generate_answers: "SÍ, GENERAR RESPUESTAS CON IA",
+    btn_keep_empty: "NO, DEJAR VACÍAS (YO LAS PONDRÉ)",
+    generating_answers: "GENERANDO OPCIONES...",
+
     // Convert Tabs & Instructions
     tab_upload: "SUBIR",
     tab_paste: "PEGAR",
@@ -259,6 +267,14 @@ export const translations = {
     platform_incompatibility: "INCOMPATIBILITY DETECTED",
     autofix: "AUTO-FIX WITH AI",
     incompatible_desc: "The selected platform does not support some of your question types.",
+
+    // MISSING ANSWERS MODAL
+    missing_answers_title: "⚠️ INCOMPLETE DATA DETECTED",
+    missing_answers_desc: "I found the questions, but the source (Kahoot/Wayground/Web) is hiding the answers. They are empty.",
+    missing_answers_ask: "Do you want AI to generate plausible answers and mark the correct one automatically?",
+    btn_generate_answers: "YES, GENERATE ANSWERS WITH AI",
+    btn_keep_empty: "NO, LEAVE EMPTY (I WILL DO IT)",
+    generating_answers: "GENERATING OPTIONS...",
 
     // Convert Tabs & Instructions
     tab_upload: "UPLOAD",

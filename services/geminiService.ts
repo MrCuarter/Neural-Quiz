@@ -264,6 +264,49 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
     });
 };
 
+// NEW: ENHANCE EXISTING QUESTIONS (Fill Missing Answers)
+export const enhanceQuestionsWithOptions = async (questions: Question[], language: string = 'Spanish'): Promise<any[]> => {
+    const ai = getAI();
+    
+    // Minimal structure to save tokens
+    const qs = questions.map(q => ({ text: q.text, type: q.questionType }));
+    
+    const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `I have a list of questions but the answers are missing. 
+        For each question, generate 4 plausible options (1 correct, 3 distractors) and mark the correct one.
+        Language: ${language}.
+        Questions: ${JSON.stringify(qs)}`,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: quizSchema,
+            systemInstruction: "You are a teacher fixing a broken quiz. Preserve the exact original question text. Generate high-quality distractors."
+        }
+    });
+
+    try {
+        const data = JSON.parse(response.text || "[]");
+        const items = Array.isArray(data) ? data : (data.questions || []);
+        
+        // Merge AI results with original data IDs
+        return items.map((generated: any, index: number) => {
+            const original = questions[index];
+            const sanitized = sanitizeQuestion(generated, [original.questionType || QUESTION_TYPES.MULTIPLE_CHOICE], language);
+            
+            return {
+                ...sanitized,
+                rawOptions: sanitized.options,
+                correctIndex: sanitized.correctAnswerIndex,
+                correctIndices: sanitized.correctAnswerIndices
+            };
+        });
+
+    } catch (e) {
+        console.error("Enhancement failed", e);
+        return []; // Fallback handled by UI
+    }
+};
+
 export const generateQuizCategories = async (questions: string[]): Promise<string[]> => {
     const ai = getAI();
     const response = await ai.models.generateContent({

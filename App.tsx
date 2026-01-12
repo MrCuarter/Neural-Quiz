@@ -11,7 +11,7 @@ import { TermsView } from './components/TermsView'; // Import
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
 import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info, FileType } from 'lucide-react';
-import { generateQuizQuestions, parseRawTextToQuiz } from './services/geminiService';
+import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
 import { fetchUrlContent } from './services/urlService';
@@ -67,6 +67,12 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const exportSectionRef = useRef<HTMLDivElement>(null);
   const progressIntervalRef = useRef<number | null>(null);
+
+  // MISSING ANSWERS STATE
+  const [showMissingAnswersModal, setShowMissingAnswersModal] = useState(false);
+  const [tempQuestions, setTempQuestions] = useState<Question[]>([]);
+  const [tempQuizInfo, setTempQuizInfo] = useState<{ title: string; desc: string }>({ title: '', desc: '' });
+  const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
 
   // Helper for ID generation
   const uuid = () => Math.random().toString(36).substring(2, 9);
@@ -381,15 +387,32 @@ const App: React.FC = () => {
         setAnalysisProgress(100);
         setAnalysisStatus(getRandomMessage('success'));
         
-        setQuiz({
-            title: sourceName,
-            description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI',
-            questions: questions
-        });
+        // --- MISSING ANSWERS CHECK ---
+        // Check if we have multiple choice questions BUT they are empty
+        const missingAnswers = questions.some(q => 
+            (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && 
+            q.options.filter(o => o.text.trim() !== "").length < 2
+        );
 
-        setTimeout(() => {
-            setView('create_manual');
-        }, 1500); 
+        if (missingAnswers) {
+             setTempQuestions(questions);
+             setTempQuizInfo({
+                 title: sourceName,
+                 description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI'
+             });
+             // Delay slightly so the user sees "Success" before the modal
+             setTimeout(() => setShowMissingAnswersModal(true), 1000);
+        } else {
+             // Normal flow
+             setQuiz({
+                title: sourceName,
+                description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI',
+                questions: questions
+            });
+            setTimeout(() => {
+                setView('create_manual');
+            }, 1500); 
+        }
 
     } catch (error: any) {
         clearAnalysisInterval();
@@ -401,6 +424,59 @@ const App: React.FC = () => {
             setView('convert_upload');
         }, 4000);
     }
+  };
+
+  const handleGenerateMissingAnswers = async () => {
+      setIsGeneratingAnswers(true);
+      try {
+          const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English', 'fr': 'French' };
+          const enhancedQuestionsRaw = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish');
+          
+          const finalQuestions = enhancedQuestionsRaw.map(gq => {
+            const qId = gq.id || uuid(); // Keep existing ID if possible? Actually gq is from AI, better map back
+            const options: Option[] = gq.rawOptions.map((optText: string) => ({ id: uuid(), text: optText }));
+            const indices = gq.correctIndices || [gq.correctIndex || 0];
+            const correctIds = indices.map((i: number) => options[i]?.id).filter((id: string) => !!id);
+            
+            return {
+              id: qId,
+              text: gq.text,
+              options: options,
+              correctOptionId: correctIds[0] || "",
+              correctOptionIds: correctIds,
+              timeLimit: 30,
+              feedback: gq.feedback,
+              questionType: gq.questionType
+            };
+          });
+
+          setQuiz({
+              ...initialQuiz,
+              title: tempQuizInfo.title,
+              description: tempQuizInfo.desc,
+              questions: finalQuestions
+          });
+          
+          setShowMissingAnswersModal(false);
+          setView('create_manual');
+
+      } catch (e) {
+          alert("Error generating answers.");
+      } finally {
+          setIsGeneratingAnswers(false);
+      }
+  };
+
+  const handleSkipMissingAnswers = () => {
+      // Load questions as they are (empty options)
+      setQuiz({
+          ...initialQuiz,
+          title: tempQuizInfo.title,
+          description: tempQuizInfo.desc,
+          questions: tempQuestions
+      });
+      setShowMissingAnswersModal(false);
+      setView('create_manual');
   };
 
   const processFileForConversion = async (file: File) => {
@@ -566,6 +642,42 @@ const App: React.FC = () => {
         </div>
     );
   };
+
+  // --- MISSING ANSWERS MODAL ---
+  const renderMissingAnswersModal = () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <CyberCard className="max-w-md w-full border-yellow-500/50 shadow-[0_0_50px_rgba(234,179,8,0.2)]">
+              <div className="flex flex-col items-center text-center space-y-6">
+                  <div className="p-4 bg-yellow-900/30 rounded-full border border-yellow-500 animate-pulse">
+                      <AlertTriangle className="w-12 h-12 text-yellow-400" />
+                  </div>
+                  <div>
+                      <h3 className="text-xl font-cyber text-yellow-400 mb-2">{t.missing_answers_title}</h3>
+                      <p className="text-gray-300 font-mono text-sm">{t.missing_answers_desc}</p>
+                      <p className="text-white font-bold mt-4 font-mono">{t.missing_answers_ask}</p>
+                  </div>
+                  <div className="w-full space-y-3">
+                      <CyberButton 
+                        variant="neural" 
+                        className="w-full" 
+                        onClick={handleGenerateMissingAnswers}
+                        isLoading={isGeneratingAnswers}
+                      >
+                         {isGeneratingAnswers ? t.generating_answers : t.btn_generate_answers}
+                      </CyberButton>
+                      <CyberButton 
+                        variant="ghost" 
+                        className="w-full text-xs" 
+                        onClick={handleSkipMissingAnswers}
+                        disabled={isGeneratingAnswers}
+                      >
+                         {t.btn_keep_empty}
+                      </CyberButton>
+                  </div>
+              </div>
+          </CyberCard>
+      </div>
+  );
 
   // --- Views ---
 
@@ -998,6 +1110,9 @@ const App: React.FC = () => {
           setLanguage={setLanguage} 
           onHelp={() => setView('help')} 
       />
+
+      {/* MODAL */}
+      {showMissingAnswersModal && renderMissingAnswersModal()}
 
       <main className="container mx-auto px-4 pb-20 relative z-10 pt-8 flex-1 w-full max-w-7xl">
         <div className="flex justify-end mb-4">

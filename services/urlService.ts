@@ -14,7 +14,7 @@ const AGENTS = [
         getUrl: (target: string) => `https://r.jina.ai/${target}`,
         headers: { 'X-No-Cache': 'true' }
     },
-    // Agent Beta: CORS Proxy IO (Raw HTML Tunnel)
+    // Agent Beta: CorsProxy (Raw HTML Tunnel) - Updated URL
     {
         name: "Agent Proxy (Tunnel)",
         getUrl: (target: string) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
@@ -27,6 +27,40 @@ const AGENTS = [
         headers: {}
     }
 ];
+
+// Helper to format Kahoot JSON into clear text for Gemini
+const formatKahootData = (json: any): string => {
+    try {
+        const data = typeof json === 'string' ? JSON.parse(json) : json;
+        const questions = data.questions || data.kahoot?.questions;
+        
+        if (!questions || !Array.isArray(questions)) return JSON.stringify(data);
+
+        let output = `--- KAHOOT EXTRACTED DATA ---\n`;
+        output += `Title: ${data.title || 'Kahoot Quiz'}\n`;
+        output += `Total Questions: ${questions.length}\n\n`;
+
+        questions.forEach((q: any, index: number) => {
+            output += `Question ${index + 1}: ${q.question}\n`;
+            output += `Type: ${q.type}\n`;
+            output += `Time: ${q.time}ms\n`;
+            
+            if (q.choices && Array.isArray(q.choices)) {
+                output += `Options:\n`;
+                q.choices.forEach((c: any) => {
+                    // Mark correct answer explicitly for the AI
+                    const marker = c.correct ? "[x]" : "[ ]";
+                    output += `  ${marker} ${c.answer}\n`;
+                });
+            }
+            output += `\n----------------\n`;
+        });
+        
+        return output;
+    } catch (e) {
+        return `--- KAHOOT RAW JSON (Parsing Failed) ---\n${JSON.stringify(json)}`;
+    }
+};
 
 export const fetchUrlContent = async (url: string): Promise<string> => {
     let targetUrl = url.trim();
@@ -44,15 +78,28 @@ export const fetchUrlContent = async (url: string): Promise<string> => {
             const id = idMatch[0];
             console.log("🎯 Kahoot UUID Detected. Attempting API injection...");
             const apiTarget = `https://create.kahoot.it/rest/kahoots/${id}`;
-            // Send the API URL to our Proxy Agent
-            try {
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiTarget)}`;
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                    const json = await response.text();
-                    if (json.includes("questions")) return `--- KAHOOT API JSON ---\n${json}`;
+            
+            // Try multiple proxies for the API specifically because it's the highest quality source
+            const apiProxies = [
+                `https://corsproxy.io/?${encodeURIComponent(apiTarget)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(apiTarget)}`
+            ];
+
+            for (const proxyUrl of apiProxies) {
+                try {
+                    const response = await fetch(proxyUrl);
+                    if (response.ok) {
+                        const json = await response.json();
+                        if (json.questions || (json.kahoot && json.kahoot.questions)) {
+                            console.log("✅ Kahoot API HIT. Structuring data...");
+                            // We parse it HERE instead of letting AI struggle with raw JSON
+                            return formatKahootData(json);
+                        }
+                    }
+                } catch(e) { 
+                    console.warn("API Sniper proxy failed, trying next...", e); 
                 }
-            } catch(e) { console.warn("API Sniper missed, falling back to brute force."); }
+            }
         }
     }
 
