@@ -1,4 +1,5 @@
 
+
 import { Quiz, Question, Option, QUESTION_TYPES, UniversalDiscoveryReport } from "../types";
 import { deepFindQuizCandidate, hasCorrectFlag } from "./deepFindService";
 
@@ -21,6 +22,7 @@ const normalizeWaygroundToQuiz = (rawQuestions: any[], sourceTitle: string, meth
     let hasChoices = false;
     let hasCorrect = false;
     let hasImages = false;
+    const missingReasons: string[] = [];
 
     const questions: Question[] = rawQuestions.map((q: any) => {
         // Wayground Structure usually: q.structure.query.text OR q.text
@@ -91,6 +93,8 @@ const normalizeWaygroundToQuiz = (rawQuestions: any[], sourceTitle: string, meth
         if (options.length < 2) enhanceReason = "endpoint_no_choices";
         else if (correctOptionIds.length === 0) enhanceReason = "no_correct_exposed_public";
 
+        if (enhanceReason && !missingReasons.includes(enhanceReason)) missingReasons.push(enhanceReason);
+
         // Image Cleanup (Wayground images sometimes lack protocol)
         if (imageUrl && imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
 
@@ -121,6 +125,7 @@ const normalizeWaygroundToQuiz = (rawQuestions: any[], sourceTitle: string, meth
             methodUsed: methodUsed,
             blockedByBot: false,
             parseOk: true,
+            attempts: [],
             questionsFound: questions.length,
             hasChoices,
             hasCorrectFlags: hasCorrect,
@@ -128,7 +133,8 @@ const normalizeWaygroundToQuiz = (rawQuestions: any[], sourceTitle: string, meth
             missing: {
                 options: !hasChoices,
                 correct: !hasCorrect,
-                image: !hasImages
+                image: !hasImages,
+                reasons: missingReasons
             }
         }
     };

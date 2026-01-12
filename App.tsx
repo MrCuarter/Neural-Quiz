@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS } from './types';
+import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, UniversalDiscoveryReport } from './types';
 import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -14,8 +14,7 @@ import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, File
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
-import { fetchUrlContent, extractKahootUUID } from './services/urlService';
-import { analyzeKahootUrl } from './services/kahootService';
+import { fetchUrlContent, analyzeUrl } from './services/urlService';
 import { getRandomMessage, getDetectionMessage } from './services/messageService';
 import * as XLSX from 'xlsx';
 
@@ -590,54 +589,53 @@ const App: React.FC = () => {
         return;
     }
     
-    // --- SPECIAL KAHOOT FLOW (Bypass AI) ---
-    const kahootUUID = extractKahootUUID(urlToConvert);
-    
-    if (kahootUUID) {
-        setView('convert_analysis');
-        setAnalysisStatus(getRandomMessage('detect_kahoot'));
-        setAnalysisProgress(30);
-        
-        try {
-            const kahootResult = await analyzeKahootUrl(urlToConvert);
-            setAnalysisProgress(80);
-            
-            if (kahootResult) {
-                const { quiz: quizData, report } = kahootResult;
-                
-                // Check if quality is acceptable
-                const missingAnswers = quizData.questions.some(q => q.needsEnhanceAI);
-                
-                if (missingAnswers) {
-                    setTempQuestions(quizData.questions);
-                    setTempQuizInfo({ title: quizData.title, desc: 'Imported from Kahoot (Private/Protected)' });
-                    setAnalysisStatus(getRandomMessage('error')); 
-                    setTimeout(() => setShowMissingAnswersModal(true), 1000);
-                } else {
-                    setAnalysisProgress(100);
-                    setAnalysisStatus(getRandomMessage('success'));
-                    setQuiz(quizData);
-                    setTimeout(() => setView('create_manual'), 1000);
-                }
-                return; // EXIT FUNCTION, DO NOT CALL AI
-            } else {
-                throw new Error("Kahoot Deep Discovery returned no result.");
-            }
-        } catch (e) {
-            console.warn("Direct Kahoot Fetch Failed, falling back to AI...", e);
-            // Fallthrough to AI logic below
-        }
-    }
-
-    // --- STANDARD AI FLOW ---
+    // --- START URL ANALYSIS ---
     setView('convert_analysis');
     setAnalysisStatus("Iniciando escaneo de red neural...");
     setAnalysisProgress(5);
 
     try {
-        const content = await fetchUrlContent(urlToConvert);
-        await performAnalysis(content, urlToConvert);
+        // Use the Orchestrator
+        const structuredResult = await analyzeUrl(urlToConvert);
+        
+        if (structuredResult) {
+            // SPECIALIZED ADAPTER HIT (Kahoot/Blooket)
+            const { quiz: quizData, report } = structuredResult;
+            
+            setAnalysisProgress(80);
+            
+            if (report.blockedByBot) {
+                setAnalysisStatus("ERROR: Bloqueo Anti-Bot detectado.");
+                // Fallback to AI scraping if blocked, or alert user?
+                // For now, let's alert and fallback to generic if possible
+            }
+
+            // Quality Check for Missing Answers
+            const missingAnswers = quizData.questions.some(q => q.needsEnhanceAI);
+            
+            if (missingAnswers) {
+                setTempQuestions(quizData.questions);
+                setTempQuizInfo({ 
+                    title: quizData.title, 
+                    desc: `Imported from ${report.platform} (Restricted/Private)` 
+                });
+                setAnalysisStatus(getRandomMessage('error')); 
+                setTimeout(() => setShowMissingAnswersModal(true), 1000);
+            } else {
+                setAnalysisProgress(100);
+                setAnalysisStatus(getRandomMessage('success'));
+                setQuiz(quizData);
+                setTimeout(() => setView('create_manual'), 1000);
+            }
+        } else {
+            // FALLBACK TO GENERIC AI SCRAPING
+            setAnalysisStatus("Estructura desconocida. Intentando IA...");
+            const content = await fetchUrlContent(urlToConvert);
+            await performAnalysis(content, urlToConvert);
+        }
+
     } catch (e: any) {
+        console.error(e);
         setAnalysisStatus(getRandomMessage('error'));
         setTimeout(() => {
             setView('convert_upload');

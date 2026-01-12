@@ -3,9 +3,10 @@ export interface ScoredCandidate {
     array: any[];
     score: number;
     path: string;
+    sampleKeys: string[];
 }
 
-// Heuristics to detect if an object looks like a question in various platforms
+// Heuristics to detect if an object looks like a question
 const isQuestionLike = (obj: any): boolean => {
     if (typeof obj !== 'object' || obj === null) return false;
     
@@ -13,8 +14,9 @@ const isQuestionLike = (obj: any): boolean => {
     const hasText = 
         typeof obj.question === 'string' || 
         typeof obj.title === 'string' || 
-        typeof obj.query === 'string' || // Kahoot sometimes
-        (obj.structure?.query?.text) || // Wayground / Quizizz
+        typeof obj.query === 'string' || // Kahoot
+        typeof obj.text === 'string' || // Generic
+        (obj.structure?.query?.text) || // Wayground
         (obj.questionText);
 
     // 2. Option Heuristics
@@ -29,17 +31,26 @@ const isQuestionLike = (obj: any): boolean => {
 
 // Heuristics to detect "Correctness"
 export const hasCorrectFlag = (obj: any): boolean => {
-    // Wayground/Quizizz structure: structure.options[].correct OR structure.answer (index)
+    // Wayground/Quizizz
     if (obj.structure) {
-        if (typeof obj.structure.answer !== 'undefined') return true; // Index based
+        if (typeof obj.structure.answer !== 'undefined') return true; 
         if (Array.isArray(obj.structure.options)) {
             return obj.structure.options.some((o: any) => o.correct || o.isCorrect);
         }
     }
+    
     // Kahoot / Generic
     if (Array.isArray(obj.choices)) return obj.choices.some((c: any) => c.correct || c.isCorrect || c.right);
     if (Array.isArray(obj.options)) return obj.options.some((c: any) => c.correct || c.isCorrect);
     
+    return false;
+};
+
+// Heuristics to detect "Images"
+export const hasImage = (obj: any): boolean => {
+    if (obj.image && (typeof obj.image === 'string' || obj.image.url)) return true;
+    if (obj.imageUrl || obj.media) return true;
+    if (obj.structure?.query?.media) return true;
     return false;
 };
 
@@ -55,26 +66,36 @@ export const deepFindQuizCandidate = (root: any, path: string = '', candidates: 
         // Evaluate array
         let score = 0;
         let validItems = 0;
+        let sampleKeys: string[] = [];
         
-        root.forEach(item => {
+        root.forEach((item, idx) => {
             if (isQuestionLike(item)) {
                 validItems++;
-                // Score boosting based on completeness
-                if (hasCorrectFlag(item)) score += 15; // Gold standard: knows answers
-                
-                // Wayground specific boost
-                if (item.structure?.query?.text) score += 5;
-                if (item.structure?.kind) score += 2;
+                if (idx === 0) sampleKeys = Object.keys(item);
 
-                // Kahoot specific boost
-                if (item.choices && Array.isArray(item.choices)) score += 5;
-                if (typeof item.time === 'number') score += 1;
+                // --- SCORING HEURISTICS ---
+                // Base points for looking like a question
+                score += 10;
+
+                // Gold Standard: Has options AND text in same object
+                if ((item.question || item.text || item.title) && (item.answers || item.options || item.choices)) {
+                    score += 10;
+                }
+
+                // Correctness Boost
+                if (hasCorrectFlag(item)) score += 20;
+
+                // Image Boost
+                if (hasImage(item)) score += 5;
+                
+                if (item.timeLimit || item.time) score += 2;
             }
         });
 
         // Threshold: At least 1 valid item and 30% of array looks like questions
-        if (validItems > 0 && validItems >= root.length * 0.3) {
-            candidates.push({ array: root, score, path });
+        // Or if array is small (<=20 items) and has high density
+        if (validItems > 0 && (validItems >= root.length * 0.3 || validItems >= 2)) {
+            candidates.push({ array: root, score, path, sampleKeys });
         }
 
         // Recurse into items (sometimes questions are wrapped)
@@ -83,7 +104,7 @@ export const deepFindQuizCandidate = (root: any, path: string = '', candidates: 
         // Object traversal
         Object.keys(root).forEach(key => {
             // Optimization: Skip junk keys
-            if (!['config', 'settings', 'theme', 'experiments', 'features'].includes(key)) {
+            if (!['config', 'settings', 'theme', 'experiments', 'features', 'meta'].includes(key)) {
                 deepFindQuizCandidate(root[key], `${path}.${key}`, candidates, depth + 1);
             }
         });

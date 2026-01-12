@@ -1,5 +1,7 @@
 
-import { Quiz, Question, Option, QUESTION_TYPES, KahootDiscoveryReport } from "../types";
+
+import { Quiz, Question, Option, QUESTION_TYPES, UniversalDiscoveryReport } from "../types";
+import { deepFindQuizCandidate } from "./deepFindService";
 
 // --- HELPERS ---
 const uuid = () => Math.random().toString(36).substring(2, 9);
@@ -30,66 +32,13 @@ const PROXIES = [
     { name: 'AllOrigins', url: (target: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}` }
 ];
 
-// --- 1. DEEP FINDER LOGIC ---
-// Recursively search for an array that looks like a list of questions.
+// --- DATA NORMALIZATION ---
 
-interface ScoredCandidate {
-    array: any[];
-    score: number;
-    path: string;
-}
-
-const isQuestionLike = (obj: any): boolean => {
-    if (typeof obj !== 'object' || obj === null) return false;
-    // Must have question text OR choices
-    const hasText = typeof obj.question === 'string' || typeof obj.title === 'string' || typeof obj.query === 'string';
-    const hasChoices = Array.isArray(obj.choices) || Array.isArray(obj.answers);
-    return hasText || hasChoices;
-};
-
-const deepFindQuizCandidate = (root: any, path: string = '', candidates: ScoredCandidate[] = [], depth = 0): ScoredCandidate[] => {
-    if (depth > 8) return candidates; // Prevent stack overflow on huge trees
-    if (typeof root !== 'object' || root === null) return candidates;
-
-    if (Array.isArray(root)) {
-        // Evaluate if this array is a list of questions
-        let score = 0;
-        let validItems = 0;
-        
-        root.forEach(item => {
-            if (isQuestionLike(item)) {
-                validItems++;
-                if (Array.isArray(item.choices) && item.choices.length > 0) score += 5;
-                if (item.choices && item.choices.some((c: any) => c.correct)) score += 10; // Gold standard
-                if (typeof item.question === 'string') score += 2;
-                if (typeof item.type === 'string') score += 1;
-            }
-        });
-
-        if (validItems > 0 && validItems >= root.length * 0.5) {
-            candidates.push({ array: root, score, path });
-        }
-
-        // Recurse into array items (sometimes questions are nested in a wrapper)
-        root.forEach((item, idx) => deepFindQuizCandidate(item, `${path}[${idx}]`, candidates, depth + 1));
-    } else {
-        // Object traversal
-        Object.keys(root).forEach(key => {
-            // Optimization: Skip obvious non-data keys to speed up
-            if (!['config', 'settings', 'theme'].includes(key)) {
-                deepFindQuizCandidate(root[key], `${path}.${key}`, candidates, depth + 1);
-            }
-        });
-    }
-    return candidates;
-};
-
-// --- 2. DATA NORMALIZATION ---
-
-const normalizeToQuiz = (rawQuestions: any[], sourceTitle: string): { quiz: Quiz, report: KahootDiscoveryReport } => {
+const normalizeToQuiz = (rawQuestions: any[], sourceTitle: string, methodUsed: any): { quiz: Quiz, report: UniversalDiscoveryReport } => {
     let hasChoices = false;
     let hasCorrect = false;
     let hasImages = false;
+    const missingReasons: string[] = [];
 
     const questions: Question[] = rawQuestions.map((q: any) => {
         const text = q.question || q.title || q.query || q.text || "Untitled Question";
@@ -148,6 +97,8 @@ const normalizeToQuiz = (rawQuestions: any[], sourceTitle: string): { quiz: Quiz
         if (options.length < 2) enhanceReason = "endpoint_no_choices";
         else if (correctOptionIds.length === 0) enhanceReason = "no_correct_flags";
 
+        if (enhanceReason && !missingReasons.includes(enhanceReason)) missingReasons.push(enhanceReason);
+
         return {
             id: uuid(),
             text: text,
@@ -171,18 +122,28 @@ const normalizeToQuiz = (rawQuestions: any[], sourceTitle: string): { quiz: Quiz
             questions
         },
         report: {
-            method: 'api_card', // Placeholder, will be overwritten by discover function
+            platform: 'kahoot',
+            methodUsed: methodUsed,
+            blockedByBot: false,
+            parseOk: true,
+            attempts: [], // Added empty attempts to satisfy interface if required, though types.ts says required, blooket populates it.
             questionsFound: questions.length,
             hasChoices,
             hasCorrectFlags: hasCorrect,
-            hasImages
+            hasImages,
+            missing: {
+                options: !hasChoices,
+                correct: !hasCorrect,
+                image: !hasImages,
+                reasons: missingReasons
+            }
         }
     };
 };
 
 // --- 3. ENDPOINT DISCOVERY & FETCHING ---
 
-export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, report: KahootDiscoveryReport } | null> => {
+export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, report: UniversalDiscoveryReport } | null> => {
     const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
     const match = url.match(uuidRegex);
     if (!match) throw new Error("No Valid Kahoot UUID found in URL");
@@ -211,12 +172,11 @@ export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, repor
                 }
 
                 const text = await response.text();
-                debugLog("KAHOOT-RESP", `Received ${text.length} bytes. Type: ${contentType}`, text);
-
+                
                 // Proxy Truncation Check
                 if (contentType.includes('json') && !text.trim().endsWith('}')) {
                     console.warn(`[KAHOOT] Possible Proxy Truncation detected via ${proxy.name}`);
-                    continue; // Try next proxy
+                    continue; 
                 }
 
                 let json;
@@ -231,13 +191,7 @@ export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, repor
                     debugLog("KAHOOT-FOUND", `Deep Finder found candidates at path: ${best.path} with score ${best.score}`);
                     
                     const title = json.title || json.kahoot?.title || json.card?.title || "Kahoot Quiz";
-                    const result = normalizeToQuiz(best.array, title);
-                    
-                    result.report.method = endpoint.method as any;
-                    result.report.endpointUsed = endpoint.url;
-                    result.report.proxyUsed = proxy.name;
-
-                    return result;
+                    return normalizeToQuiz(best.array, title, endpoint.method);
                 }
 
             } catch (e) {
@@ -247,18 +201,12 @@ export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, repor
     }
 
     // STRATEGY 2: HTML Scraping (Embedded Data)
-    // If APIs are locked, the public page might still have the data embedded for React hydration.
-    debugLog("KAHOOT-HTML", "APIs failed. Attempting HTML embedded data scraping...");
-    
-    // We reuse the last working proxy or just try one
     const htmlUrl = `https://create.kahoot.it/details/${uuid}`;
     const proxy = PROXIES[0];
     try {
         const response = await fetch(proxy.url(htmlUrl));
         const html = await response.text();
         
-        // Search for NEXT_DATA or APOLLO_STATE
-        // Pattern 1: <script id="__NEXT_DATA__" type="application/json">
         const nextDataRegex = /<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/;
         const nextMatch = html.match(nextDataRegex);
         
@@ -270,7 +218,6 @@ export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, repor
             jsonToScan = JSON.parse(nextMatch[1]);
             method = 'html_next_data';
         } else {
-            // Pattern 2: window.__APOLLO_STATE__ = {...}
             const apolloRegex = /window\.__APOLLO_STATE__\s*=\s*({.*?});/s;
             const apolloMatch = html.match(apolloRegex);
             if (apolloMatch && apolloMatch[1]) {
@@ -287,9 +234,7 @@ export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, repor
             if (candidates.length > 0) {
                 const best = candidates[0];
                 debugLog("KAHOOT-FOUND-HTML", `Found questions in HTML embedded data. Path: ${best.path}`);
-                const result = normalizeToQuiz(best.array, "Kahoot (HTML)");
-                result.report.method = method;
-                return result;
+                return normalizeToQuiz(best.array, "Kahoot (HTML)", method);
             }
         }
 
@@ -297,6 +242,5 @@ export const analyzeKahootUrl = async (url: string): Promise<{ quiz: Quiz, repor
         console.error("[KAHOOT] HTML scraping failed", e);
     }
 
-    // Fail gracefully
     return null;
 };

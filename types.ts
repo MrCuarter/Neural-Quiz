@@ -43,32 +43,50 @@ export interface Quiz {
   questions: Question[];
 }
 
-export interface KahootDiscoveryReport {
-    method: 'api_card' | 'api_rest' | 'html_next_data' | 'html_apollo' | 'fallback_ai';
-    endpointUsed?: string;
-    questionsFound: number;
-    hasChoices: boolean;
-    hasCorrectFlags: boolean;
-    hasImages: boolean;
-    proxyUsed?: string;
+export interface DiscoveryAttempt {
+    method: 'api_proxy' | 'jina_reader' | 'html_embedded' | 'direct_fetch';
+    finalUrl: string;
+    status: number; // 0 if network error
+    contentType?: string;
+    length: number;
+    parseOk: boolean;
+    error?: string;
 }
 
 export interface UniversalDiscoveryReport {
-    platform: string;
-    methodUsed: string;
+    platform: 'kahoot' | 'blooket' | 'wayground' | 'unknown';
+    originalUrl?: string;
+    adapterUsed?: string;
+    methodUsed?: string;
+    
+    // Status
     blockedByBot: boolean;
-    blockedEvidence?: string;
+    blockedEvidence?: string; // e.g. "Cloudflare Challenge found"
     parseOk: boolean;
+    
+    // Forensic Trace
+    attempts: DiscoveryAttempt[];
+    topLevelKeys?: string[];
+    candidatePathsTop5?: { path: string, score: number, sampleKeys: string[] }[];
+    selectedPath?: string;
+
+    // Metrics
     questionsFound: number;
     hasChoices: boolean;
     hasCorrectFlags: boolean;
     hasImages: boolean;
+    
+    // Quality / Missing Data
     missing?: {
         options: boolean;
         correct: boolean;
         image: boolean;
+        reasons: string[];
     };
 }
+
+// Alias for backward compatibility if needed
+export type KahootDiscoveryReport = UniversalDiscoveryReport;
 
 export interface KahootCardResponse {
     kahoot?: {

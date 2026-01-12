@@ -1,7 +1,10 @@
 
 import { extractTextFromPDF } from "./pdfService";
+import { analyzeKahootUrl } from "./kahootService";
+import { analyzeBlooketUrl } from "./blooketService";
+import { UniversalDiscoveryReport, Quiz } from "../types";
 
-// ROBUST URL SERVICE
+// ROBUST URL SERVICE & ORCHESTRATOR
 // Solves CORS and SPA Rendering by delegating fetching to specialized external agents.
 
 const AGENTS = [
@@ -31,15 +34,33 @@ export const extractKahootUUID = (url: string): string | null => {
     return match ? match[0] : null;
 };
 
-// Main Fetcher for General URLs (Not Kahoot specific)
+export const isBlooketUrl = (url: string): boolean => {
+    return url.includes("blooket.com/set/");
+};
+
+// ORCHESTRATOR: Routes URL to specific adapter or generic fetcher
+export const analyzeUrl = async (url: string): Promise<{ quiz: Quiz, report: UniversalDiscoveryReport } | null> => {
+    const targetUrl = url.trim();
+
+    // 1. KAHOOT ROUTE (Preserved Legacy)
+    if (extractKahootUUID(targetUrl)) {
+        return analyzeKahootUrl(targetUrl);
+    }
+
+    // 2. BLOOKET ROUTE (New Adapter)
+    if (isBlooketUrl(targetUrl)) {
+        return analyzeBlooketUrl(targetUrl);
+    }
+
+    return null; // Fallback to generic AI analysis in App.tsx
+};
+
+// Main Fetcher for General URLs (Generic Fallback)
 export const fetchUrlContent = async (url: string): Promise<string> => {
     let targetUrl = url.trim();
     if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
 
     console.log(`⚡ NEURAL SCAN INITIATED: ${targetUrl}`);
-
-    // --- STRATEGY 2: AGENT ROTATION (Brute Force) ---
-    // We try each agent until one returns valid content.
 
     for (const agent of AGENTS) {
         console.log(`🔄 Deploying ${agent.name}...`);
@@ -47,7 +68,7 @@ export const fetchUrlContent = async (url: string): Promise<string> => {
         try {
             const fetchUrl = agent.getUrl(targetUrl);
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for heavy rendering
+            const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
             const response = await fetch(fetchUrl, { 
                 headers: agent.headers,
@@ -63,7 +84,6 @@ export const fetchUrlContent = async (url: string): Promise<string> => {
 
             const text = await response.text();
 
-            // Validation: Did we actually get content or just a "Access Denied" page?
             if (text.length < 500) {
                  console.warn(`⚠️ ${agent.name} returned insufficient data.`);
                  continue;
@@ -75,7 +95,6 @@ export const fetchUrlContent = async (url: string): Promise<string> => {
 
             console.log(`✅ ${agent.name} retrieved ${text.length} bytes.`);
             
-            // Success! Return the data tagged with the source type for Gemini
             if (agent.name.includes("Jina")) {
                 return `--- JINA READER OUTPUT (MARKDOWN) ---\n${text}`;
             } else {
