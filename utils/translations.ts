@@ -155,7 +155,8 @@ export const translations = {
     editor_types_desc: "Hemos filtrado los tipos de pregunta para asegurar compatibilidad con la plataforma elegida. Si exportas a otra, te ayudaremos a adaptar las preguntas después.",
     
     // Question Types
-    type_mc: "Opción Múltiple",
+    type_mc: "Respuesta Única (Solo una)",
+    type_ms: "Elección Múltiple (Varias)",
     type_tf: "Verdadero / Falso",
     type_short: "Respuesta Corta / Rellenar Huecos",
     type_open: "Abierta / Opinión",
@@ -333,7 +334,8 @@ export const translations = {
     editor_types_desc: "We have filtered question types to ensure compatibility with the chosen platform. If you export to another, we will help you adapt questions later.",
     
     // Question Types
-    type_mc: "Multiple Choice",
+    type_mc: "Single Choice",
+    type_ms: "Multi-Select",
     type_tf: "True / False",
     type_short: "Short Answer / Fill Gap",
     type_open: "Open Ended / Opinion",
@@ -364,7 +366,8 @@ export const translations = {
     supports_fmt: "Supporte : .CSV, .XLSX, .TXT, .PDF, .PNG, .JPG",
     autodetect_fmt: "Détection auto et OCR pour images.",
     q_type_label: "TYPE DE QUESTION",
-    type_mc: "Choix Multiple",
+    type_mc: "Choix Unique",
+    type_ms: "Choix Multiple",
     type_order: "Ordonner",
     q_order_desc: "Entrez les éléments dans l'ORDRE CORRECT. La plateforme les mélangera.",
     q_fill_gap_desc: "Utilisez '__' pour les trous. Listez ensuite les réponses dans l'ordre.",

@@ -211,7 +211,7 @@ const App: React.FC = () => {
     setIsGenerating(true);
     setGenerationStatus(getRandomMessage('start'));
 
-    // Message rotation for generation
+    // Message rotation
     const genInterval = setInterval(() => {
         setGenerationStatus(getRandomMessage('generate_ai'));
     }, 4000);
@@ -221,11 +221,14 @@ const App: React.FC = () => {
           'es': 'Spanish', 'en': 'English', 'fr': 'French', 'it': 'Italian', 'de': 'German'
       };
       const selectedLang = langMap[language] || 'Spanish';
-
-      // Split URLs by comma or newline
       const urlList = genParams.urls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
 
-      const generatedQs = await generateQuizQuestions({
+      // TIMEOUT PROMISE: Force fail after 45s
+      const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Timeout: AI took too long. Try requesting fewer questions or simpler types.")), 45000)
+      );
+
+      const apiPromise = generateQuizQuestions({
         topic: genParams.topic,
         count: Number(genParams.count) || 5,
         types: genParams.types,
@@ -234,17 +237,23 @@ const App: React.FC = () => {
         urls: urlList,
         language: selectedLang
       });
+
+      // Race against timeout
+      const generatedQs = await Promise.race([apiPromise, timeoutPromise]) as any[];
       
       const newQuestions: Question[] = generatedQs.map(gq => {
         const qId = uuid();
-        const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
-        const correctIdx = (gq.correctIndex >= 0 && gq.correctIndex < options.length) ? gq.correctIndex : 0;
+        const options: Option[] = gq.rawOptions.map((optText: string) => ({ id: uuid(), text: optText }));
+        // Handle indices safely
+        const indices = gq.correctIndices || [gq.correctIndex || 0];
+        const correctIds = indices.map((i: number) => options[i]?.id).filter((id: string) => !!id);
         
         return {
           id: qId,
           text: gq.text,
           options: options,
-          correctOptionId: options[correctIdx].id,
+          correctOptionId: correctIds[0] || "",
+          correctOptionIds: correctIds,
           timeLimit: 30,
           feedback: gq.feedback,
           questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE
@@ -258,8 +267,9 @@ const App: React.FC = () => {
       });
       
       setView('create_manual'); 
-    } catch (e) {
-      alert(t.alert_fail);
+    } catch (e: any) {
+      console.error(e);
+      alert(`${t.alert_fail} (${e.message})`);
     } finally {
       setIsGenerating(false);
       clearInterval(genInterval);
@@ -305,12 +315,16 @@ const App: React.FC = () => {
                 return generatedQs.map(gq => {
                   const qId = uuid();
                   const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
-                  const correctIdx = (gq.correctIndex >= 0 && gq.correctIndex < options.length) ? gq.correctIndex : 0;
+                  // Handle indices safely
+                  const indices = gq.correctIndices || [gq.correctIndex || 0];
+                  const correctIds = indices.map((i: number) => options[i]?.id).filter((id: string) => !!id);
+
                   return {
                     id: qId,
                     text: gq.text,
                     options: options,
-                    correctOptionId: options[correctIdx].id,
+                    correctOptionId: correctIds[0] || "",
+                    correctOptionIds: correctIds,
                     timeLimit: 30,
                     feedback: gq.feedback,
                     questionType: gq.questionType

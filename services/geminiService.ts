@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Question } from "../types";
+import { Question, QUESTION_TYPES } from "../types";
 
 // ... (getAPIKey and getAI unchanged) ...
 const getAPIKey = (): string => {
@@ -35,15 +35,10 @@ const questionSchema: Schema = {
     options: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: "List of options. For Fill-Blank, ONLY correct words."
+      description: "List of options. For 'Order', list items in CORRECT sequence."
     },
-    // Supporting both single and multiple correct indices
-    correctAnswerIndex: { type: Type.INTEGER, description: "Index of primary correct answer." },
-    correctAnswerIndices: { 
-        type: Type.ARRAY, 
-        items: { type: Type.INTEGER },
-        description: "Array of indices for ALL correct answers (for Multi-Select)." 
-    },
+    correctAnswerIndex: { type: Type.INTEGER, description: "Index of correct option. 0 for Order/FillGap." },
+    correctAnswerIndices: { type: Type.ARRAY, items: { type: Type.INTEGER } },
     feedback: { type: Type.STRING },
     type: { type: Type.STRING },
     imageUrl: { type: Type.STRING }
@@ -67,24 +62,118 @@ interface GenParams {
   language?: string; 
 }
 
+// HEURISTIC FIXER: The AI sometimes gets confused. We fix it with logic.
+const sanitizeQuestion = (q: any, allowedTypes: string[], language: string): any => {
+    let text = q.text || "";
+    let type = q.type || QUESTION_TYPES.MULTIPLE_CHOICE;
+    let options = Array.isArray(q.options) ? q.options : [];
+    let correctIndex = q.correctAnswerIndex || 0;
+    
+    // 1. DETECT HIDDEN 'ORDER' QUESTIONS
+    const orderKeywords = ["ordena", "ordenar", "clasifica", "secuencia", "arrange", "sort", "order", "rank"];
+    const isOrderText = orderKeywords.some(k => text.toLowerCase().includes(k));
+    
+    if (isOrderText && allowedTypes.includes(QUESTION_TYPES.ORDER)) {
+        type = QUESTION_TYPES.ORDER;
+        correctIndex = 0;
+    }
+
+    // 2. DETECT HIDDEN 'TRUE/FALSE'
+    const tfKeywords = ["verdadero", "falso", "true", "false", "cierto", "correct?"];
+    const hasTFOptions = options.length === 2 && options.some((o:string) => o.toLowerCase().includes('true') || o.toLowerCase().includes('verdadero'));
+    
+    if ((hasTFOptions || (options.length === 2 && tfKeywords.some(k => text.toLowerCase().includes(k)))) && allowedTypes.includes(QUESTION_TYPES.TRUE_FALSE)) {
+        type = QUESTION_TYPES.TRUE_FALSE;
+        const isSpanish = language.toLowerCase() === 'spanish' || language === 'es';
+        options = isSpanish ? ["Verdadero", "Falso"] : ["True", "False"];
+        if (correctIndex < 0 || correctIndex > 1) correctIndex = 0;
+    }
+
+    // 3. FILL GAP SANITIZATION
+    if (type === QUESTION_TYPES.FILL_GAP || type.toLowerCase().includes('gap') || type.toLowerCase().includes('blank')) {
+        type = QUESTION_TYPES.FILL_GAP;
+        const gapCount = (text.match(/__/g) || []).length;
+        if (gapCount === 0) {
+             if (allowedTypes.includes(QUESTION_TYPES.MULTIPLE_CHOICE)) {
+                 type = QUESTION_TYPES.MULTIPLE_CHOICE;
+             } else {
+                 text += " __";
+             }
+        } else {
+            if (options.length > gapCount) options = options.slice(0, gapCount);
+            while (options.length < gapCount) options.push("???");
+        }
+        correctIndex = 0;
+    }
+
+    // 4. DETECT MULTI-SELECT (Plural phrasing)
+    // IMPORTANT: If text asks to select "ingredients", "elements", "types" (plural), FORCE Multi-Select.
+    const multiKeywords = [
+        "selecciona los", "selecciona las", "cuales son", "select all", "choose the", "marcar todas",
+        "ingredientes", "elements", "features", "characteristics", "son correctas"
+    ];
+    const impliesPlural = multiKeywords.some(k => text.toLowerCase().includes(k));
+    
+    // Switch to Multi-Select if plural implied OR explicitly requested
+    if ((impliesPlural || type === 'Multi-Select' || type === QUESTION_TYPES.MULTI_SELECT) && allowedTypes.includes(QUESTION_TYPES.MULTI_SELECT)) {
+        type = QUESTION_TYPES.MULTI_SELECT;
+        // Ensure indices exist
+        if (!q.correctAnswerIndices || q.correctAnswerIndices.length === 0) {
+            // Fallback: If AI provided single index, use it. Else 0.
+            q.correctAnswerIndices = [typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0];
+        }
+    } else if (type === QUESTION_TYPES.MULTIPLE_CHOICE) {
+        // Enforce Single Choice
+        q.correctAnswerIndices = [correctIndex];
+    }
+
+    // 5. FAILSAFE: EMPTY OPTIONS
+    // If it's a choice type but has NO options, inject placeholders so UI doesn't look broken
+    if ((type === QUESTION_TYPES.MULTIPLE_CHOICE || type === QUESTION_TYPES.MULTI_SELECT) && options.length === 0) {
+        options = ["Opción A", "Opción B", "Opción C", "Opción D"];
+    }
+
+    // 6. ORDER SANITIZATION
+    if (type === QUESTION_TYPES.ORDER) {
+        while (options.length < 2) options.push("Item " + (options.length + 1));
+        if (options.length > 6) options = options.slice(0, 6);
+        correctIndex = 0; 
+    }
+
+    return { ...q, text, type, options, correctAnswerIndex: correctIndex, correctAnswerIndices: q.correctAnswerIndices };
+};
+
 export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number, correctIndices?: number[] })[]> => {
   try {
     const ai = getAI();
     const { topic, count, types, age, context, urls, language = 'Spanish' } = params;
-    const safeCount = Math.min(Math.max(count, 1), 100);
+    const safeCount = Math.min(Math.max(count, 1), 50); 
+
+    const priorityTypes = types.filter(t => t !== QUESTION_TYPES.MULTIPLE_CHOICE);
+    const useComplex = priorityTypes.length > 0;
 
     let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
-    prompt += `\nTarget Audience: ${age}.`;
-    prompt += `\nREQUIRED TYPES: ${types.join(', ')}.`;
-    prompt += `\nLanguage: ${language}.`;
+    prompt += `\nTarget Audience: ${age}. Language: ${language}.`;
+    prompt += `\nSTRICTLY ALLOWED TYPES: ${types.join(', ')}.`;
     
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
     if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
 
-    prompt += `\n\nRULES:
-    1. 'Multi-Select': Set 'type'='Multi-Select'. Provide 4 options. **Populate 'correctAnswerIndices' with ALL correct option indices.**
-    2. 'Fill in the Blank': 'text' has '__'. 'options' has ONLY correct words matching gaps.
-    3. 'Order': 'options' in CORRECT sequence.
+    prompt += `\n\nSTRICT ENGINEERING RULES:
+    1. 'Fill in the Blank':
+       - **GRAMMAR CHECK**: Ensure the article (El/La/Los/Las) preceding the gap matches the gender/number of the hidden word.
+       - Incorrect: "El __ es una fruta (Manzana)". Correct: "La __ es una fruta (Manzana)".
+       - Text MUST contain '__' for missing words.
+    
+    2. TYPE DISTINCTION (CRITICAL):
+       - 'Multiple Choice' (Respuesta Única): ONLY ONE correct answer.
+       - 'Multi-Select' (Elección Múltiple): SEVERAL correct answers. 
+       - If the question asks to "Select ingredients", "Select all", or implies plurality, YOU MUST USE type='Multi-Select'.
+       - **MUST PROVIDE OPTIONS**. Never return empty options for Choice types.
+    
+    3. 'Order' / 'Sort':
+       - 'options' MUST be in the **CORRECT FINAL ORDER**.
+       - Set 'correctAnswerIndex' to 0.
     `;
 
     const response = await ai.models.generateContent({
@@ -93,7 +182,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `Educational Content Generator. Output Lang: ${language}. Handle Multi-Select correctly.`,
+        systemInstruction: `You are a precise quiz engine. Pay close attention to Spanish grammatical gender agreement in Fill-in-the-Blank questions. ALWAYS provide 4 options for Multiple Choice/Multi-Select.`,
       },
     });
 
@@ -106,24 +195,17 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     const items = Array.isArray(data) ? data : (data.questions || data.items || []);
     if (!Array.isArray(items)) return [];
 
-    return items.map((q: any) => {
-      let cleanedOptions = Array.isArray(q.options) ? q.options : [];
-      
-      // SANITIZATION FOR FILL GAP
-      if (q.type === 'Fill in the Blank' || q.type === 'Fill Gap') {
-          const gapCount = (q.text.match(/__/g) || []).length;
-          if (cleanedOptions.length > gapCount) cleanedOptions = cleanedOptions.slice(0, gapCount);
-          while (cleanedOptions.length < gapCount) cleanedOptions.push("???");
-      }
+    return items.map((rawQ: any) => {
+      // Apply the Heuristic Fixer
+      const q = sanitizeQuestion(rawQ, types, language);
 
       return {
-        text: q.text || "Question Text Missing",
-        rawOptions: cleanedOptions,
-        correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
-        // Map the new array field
-        correctIndices: Array.isArray(q.correctAnswerIndices) ? q.correctAnswerIndices : [q.correctAnswerIndex || 0],
+        text: q.text,
+        rawOptions: q.options,
+        correctIndex: q.correctAnswerIndex,
+        correctIndices: q.correctAnswerIndices || [q.correctAnswerIndex],
         feedback: q.feedback || "",
-        questionType: q.type || "Multiple Choice",
+        questionType: q.type,
         imageUrl: q.imageUrl || ""
       };
     });
@@ -134,8 +216,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
   }
 };
 
-// ... (Rest of file exports: parseRawTextToQuiz, generateQuizCategories, adaptQuestionsToPlatform) ...
-// Ensuring file integrity
+// ... (Rest of file exports unchanged, but ensuring parseRawTextToQuiz uses the same sanitizer) ...
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: any): Promise<any[]> => {
     const ai = getAI();
     const truncatedText = rawText.substring(0, 800000); 
@@ -147,7 +228,9 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
     contents.push({
        text: `FORENSIC ANALYSIS. Source: ${truncatedText}. 
        Output Lang: ${language}.
-       Detect Multi-Select (multiple correct).`
+       Detect Multi-Select (multiple correct answers) based on question phrasing (e.g. "Select ingredients").
+       Detect 'Order' questions.
+       Ensure grammatical concordance in Fill Gap.`
     });
 
     const response = await ai.models.generateContent({
@@ -164,15 +247,21 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
     let data;
     try { data = JSON.parse(text); } catch (e) { return []; }
     const items = Array.isArray(data) ? data : (data.questions || data.items || []);
-    return items.map((q: any) => ({
-      text: q.text || "Question Text Missing",
-      rawOptions: Array.isArray(q.options) ? q.options : [],
-      correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
-      correctIndices: Array.isArray(q.correctAnswerIndices) ? q.correctAnswerIndices : [q.correctAnswerIndex || 0],
-      feedback: q.feedback || "",
-      questionType: q.type || "Multiple Choice",
-      imageUrl: q.imageUrl || ""
-    }));
+    
+    const allowedTypes = Object.values(QUESTION_TYPES);
+
+    return items.map((rawQ: any) => {
+        const q = sanitizeQuestion(rawQ, allowedTypes, language);
+        return {
+            text: q.text,
+            rawOptions: q.options,
+            correctIndex: q.correctAnswerIndex,
+            correctIndices: q.correctAnswerIndices || [q.correctAnswerIndex],
+            feedback: q.feedback || "",
+            questionType: q.type,
+            imageUrl: q.imageUrl || ""
+        };
+    });
 };
 
 export const generateQuizCategories = async (questions: string[]): Promise<string[]> => {
@@ -201,13 +290,15 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
         return items.map((aq: any, index: number) => {
              const originalQ: any = questions[index] || { id: Math.random().toString() }; 
              const newOptions = (aq.options || []).map((t:string) => ({ id: Math.random().toString(), text: t }));
+             const sanitized = sanitizeQuestion({ ...aq, options: newOptions.map(o => o.text) }, allowedTypes, 'Spanish');
+             
              return {
                  ...originalQ,
-                 text: aq.text || "Adapted",
-                 options: newOptions,
-                 correctOptionId: newOptions[aq.correctAnswerIndex || 0]?.id || "",
-                 correctOptionIds: (aq.correctAnswerIndices || [aq.correctAnswerIndex || 0]).map((i: number) => newOptions[i]?.id),
-                 questionType: aq.questionType
+                 text: sanitized.text || "Adapted",
+                 options: newOptions, 
+                 correctOptionId: newOptions[sanitized.correctAnswerIndex || 0]?.id || "",
+                 correctOptionIds: (sanitized.correctAnswerIndices || [sanitized.correctAnswerIndex || 0]).map((i: number) => newOptions[i]?.id),
+                 questionType: sanitized.type
              };
         });
     } catch { return questions; }
