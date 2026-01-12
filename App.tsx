@@ -389,10 +389,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFileForConversion = async (file: File) => {
     // Reset view
     setAnalysisProgress(0);
     
@@ -458,6 +455,29 @@ const App: React.FC = () => {
         // Reset input
         if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await processFileForConversion(file);
+  };
+
+  const handleConvertDrag = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.type === 'dragenter' || e.type === 'dragover') {
+          setDragActive(true);
+      } else if (e.type === 'dragleave') {
+          setDragActive(false);
+      }
+  };
+
+  const handleConvertDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) processFileForConversion(file);
   };
 
   const handlePasteAnalysis = async () => {
@@ -857,9 +877,13 @@ const App: React.FC = () => {
 
         {convertTab === 'upload' ? (
             <div className="space-y-6">
-                <div className="border-2 border-dashed border-gray-700 rounded-lg p-12 text-center hover:border-pink-500 hover:bg-pink-950/5 transition-all cursor-pointer"
+                <div className={`border-2 border-dashed rounded-lg p-12 text-center transition-all cursor-pointer ${dragActive ? 'border-pink-400 bg-pink-950/20' : 'border-gray-700 hover:border-pink-500 hover:bg-pink-950/5'}`}
+                    onDragEnter={handleConvertDrag}
+                    onDragLeave={handleConvertDrag}
+                    onDragOver={handleConvertDrag}
+                    onDrop={handleConvertDrop}
                     onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="w-16 h-16 text-pink-500 mx-auto mb-4" />
+                    <Upload className={`w-16 h-16 mx-auto mb-4 ${dragActive ? 'text-pink-400' : 'text-pink-500'}`} />
                     <h3 className="text-xl font-bold text-white mb-2">{t.drop_file}</h3>
                     <p className="text-sm text-gray-500 font-mono">{t.supports_fmt}</p>
                     <p className="text-xs text-gray-600 font-mono mt-2">{t.autodetect_fmt}</p>

@@ -221,6 +221,15 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
            - Correct Option = Definition
            - Distractors = Generate 3 plausible wrong definitions from OTHER terms in the set.
 
+      7. **COPY-PASTE & FORMAT RECOGNITION (CRITICAL)**:
+         - If the input text looks like a list of questions (e.g. "1) ...", "1.", "1-"):
+         - Identify options labeled with "a)", "b)", "c)", "d)" or similar.
+         - **DETECT CORRECT ANSWERS**: Look for visual markers next to options such as:
+           - Checkmarks: ✅, ✔️, ☑️, ✓
+           - Asterisks: *Option A*, Option A*
+           - Bold text: **Option A**
+           - Labels: (Correct), (True)
+         - If you see a checkmark (✅) at the end of a line, THAT is the correct answer. 
       `
     });
 
