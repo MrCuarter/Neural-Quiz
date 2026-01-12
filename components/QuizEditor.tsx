@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle } from 'lucide-react';
 import { generateQuizQuestions } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import * as XLSX from 'xlsx';
@@ -109,9 +109,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
          updates.options = [{ id: trueId, text: t.q_tf_true }, { id: uuid(), text: t.q_tf_false }];
          updates.correctOptionId = trueId;
      } else if (newType === QUESTION_TYPES.FILL_GAP || newType === QUESTION_TYPES.ORDER) {
-         // Ensure clean slate but keep existing texts if moving from MC
-         if (question.options.length === 0) updates.options = [{ id: uuid(), text: '' }];
-         // No single "Correct Option" radio button for Order/Gaps in the traditional sense
+         // Keep existing texts if relevant, but often needs cleanup
+         // For fill gap, initially clear or keep if user is just switching back
+         // We'll let the user manage it or use the new validation UI to fix it
          updates.correctOptionId = ""; 
      } else if (newType === QUESTION_TYPES.OPEN_ENDED) {
          updates.options = [{ id: uuid(), text: '' }];
@@ -129,12 +129,40 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const validateQuestion = (q: Question) => {
     const hasText = q.text.trim().length > 0;
     if (q.questionType === QUESTION_TYPES.OPEN_ENDED || q.questionType === QUESTION_TYPES.POLL) return hasText;
-    if (q.questionType === QUESTION_TYPES.FILL_GAP || q.questionType === QUESTION_TYPES.ORDER) {
-        return hasText && q.options.length >= 1 && q.options.every(o => o.text.trim().length > 0);
+    if (q.questionType === QUESTION_TYPES.FILL_GAP) {
+        const gapCount = (q.text.match(/__/g) || []).length;
+        // Strictly require gap count == options length
+        return hasText && gapCount > 0 && q.options.length === gapCount && q.options.every(o => o.text.trim().length > 0);
+    }
+    if (q.questionType === QUESTION_TYPES.ORDER) {
+        return hasText && q.options.length >= 2 && q.options.every(o => o.text.trim().length > 0);
     }
     const hasCorrect = q.correctOptionId !== '' && q.options.some(o => o.id === q.correctOptionId);
     const hasOptions = q.options.filter(o => o.text.trim().length > 0).length >= 2;
     return hasText && hasCorrect && hasOptions;
+  };
+
+  // Auto-Fix for Fill Gap
+  const fixFillGap = (qId: string) => {
+      setQuiz(prev => ({
+          ...prev,
+          questions: prev.questions.map(q => {
+              if (q.id !== qId) return q;
+              const gapCount = (q.text.match(/__/g) || []).length;
+              let newOptions = [...q.options];
+              
+              if (newOptions.length > gapCount) {
+                  // Too many options, trim
+                  newOptions = newOptions.slice(0, gapCount);
+              } else {
+                  // Too few, add
+                  while (newOptions.length < gapCount) {
+                      newOptions.push({ id: uuid(), text: '' });
+                  }
+              }
+              return { ...q, options: newOptions };
+          })
+      }));
   };
 
   const handleAiGenerate = async () => {
@@ -340,7 +368,29 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               {/* FILL IN THE BLANK (Enhanced for Genially) */}
                               {q.questionType === QUESTION_TYPES.FILL_GAP && (
                                   <div className="space-y-4">
-                                      <p className="text-xs text-yellow-500 font-mono flex items-center gap-2"><Type className="w-3 h-3"/> {t.q_fill_gap_desc}</p>
+                                      <div className="flex items-center justify-between">
+                                          <p className="text-xs text-yellow-500 font-mono flex items-center gap-2"><Type className="w-3 h-3"/> {t.q_fill_gap_desc}</p>
+                                          
+                                          {/* Visual Validator */}
+                                          {(() => {
+                                              const gapCount = (q.text.match(/__/g) || []).length;
+                                              const ansCount = q.options.length;
+                                              if (gapCount !== ansCount) {
+                                                  return (
+                                                      <button 
+                                                        onClick={() => fixFillGap(q.id)}
+                                                        className="flex items-center gap-2 text-xs bg-red-900/50 border border-red-500 text-red-200 px-2 py-1 rounded hover:bg-red-900 transition-colors animate-pulse"
+                                                        title="Click to Auto-Fix"
+                                                      >
+                                                          <AlertTriangle className="w-3 h-3" />
+                                                          <span>GAP MISMATCH: {gapCount} vs {ansCount} (FIX)</span>
+                                                      </button>
+                                                  );
+                                              }
+                                              return <span className="text-xs text-green-500 font-mono flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> SYNCED ({gapCount})</span>;
+                                          })()}
+                                      </div>
+
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                           {q.options.map((opt, i) => (
                                               <div key={opt.id} className="bg-black/30 p-2 rounded border border-gray-800 flex items-center gap-2">

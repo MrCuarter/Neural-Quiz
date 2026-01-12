@@ -56,32 +56,36 @@ const generateGeniallyXLSX = (quiz: Quiz, title: string): GeneratedFile => {
     let type = "Elección única";
     let correctAnswer = "";
     
+    // Filter out empty options to ensure valid csv logic unless it's fixed structure
+    const validOptions = q.options;
+
     switch (q.questionType) {
         case QUESTION_TYPES.MULTIPLE_CHOICE:
             type = "Elección única";
-            const correctIndex = q.options.findIndex(o => o.id === q.correctOptionId);
+            const correctIndex = validOptions.findIndex(o => o.id === q.correctOptionId);
             if (correctIndex !== -1) correctAnswer = String.fromCharCode(65 + correctIndex);
             break;
         case QUESTION_TYPES.MULTI_SELECT:
             type = "Elección múltiple";
             // Simple logic for now: assumes single correct ID in current data model, would need multi-ID support ideally
-            const mIdx = q.options.findIndex(o => o.id === q.correctOptionId);
+            const mIdx = validOptions.findIndex(o => o.id === q.correctOptionId);
             if (mIdx !== -1) correctAnswer = String.fromCharCode(65 + mIdx);
             break;
         case QUESTION_TYPES.TRUE_FALSE:
             type = "Verdadero o falso";
-            const tfIndex = q.options.findIndex(o => o.id === q.correctOptionId);
+            const tfIndex = validOptions.findIndex(o => o.id === q.correctOptionId);
             if (tfIndex !== -1) correctAnswer = String.fromCharCode(65 + tfIndex);
             break;
         case QUESTION_TYPES.ORDER:
             type = "Ordenar";
             // Correct answer is the sequence A,B,C,D... corresponding to the provided rows
-            const letters = q.options.map((_, i) => String.fromCharCode(65 + i));
+            const letters = validOptions.map((_, i) => String.fromCharCode(65 + i));
             correctAnswer = letters.join(",");
             break;
         case QUESTION_TYPES.FILL_GAP:
             type = "Rellenar huecos";
-            correctAnswer = q.options.map(o => o.text).join(",");
+            // For Genially, correct answers are the words themselves separated by comma
+            correctAnswer = validOptions.map(o => o.text.trim()).filter(t => t !== "").join(",");
             break;
         case QUESTION_TYPES.OPEN_ENDED: type = "Respuesta abierta"; break;
         case QUESTION_TYPES.POLL: type = "Encuesta"; break;
@@ -89,7 +93,7 @@ const generateGeniallyXLSX = (quiz: Quiz, title: string): GeneratedFile => {
 
     const row = [
       type, q.text, correctAnswer,
-      q.options[0]?.text || "", q.options[1]?.text || "", q.options[2]?.text || "", q.options[3]?.text || "", q.options[4]?.text || "",
+      validOptions[0]?.text || "", validOptions[1]?.text || "", validOptions[2]?.text || "", validOptions[3]?.text || "", validOptions[4]?.text || "",
       "", "", "", "", "", // F-J placeholders
       q.feedback || ""
     ];
@@ -127,7 +131,7 @@ const generateUniversalCSV = (quiz: Quiz, title: string) => {
 // Generic fallbacks for other types
 const generateGenericCSV = (q:any, t:any) => generateUniversalCSV(q, t);
 const generateKahootXLSX = (quiz: Quiz, title: string) => {
-    const data = [[""],["Question","Answer 1","Answer 2","Answer 3","Answer 4","Time limit","Correct answer"]];
+    const data: any[][] = [[""],["Question","Answer 1","Answer 2","Answer 3","Answer 4","Time limit","Correct answer"]];
     quiz.questions.forEach((q, i) => {
         const cIdx = q.options.findIndex(o => o.id === q.correctOptionId);
         data.push([q.text, q.options[0]?.text, q.options[1]?.text, q.options[2]?.text, q.options[3]?.text, q.timeLimit || 20, cIdx !== -1 ? cIdx+1 : 1]);

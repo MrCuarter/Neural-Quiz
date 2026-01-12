@@ -35,7 +35,7 @@ const questionSchema: Schema = {
     options: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: "A list of 4 possible answers. For 'Order', list items in CORRECT SEQUENCE. For 'Fill Gap', list the missing words in order."
+      description: "A list of answers. For 'Fill in the Blank', list ONLY the correct words for each gap."
     },
     correctAnswerIndex: { type: Type.INTEGER, description: "The index (0-3) of the correct answer. For 'Order' or 'Fill Gap', use 0." },
     feedback: { type: Type.STRING, description: "Brief explanation." },
@@ -79,11 +79,11 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     1. 'Order' / 'Sort': 
        - Set 'type' to 'Order'.
        - In 'options', list the items in the **CORRECT CHRONOLOGICAL OR LOGICAL ORDER** (1st to last).
-       - The UI will shuffle them for the user.
     2. 'Fill in the Blank' / 'Fill Gap':
        - Set 'type' to 'Fill in the Blank'.
        - The 'text' MUST contain '__' (double underscore) where words are missing (e.g. "Water is made of __ and __").
-       - The 'options' MUST contain the missing words in sequence (e.g. ["Hydrogen", "Oxygen"]). Fill remaining options with empty strings.
+       - The 'options' MUST contain ONLY the missing words in sequence (e.g. ["Hydrogen", "Oxygen"]).
+       - **CRITICAL**: The number of items in 'options' MUST MATCH EXACTLY the number of '__' in 'text'. Do NOT include distractors.
     3. 'Multiple Choice': 4 options, one correct.
     4. 'True/False': Options 'True', 'False'.
     5. 'Open Ended': 'type'='Open Ended', put suggested answer in 'feedback'.
@@ -95,7 +95,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are an expert educational content creator. Output language: ${language}.`,
+        systemInstruction: `You are an expert educational content creator. Output language: ${language}. Ensure Fill-in-the-Blank questions have exactly matching gaps and options.`,
       },
     });
 
@@ -108,14 +108,32 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     const items = Array.isArray(data) ? data : (data.questions || data.items || []);
     if (!Array.isArray(items)) return [];
 
-    return items.map((q: any) => ({
-      text: q.text || "Question Text Missing",
-      rawOptions: Array.isArray(q.options) ? q.options : [],
-      correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
-      feedback: q.feedback || "",
-      questionType: q.type || "Multiple Choice",
-      imageUrl: q.imageUrl || ""
-    }));
+    return items.map((q: any) => {
+      let cleanedOptions = Array.isArray(q.options) ? q.options : [];
+      
+      // SANITIZATION FOR FILL GAP
+      if (q.type === 'Fill in the Blank' || q.type === 'Fill Gap') {
+          // Count gaps
+          const gapCount = (q.text.match(/__/g) || []).length;
+          // Force options to match gap count
+          if (cleanedOptions.length > gapCount) {
+              cleanedOptions = cleanedOptions.slice(0, gapCount);
+          } else {
+              while (cleanedOptions.length < gapCount) {
+                  cleanedOptions.push("???"); // Placeholder if AI failed to provide enough answers
+              }
+          }
+      }
+
+      return {
+        text: q.text || "Question Text Missing",
+        rawOptions: cleanedOptions,
+        correctIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+        feedback: q.feedback || "",
+        questionType: q.type || "Multiple Choice",
+        imageUrl: q.imageUrl || ""
+      };
+    });
 
   } catch (error: any) {
     console.error("Gemini Generation Error:", error);
@@ -123,20 +141,10 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
   }
 };
 
-// ... (parseRawTextToQuiz, generateQuizCategories, adaptQuestionsToPlatform remain largely the same, just ensured they use correct getAI) ...
-// (Omitting full repetition of other functions for brevity unless logic changes, focusing on generateQuizQuestions prompt update)
-
-// Need to export the other functions to maintain file integrity if they are overwritten. 
-// Re-including them briefly to ensure the file is complete.
-
+// ... (Rest of the file exports remain unchanged: parseRawTextToQuiz, generateQuizCategories, adaptQuestionsToPlatform) ...
+// Included purely to ensure file structure persists correctly in response
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: any): Promise<any[]> => {
-    // ... existing logic ...
     const ai = getAI();
-    // ... logic remains same as previous version ...
-    // Just returning empty array for brevity in this changeset context, assume previous logic holds.
-    // In a real full-file overwrite, I would include the full code. 
-    // To ensure safety, I will include the full existing logic below.
-    
     const truncatedText = rawText.substring(0, 800000); 
     const contents: any[] = [];
     if (image) {
@@ -196,7 +204,6 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
         contents: `Adapt these questions for ${platformName}. Allowed types: ${allowedTypes.join(', ')}. JSON:\n${JSON.stringify(questionsJson)}`,
         config: { responseMimeType: "application/json", responseSchema: quizSchema }
     });
-    // ... Parsing logic ...
     try {
         const data = JSON.parse(response.text || "[]");
         const items = Array.isArray(data) ? data : (data.questions || []);
