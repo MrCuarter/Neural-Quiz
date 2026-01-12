@@ -24,6 +24,9 @@ const isQuestionLike = (obj: any): boolean => {
         Array.isArray(obj.choices) || 
         Array.isArray(obj.answers) || 
         Array.isArray(obj.options) || 
+        // Blooket Typing Support:
+        Array.isArray(obj.typingAnswers) || 
+        Array.isArray(obj.correctAnswers) ||
         (obj.structure?.options && Array.isArray(obj.structure.options));
 
     return !!(hasText || hasChoices);
@@ -31,6 +34,10 @@ const isQuestionLike = (obj: any): boolean => {
 
 // Heuristics to detect "Correctness"
 export const hasCorrectFlag = (obj: any): boolean => {
+    // Blooket (Array of strings)
+    if (Array.isArray(obj.correctAnswers) && obj.correctAnswers.length > 0) return true;
+    if (Array.isArray(obj.typingAnswers) && obj.typingAnswers.length > 0) return true;
+
     // Wayground/Quizizz
     if (obj.structure) {
         if (typeof obj.structure.answer !== 'undefined') return true; 
@@ -78,7 +85,8 @@ export const deepFindQuizCandidate = (root: any, path: string = '', candidates: 
                 score += 10;
 
                 // Gold Standard: Has options AND text in same object
-                if ((item.question || item.text || item.title) && (item.answers || item.options || item.choices)) {
+                if ((item.question || item.text || item.title) && 
+                    (item.answers || item.options || item.choices || item.typingAnswers)) {
                     score += 10;
                 }
 
@@ -88,6 +96,8 @@ export const deepFindQuizCandidate = (root: any, path: string = '', candidates: 
                 // Image Boost
                 if (hasImage(item)) score += 5;
                 
+                // Specific Blooket Signals
+                if (item.typingAnswers) score += 15;
                 if (item.timeLimit || item.time) score += 2;
             }
         });

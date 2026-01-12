@@ -3,6 +3,7 @@
 export interface Option {
   id: string;
   text: string;
+  imageUrl?: string;
 }
 
 export interface Question {
