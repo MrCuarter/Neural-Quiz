@@ -8,42 +8,59 @@ let currentKeyIndex = 0;
 const getAPIKeys = (): string[] => {
   const keys: string[] = [];
   try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-      // @ts-ignore
-      if (import.meta.env.VITE_API_KEY) keys.push(import.meta.env.VITE_API_KEY);
-      // @ts-ignore
-      if (import.meta.env.API_KEY) keys.push(import.meta.env.API_KEY); // Legacy fallback
-      // @ts-ignore
-      if (import.meta.env.VITE_API_KEY_SECONDARY) keys.push(import.meta.env.VITE_API_KEY_SECONDARY);
-      // @ts-ignore
-      if (import.meta.env.VITE_API_KEY_TERTIARY) keys.push(import.meta.env.VITE_API_KEY_TERTIARY);
+    // Cast import.meta to any to handle environments where ImportMeta env is not defined in TS
+    const meta = (import.meta as any);
+    if (typeof meta !== 'undefined' && meta.env) {
+      // Primary
+      if (meta.env.VITE_API_KEY) keys.push(meta.env.VITE_API_KEY);
+      if (meta.env.API_KEY) keys.push(meta.env.API_KEY);
+      
+      // Secondary
+      if (meta.env.VITE_API_KEY_SECONDARY) keys.push(meta.env.VITE_API_KEY_SECONDARY);
+      if (meta.env.API_KEY_SECONDARY) keys.push(meta.env.API_KEY_SECONDARY);
+      
+      // Tertiary
+      if (meta.env.VITE_API_KEY_TERTIARY) keys.push(meta.env.VITE_API_KEY_TERTIARY);
+      if (meta.env.API_KEY_TERTIARY) keys.push(meta.env.API_KEY_TERTIARY);
     }
   } catch (e) {}
   try {
     if (typeof process !== 'undefined' && process.env) {
       if (process.env.VITE_API_KEY) keys.push(process.env.VITE_API_KEY);
       if (process.env.API_KEY) keys.push(process.env.API_KEY);
+      
       if (process.env.VITE_API_KEY_SECONDARY) keys.push(process.env.VITE_API_KEY_SECONDARY);
+      if (process.env.API_KEY_SECONDARY) keys.push(process.env.API_KEY_SECONDARY);
+      
       if (process.env.VITE_API_KEY_TERTIARY) keys.push(process.env.VITE_API_KEY_TERTIARY);
+      if (process.env.API_KEY_TERTIARY) keys.push(process.env.API_KEY_TERTIARY);
     }
   } catch(e) {}
   
   // Deduplicate and filter empty
-  return Array.from(new Set(keys)).filter(k => !!k);
+  const distinctKeys = Array.from(new Set(keys)).filter(k => !!k && k.length > 10);
+  
+  if (distinctKeys.length === 0) {
+      console.warn("No API Keys found in environment variables.");
+  }
+  
+  return distinctKeys;
 };
 
 const getAI = () => {
   const keys = getAPIKeys();
-  if (keys.length === 0) throw new Error("Configuration Error: API Key missing.");
+  if (keys.length === 0) throw new Error("Configuration Error: No valid API Keys found. Please check .env file.");
   
-  // Use the current active key. Ensure index is safe.
-  const activeKey = keys[currentKeyIndex] || keys[0];
+  // Ensure index is within bounds (Circular safety)
+  if (currentKeyIndex >= keys.length) currentKeyIndex = 0;
+  
+  const activeKey = keys[currentKeyIndex];
+  // console.log(`[Gemini] Using Key Index: ${currentKeyIndex} (Total: ${keys.length})`); // Uncomment for debug
   
   return new GoogleGenAI({ apiKey: activeKey });
 };
 
-// --- RETRY LOGIC HELPER WITH KEY ROTATION ---
+// --- RETRY LOGIC HELPER WITH CIRCULAR KEY ROTATION ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const withRetry = async <T>(
@@ -62,21 +79,30 @@ const withRetry = async <T>(
     if (retries > 0 && isQuotaError) {
         const keys = getAPIKeys();
         
-        // CHECK ROTATION: If we have more keys and haven't used them all yet
-        // We check if currentKeyIndex is strictly less than the last index
-        if (keys.length > 1 && currentKeyIndex < keys.length - 1) {
-            currentKeyIndex++; // Switch to next key
-            console.warn(`⚠️ Primary API Key Quota Exceeded (${status}). Switching to Backup Key [Index ${currentKeyIndex}]...`);
+        if (keys.length > 1) {
+            // CIRCULAR ROTATION: Move to next key, wrapping around to 0
+            const prevIndex = currentKeyIndex;
+            currentKeyIndex = (currentKeyIndex + 1) % keys.length;
             
-            // Retry immediately with the new key (no wait needed for a fresh key)
+            console.warn(`⚠️ API Key [Index ${prevIndex}] Quota Exceeded (${status}). Rotating to Key [Index ${currentKeyIndex}]...`);
+            
+            // If we just wrapped around to 0, it means we exhausted all keys in a short burst.
+            // We should add a small delay to prevent rapid-fire looping.
+            if (currentKeyIndex === 0) {
+                 const delay = 2000; 
+                 console.warn(`🔄 All keys rotated. Pausing for ${delay}ms before restarting cycle...`);
+                 await wait(delay);
+            }
+
+            // Retry immediately (or after small wait) with the new key
             return withRetry(operation, retries, baseDelay); 
         }
 
-        // STANDARD BACKOFF: If we are out of keys or using the last key
-        const delay = baseDelay + Math.random() * 1000; // Add jitter
-        console.warn(`⚠️ Gemini API Rate Limit (${status}). All keys busy/exhausted. Retrying in ${(delay/1000).toFixed(1)}s...`);
+        // STANDARD BACKOFF: If we only have 1 key
+        const delay = baseDelay + Math.random() * 1000;
+        console.warn(`⚠️ Gemini API Rate Limit (${status}). Single key configured. Retrying in ${(delay/1000).toFixed(1)}s...`);
         await wait(delay);
-        return withRetry(operation, retries - 1, delay * 2); // Exponential Backoff
+        return withRetry(operation, retries - 1, delay * 2);
     }
     throw error;
   }
