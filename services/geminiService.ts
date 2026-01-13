@@ -2,33 +2,48 @@
 import { GoogleGenAI, Type, Schema, GenerateContentResponse } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 
-// ... (getAPIKey and getAI unchanged) ...
-const getAPIKey = (): string => {
+// --- API KEY MANAGEMENT (ROTATION SUPPORT) ---
+let currentKeyIndex = 0;
+
+const getAPIKeys = (): string[] => {
+  const keys: string[] = [];
   try {
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env) {
       // @ts-ignore
-      if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
+      if (import.meta.env.VITE_API_KEY) keys.push(import.meta.env.VITE_API_KEY);
       // @ts-ignore
-      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+      if (import.meta.env.API_KEY) keys.push(import.meta.env.API_KEY); // Legacy fallback
+      // @ts-ignore
+      if (import.meta.env.VITE_API_KEY_SECONDARY) keys.push(import.meta.env.VITE_API_KEY_SECONDARY);
+      // @ts-ignore
+      if (import.meta.env.VITE_API_KEY_TERTIARY) keys.push(import.meta.env.VITE_API_KEY_TERTIARY);
     }
   } catch (e) {}
   try {
     if (typeof process !== 'undefined' && process.env) {
-      if (process.env.VITE_API_KEY) return process.env.VITE_API_KEY;
-      if (process.env.API_KEY) return process.env.API_KEY;
+      if (process.env.VITE_API_KEY) keys.push(process.env.VITE_API_KEY);
+      if (process.env.API_KEY) keys.push(process.env.API_KEY);
+      if (process.env.VITE_API_KEY_SECONDARY) keys.push(process.env.VITE_API_KEY_SECONDARY);
+      if (process.env.VITE_API_KEY_TERTIARY) keys.push(process.env.VITE_API_KEY_TERTIARY);
     }
   } catch(e) {}
-  return "";
+  
+  // Deduplicate and filter empty
+  return Array.from(new Set(keys)).filter(k => !!k);
 };
 
 const getAI = () => {
-  const apiKey = getAPIKey();
-  if (!apiKey) throw new Error("Configuration Error: API Key missing.");
-  return new GoogleGenAI({ apiKey: apiKey });
+  const keys = getAPIKeys();
+  if (keys.length === 0) throw new Error("Configuration Error: API Key missing.");
+  
+  // Use the current active key. Ensure index is safe.
+  const activeKey = keys[currentKeyIndex] || keys[0];
+  
+  return new GoogleGenAI({ apiKey: activeKey });
 };
 
-// --- RETRY LOGIC HELPER ---
+// --- RETRY LOGIC HELPER WITH KEY ROTATION ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const withRetry = async <T>(
@@ -42,13 +57,26 @@ const withRetry = async <T>(
     // Extract status code
     const status = error.status || error.code || (error.error && error.error.code);
     const message = error.message || (error.error && error.error.message) || "";
+    const isQuotaError = status === 429 || status === 503 || message.includes('429') || message.includes('quota') || message.includes('RESOURCE_EXHAUSTED');
 
-    // Check for Rate Limit (429) or Server Overload (503)
-    if (retries > 0 && (status === 429 || status === 503 || message.includes('429') || message.includes('quota'))) {
-      const delay = baseDelay + Math.random() * 1000; // Add jitter
-      console.warn(`⚠️ Gemini API Rate Limit (${status}). Retrying in ${(delay/1000).toFixed(1)}s...`);
-      await wait(delay);
-      return withRetry(operation, retries - 1, delay * 2); // Exponential Backoff
+    if (retries > 0 && isQuotaError) {
+        const keys = getAPIKeys();
+        
+        // CHECK ROTATION: If we have more keys and haven't used them all yet
+        // We check if currentKeyIndex is strictly less than the last index
+        if (keys.length > 1 && currentKeyIndex < keys.length - 1) {
+            currentKeyIndex++; // Switch to next key
+            console.warn(`⚠️ Primary API Key Quota Exceeded (${status}). Switching to Backup Key [Index ${currentKeyIndex}]...`);
+            
+            // Retry immediately with the new key (no wait needed for a fresh key)
+            return withRetry(operation, retries, baseDelay); 
+        }
+
+        // STANDARD BACKOFF: If we are out of keys or using the last key
+        const delay = baseDelay + Math.random() * 1000; // Add jitter
+        console.warn(`⚠️ Gemini API Rate Limit (${status}). All keys busy/exhausted. Retrying in ${(delay/1000).toFixed(1)}s...`);
+        await wait(delay);
+        return withRetry(operation, retries - 1, delay * 2); // Exponential Backoff
     }
     throw error;
   }
