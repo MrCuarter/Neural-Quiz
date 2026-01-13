@@ -1,46 +1,11 @@
-
 import { GoogleGenAI, Type, Schema, GenerateContentResponse } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 
 // --- API KEY MANAGEMENT ---
-let currentKeyIndex = 0;
-
-const getAPIKeys = (): string[] => {
-  const keys: string[] = [];
-  try {
-    // Cast import.meta to any to handle environments where ImportMeta env is not defined in TS
-    const meta = (import.meta as any);
-    if (typeof meta !== 'undefined' && meta.env) {
-      if (meta.env.VITE_API_KEY) keys.push(meta.env.VITE_API_KEY);
-      if (meta.env.API_KEY) keys.push(meta.env.API_KEY);
-      
-      if (meta.env.VITE_API_KEY_SECONDARY) keys.push(meta.env.VITE_API_KEY_SECONDARY);
-      if (meta.env.API_KEY_SECONDARY) keys.push(meta.env.API_KEY_SECONDARY);
-      
-      if (meta.env.VITE_API_KEY_TERTIARY) keys.push(meta.env.VITE_API_KEY_TERTIARY);
-      if (meta.env.API_KEY_TERTIARY) keys.push(meta.env.API_KEY_TERTIARY);
-    }
-  } catch (e) {}
-  
-  // Deduplicate and filter empty
-  const distinctKeys = Array.from(new Set(keys)).filter(k => !!k && k.length > 10);
-  
-  if (distinctKeys.length === 0) {
-      console.warn("No API Keys found in environment variables.");
-  }
-  
-  return distinctKeys;
-};
-
 const getAI = () => {
-  const keys = getAPIKeys();
-  if (keys.length === 0) throw new Error("Configuration Error: No valid API Keys found. Please check .env file.");
-  
-  // Ensure index is within bounds
-  if (currentKeyIndex >= keys.length) currentKeyIndex = 0;
-  
-  const activeKey = keys[currentKeyIndex];
-  return new GoogleGenAI({ apiKey: activeKey });
+  // Always use process.env.API_KEY as per guidelines.
+  // Assuming process.env.API_KEY is available.
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 // --- GLOBAL REQUEST QUEUE (SEMAPHORE) ---
@@ -83,7 +48,7 @@ class RequestQueue {
 
 const globalQueue = new RequestQueue();
 
-// --- RETRY LOGIC WITH ROTATION & QUEUE ---
+// --- RETRY LOGIC ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const withRetry = async <T>(
@@ -111,28 +76,10 @@ const executeWithRetry = async <T>(
         const isQuotaError = status === 429 || status === 503 || message.includes('429') || message.includes('quota') || message.includes('RESOURCE_EXHAUSTED');
 
         if (retries > 0 && isQuotaError) {
-            const keys = getAPIKeys();
-            
-            if (keys.length > 1) {
-                // Rotate Key
-                const prevIndex = currentKeyIndex;
-                currentKeyIndex = (currentKeyIndex + 1) % keys.length;
-                console.warn(`⚠️ Quota Exceeded on Key ${prevIndex}. Rotating to Key ${currentKeyIndex}...`);
-                
-                // If we wrapped around, wait longer
-                if (currentKeyIndex === 0) {
-                    console.warn("🔄 All keys exhausted. Pausing for 5 seconds...");
-                    await wait(5000);
-                }
-                
-                // Recursive call with new key
-                return executeWithRetry(operation, retries - 1, baseDelay);
-            } else {
-                // Standard backoff for single key
-                console.warn(`⚠️ Rate Limit (429). Retrying in ${baseDelay/1000}s...`);
-                await wait(baseDelay);
-                return executeWithRetry(operation, retries - 1, baseDelay * 2);
-            }
+            // Standard backoff for single key
+            console.warn(`⚠️ Rate Limit (429). Retrying in ${baseDelay/1000}s...`);
+            await wait(baseDelay);
+            return executeWithRetry(operation, retries - 1, baseDelay * 2);
         }
         throw error;
     }
