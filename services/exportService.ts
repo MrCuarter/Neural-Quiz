@@ -117,7 +117,7 @@ const generateGeniallyXLSX = (quiz: Quiz, title: string): GeneratedFile => {
   return { filename: `${title}_genially.xlsx`, content: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', isBase64: true };
 };
 
-// ... OTHER EXPORTERS (Minified for brevity but functional) ...
+// ... OTHER EXPORTERS ...
 const generateUniversalCSV = (quiz: Quiz, title: string) => {
   const header = "Pregunta,Respuesta 1 (Correcta),Respuesta 2,Respuesta 3,Respuesta 4,Dirección de Imagen,Respuesta 5,Tipo,Tiempo,Feedback";
   const rows = quiz.questions.map(q => {
@@ -140,7 +140,6 @@ const generateUniversalCSV = (quiz: Quiz, title: string) => {
   return { filename: `${title}_universal.csv`, content: `${header}\n${rows}`, mimeType: 'text/csv' };
 };
 
-// Generic fallbacks for other types
 const generateGenericCSV = (q:any, t:any) => generateUniversalCSV(q, t);
 const generateKahootXLSX = (quiz: Quiz, title: string) => {
     const data: any[][] = [[""],["Question","Answer 1","Answer 2","Answer 3","Answer 4","Time limit","Correct answer"]];
@@ -152,21 +151,60 @@ const generateKahootXLSX = (quiz: Quiz, title: string) => {
     return { filename: `${title}_kahoot.xlsx`, content: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', isBase64: true };
 };
 
-const generateBlooketCSV = (quiz:Quiz, title:string) => {
-    const header = "Question,Answer 1,Answer 2,Answer 3,Answer 4,Time,Correct";
-    const rows = quiz.questions.map(q => {
-        const cIdx = q.options.findIndex(o => o.id === q.correctOptionId);
+// BLOOKET EXPORT (UPDATED TO OFFICIAL TEMPLATE STRUCTURE WITH IMAGE SUPPORT)
+const generateBlooketCSV = (quiz: Quiz, title: string) => {
+    // Row 1: Official Template Header (Now 9 columns)
+    // 1 header cell + 8 empty cells = 9 columns
+    const row1 = ['"Blooket\nImport Template"', "", "", "", "", "", "", "", ""].join(",");
+
+    // Row 2: Strict Column Headers
+    const headers = [
+        "Question #",
+        "Question Text",
+        "Answer 1",
+        "Answer 2",
+        "Answer 3\n(Optional)",
+        "Answer 4\n(Optional)",
+        "Time Limit (sec)\n(Max: 300 seconds)",
+        "Correct Answer(s)\n(Only include Answer #)",
+        "Image"
+    ].map(escapeCSV).join(",");
+
+    // Data Rows
+    const rows = quiz.questions.map((q, index) => {
+        // Options padding (Blooket template shows 4 answer columns)
+        const opts = q.options.slice(0, 4);
+        
+        // Calculate 1-based indices for correct answers
+        const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+            ? q.correctOptionIds 
+            : (q.correctOptionId ? [q.correctOptionId] : []);
+        
+        // Map correct ID to its 1-based index in the sliced options array
+        let correctIndices = opts
+            .map((o, i) => correctIds.includes(o.id) ? i + 1 : null)
+            .filter(i => i !== null);
+            
+        if (correctIndices.length === 0 && opts.length > 0) correctIndices = [1]; // Fallback to first if none marked
+
         return [
-          escapeCSV(q.text), 
-          escapeCSV(q.options[0]?.text), 
-          escapeCSV(q.options[1]?.text), 
-          escapeCSV(q.options[2]?.text), 
-          escapeCSV(q.options[3]?.text), 
-          String(q.timeLimit || 20), 
-          String(cIdx+1)
+            String(index + 1),
+            escapeCSV(q.text),
+            escapeCSV(opts[0]?.text || ""),
+            escapeCSV(opts[1]?.text || ""),
+            escapeCSV(opts[2]?.text || ""),
+            escapeCSV(opts[3]?.text || ""),
+            String(q.timeLimit || 20),
+            escapeCSV(correctIndices.join(",")), // "1,4"
+            escapeCSV(q.imageUrl || "")
         ].join(",");
     }).join("\n");
-    return { filename: `${title}_blooket.csv`, content: header+"\n"+rows, mimeType: 'text/csv' };
+
+    return { 
+        filename: `${title}_blooket.csv`, 
+        content: `${row1}\n${headers}\n${rows}`, 
+        mimeType: 'text/csv' 
+    };
 };
 
 const generateSocrativeXLSX = (quiz: Quiz, title: string) => {
@@ -188,10 +226,10 @@ const generateWordwall = (q:Quiz, t:string) => ({ filename: `${t}_wordwall.txt`,
 const generateAiken = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "Aiken", mimeType: 'text/plain' });
 const generateGIFT = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "GIFT", mimeType: 'text/plain' });
 const generateWaygroundXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
-const generateQuizalizeCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t);
+const generateQuizalizeCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t); // Quizalize might need adjustment if it differs from Blooket, but kept for now.
 const generateIdoceoXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
 const generatePlickers = (q:Quiz, t:string) => generateWordwall(q,t);
-const generateGimkitClassicCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t);
+const generateGimkitClassicCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t); // Gimkit accepts Blooket format
 const generateGimkitTextCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t);
 const generateFlippityXLSX = (q:Quiz, t:string, o:any) => generateKahootXLSX(q,t);
 const generateSandbox = (q:Quiz, t:string) => generateWordwall(q,t);

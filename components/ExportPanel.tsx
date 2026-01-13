@@ -6,6 +6,7 @@ import { exportToGoogleForms } from '../services/googleFormsService';
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
 import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface ExportPanelProps {
   quiz: Quiz;
@@ -105,7 +106,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
           setIsFixing(false);
       }
   };
-
 
   const getPreparedQuiz = (): Quiz => {
     if (selectedFormat !== ExportFormat.FLIPPITY) return quiz;
@@ -216,15 +216,40 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
       setFlippityCategories(newCats);
   };
 
-  const currentExport = (() => {
+  // Memoize Export to prevent re-runs and allow stable preview generation
+  const preparedQuiz = useMemo(() => getPreparedQuiz(), [quiz, flippityMode, flippitySelection, selectedFormat]);
+
+  const currentExport = useMemo(() => {
     try {
-        if (selectedFormat === ExportFormat.FLIPPITY || selectedFormat === ExportFormat.WOOCLAP) return { content: "", isBase64: true }; 
         if (selectedFormat === ExportFormat.GOOGLE_FORMS) return { content: "", isBase64: true };
-        return exportQuiz(getPreparedQuiz(), selectedFormat);
+        const exportOptions = selectedFormat === ExportFormat.FLIPPITY ? { categories: flippityCategories } : undefined;
+        return exportQuiz(preparedQuiz, selectedFormat, exportOptions);
     } catch(e) {
         return { content: "Error generating preview.", isBase64: false };
     }
-  })();
+  }, [preparedQuiz, selectedFormat, flippityCategories]);
+
+  // Generate Table Preview from XLSX (Base64) if applicable
+  const xlsxPreview = useMemo(() => {
+      if (currentExport.isBase64 && 
+         (currentExport.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+          selectedFormat === ExportFormat.KAHOOT || 
+          selectedFormat === ExportFormat.SOCRATIVE || 
+          selectedFormat === ExportFormat.WAYGROUND ||
+          selectedFormat === ExportFormat.GENIALLY ||
+          selectedFormat === ExportFormat.WOOCLAP ||
+          selectedFormat === ExportFormat.IDOCEO)) {
+          try {
+              const wb = XLSX.read(currentExport.content, { type: 'base64' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              return XLSX.utils.sheet_to_csv(ws);
+          } catch (e) {
+              console.error("Preview Parse Error", e);
+              return null;
+          }
+      }
+      return null;
+  }, [currentExport, selectedFormat]);
 
   const isGimkit = selectedFormat === ExportFormat.GIMKIT_CLASSIC || selectedFormat === ExportFormat.GIMKIT_TEXT;
   const isQuizlet = selectedFormat === ExportFormat.QUIZLET_QA || selectedFormat === ExportFormat.QUIZLET_AQ;
@@ -232,6 +257,10 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
   const isFlippity = selectedFormat === ExportFormat.FLIPPITY;
   const isGoogle = selectedFormat === ExportFormat.GOOGLE_FORMS;
   const isCSV = selectedFormat.includes('CSV') || selectedFormat === ExportFormat.QUIZALIZE || selectedFormat === ExportFormat.BLOOKET;
+  
+  // Table View Determination
+  const showAsTable = isCSV || !!xlsxPreview;
+  const contentToRender = xlsxPreview || currentExport.content;
 
   const renderCSVTable = (csv: string) => {
     const lines = csv.split('\n').slice(0, 10);
@@ -240,7 +269,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
             <table className="min-w-full text-xs font-mono text-left border-collapse">
                 <tbody>
                     {lines.map((line, i) => {
+                        // Regex handles quoted commas for CSV parsing
                         const cells = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                        if (cells.length === 1 && cells[0] === "") return null;
                         return (
                             <tr key={i} className={i === 0 ? "bg-gray-800 text-cyan-400 font-bold" : "border-b border-gray-800 hover:bg-white/5"}>
                                 {cells.map((cell, j) => (
@@ -353,7 +384,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
           {/* Sub-options for Gimkit */}
           {isGimkit && (
             <div className="flex flex-col sm:flex-row gap-4 p-4 bg-black/40 border border-cyan-900/50 rounded-lg">
-              {/* ... (Gimkit logic same as before) ... */}
               <div className="flex-1">
                 <p className="text-cyan-400 font-mono-cyber text-sm mb-2 uppercase">{t.gimkit_mode}</p>
                 <div className="flex gap-4">
@@ -388,7 +418,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
           {/* Sub-options for Flippity */}
           {isFlippity && (
             <div className="flex flex-col gap-4 p-4 bg-black/40 border border-orange-500/50 rounded-lg animate-in fade-in">
-                {/* ... (Flippity logic same as before) ... */}
                 <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <p className="text-orange-400 font-mono-cyber text-sm mb-2 uppercase">{t.flippity_config}</p>
@@ -466,7 +495,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                          {t.open_form} <ExternalLink className="w-4 h-4" />
                      </a>
                  </div>
-             ) : currentExport.isBase64 && !isGoogle ? (
+             ) : currentExport.isBase64 && !isGoogle && !xlsxPreview ? (
                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
                  <AlertTriangle className="w-8 h-8 opacity-50" />
                  <p>{t.preview_binary_unavailable}</p>
@@ -477,9 +506,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) =>
                      <p className="max-w-xs text-center">{t.google_preview_unavailable}</p>
                  </div>
              ) : (
-                isCSV ? renderCSVTable(currentExport.content) : (
+                showAsTable ? renderCSVTable(contentToRender) : (
                   <pre className="whitespace-pre-wrap break-all p-4">
-                    {currentExport.content}
+                    {contentToRender}
                   </pre>
                 )
              )}
