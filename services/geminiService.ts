@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI, Type, Schema, GenerateContentResponse } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 
 // ... (getAPIKey and getAI unchanged) ...
@@ -26,6 +26,32 @@ const getAI = () => {
   const apiKey = getAPIKey();
   if (!apiKey) throw new Error("Configuration Error: API Key missing.");
   return new GoogleGenAI({ apiKey: apiKey });
+};
+
+// --- RETRY LOGIC HELPER ---
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const withRetry = async <T>(
+  operation: () => Promise<T>, 
+  retries = 3, 
+  baseDelay = 5000
+): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error: any) {
+    // Extract status code
+    const status = error.status || error.code || (error.error && error.error.code);
+    const message = error.message || (error.error && error.error.message) || "";
+
+    // Check for Rate Limit (429) or Server Overload (503)
+    if (retries > 0 && (status === 429 || status === 503 || message.includes('429') || message.includes('quota'))) {
+      const delay = baseDelay + Math.random() * 1000; // Add jitter
+      console.warn(`⚠️ Gemini API Rate Limit (${status}). Retrying in ${(delay/1000).toFixed(1)}s...`);
+      await wait(delay);
+      return withRetry(operation, retries - 1, delay * 2); // Exponential Backoff
+    }
+    throw error;
+  }
 };
 
 const questionSchema: Schema = {
@@ -146,28 +172,22 @@ const sanitizeQuestion = (q: any, allowedTypes: string[], language: string): any
     }
 
     // 4. DETECT MULTI-SELECT (Plural phrasing)
-    // IMPORTANT: If text asks to select "ingredients", "elements", "types" (plural), FORCE Multi-Select.
     const multiKeywords = [
         "selecciona los", "selecciona las", "cuales son", "select all", "choose the", "marcar todas",
         "ingredientes", "elements", "features", "characteristics", "son correctas"
     ];
     const impliesPlural = multiKeywords.some(k => text.toLowerCase().includes(k));
     
-    // Switch to Multi-Select if plural implied OR explicitly requested
     if ((impliesPlural || type === 'Multi-Select' || type === QUESTION_TYPES.MULTI_SELECT) && allowedTypes.includes(QUESTION_TYPES.MULTI_SELECT)) {
         type = QUESTION_TYPES.MULTI_SELECT;
-        // Ensure indices exist
         if (!q.correctAnswerIndices || q.correctAnswerIndices.length === 0) {
-            // Fallback: If AI provided single index, use it. Else 0.
             q.correctAnswerIndices = [typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0];
         }
     } else if (type === QUESTION_TYPES.MULTIPLE_CHOICE) {
-        // Enforce Single Choice
         q.correctAnswerIndices = [correctIndex];
     }
 
     // 5. FAILSAFE: EMPTY OPTIONS
-    // If it's a choice type but has NO options, inject placeholders so UI doesn't look broken
     if ((type === QUESTION_TYPES.MULTIPLE_CHOICE || type === QUESTION_TYPES.MULTI_SELECT) && options.length === 0) {
         options = ["Opción A", "Opción B", "Opción C", "Opción D"];
     }
@@ -187,9 +207,6 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     const ai = getAI();
     const { topic, count, types, age, context, urls, language = 'Spanish' } = params;
     const safeCount = Math.min(Math.max(count, 1), 50); 
-
-    const priorityTypes = types.filter(t => t !== QUESTION_TYPES.MULTIPLE_CHOICE);
-    const useComplex = priorityTypes.length > 0;
 
     let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
     prompt += `\nTarget Audience: ${age}. Language: ${language}.`;
@@ -215,7 +232,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
        - Set 'correctAnswerIndex' to 0.
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
@@ -223,7 +240,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
         responseSchema: quizSchema,
         systemInstruction: `You are a precise quiz engine. Pay close attention to Spanish grammatical gender agreement in Fill-in-the-Blank questions. ALWAYS provide 4 options for Multiple Choice/Multi-Select.`,
       },
-    });
+    }));
 
     const text = response.text;
     if (!text) return [];
@@ -235,16 +252,14 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     if (!Array.isArray(items)) return [];
 
     return items.map((rawQ: any) => {
-      // Apply the Heuristic Fixer
       const q = sanitizeQuestion(rawQ, types, language);
-
       return {
         text: q.text,
         rawOptions: q.options,
         correctIndex: q.correctAnswerIndex,
         correctIndices: q.correctAnswerIndices || [q.correctAnswerIndex],
         feedback: q.feedback || "",
-        questionType: q.type,
+        questionType: q.questionType,
         imageUrl: q.imageUrl || "",
         reconstructed: q.reconstructed,
         sourceEvidence: q.sourceEvidence,
@@ -267,17 +282,12 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       contents.push({ text: "Extract questions from this image." });
     }
     
-    // FORENSIC ANALYSIS PROMPT
     const prompt = `You are a Quiz Reverse-Engineering Engine.
-    
     Output Language: ${language}
-    
     Your task is NOT to read the page like a human.
     Your task is to reconstruct the internal quiz data model used by the platform.
-    
     Source Content:
     ${truncatedText}
-    
     You must:
     1. Identify each question block.
     2. Locate ALL possible answer options.
@@ -289,23 +299,21 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
     6. If still missing, infer the correct answer by semantic analysis and mark 'reconstructed': true.
     
     Work as a forensic analyst. Do not stop at visible text. Assume important data is hidden in structure (JSON blocks, Script tags).
-    
     Detect 'Multi-Select' if multiple answers are correct.
     Detect 'Order' questions.
-    
     Populate the 'sourceEvidence' field explaining where you found the data.
     Populate 'imageReconstruction' with 'direct', 'partial' (if you built the URL), or 'none'.`;
 
     contents.push({ text: prompt });
 
-    const response = await ai.models.generateContent({
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: contents,
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
       },
-    });
+    }));
     
     const text = response.text;
     if (!text) return [];
@@ -363,7 +371,7 @@ Rules:
   • For images: if imageCandidates exist, select the best match. If none, set url=null.
 `;
 
-        const response = await ai.models.generateContent({
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: prompt,
             config: {
@@ -377,7 +385,7 @@ Priorities:
   4. Return strict JSON.
   5. Provide confidence scores 0-1.`
             }
-        });
+        }));
 
         const data = JSON.parse(response.text || "{}");
         if (!data.options) throw new Error("Enhance AI failed to generate options");
@@ -410,19 +418,19 @@ Priorities:
             imageUrl: data.imageUrl || q.imageUrl || ""
         };
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Enhance Question Error", e);
-        return q;
+        // If retries failed, we throw so UI can handle it or show toast
+        throw e;
     }
 };
 
-// ... (existing exports) ...
 export const enhanceQuestionsWithOptions = async (questions: Question[], language: string = 'Spanish'): Promise<any[]> => {
-    // Legacy generic enhancement (batch)
     const ai = getAI();
-    // ... same content as before ...
     const qs = questions.map(q => ({ text: q.text, type: q.questionType }));
-    const response = await ai.models.generateContent({
+    
+    // Applying retry logic here as well
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `I have a list of questions but the answers are missing. 
         For each question, generate 4 plausible options (1 correct, 3 distractors) and mark the correct one.
@@ -433,7 +441,8 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
             responseSchema: quizSchema,
             systemInstruction: "You are a teacher fixing a broken quiz. Preserve the exact original question text. Generate high-quality distractors."
         }
-    });
+    }));
+
     try {
         const data = JSON.parse(response.text || "[]");
         const items = Array.isArray(data) ? data : (data.questions || []);
@@ -452,11 +461,11 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
 
 export const generateQuizCategories = async (questions: string[]): Promise<string[]> => {
     const ai = getAI();
-    const response = await ai.models.generateContent({
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Generate 6 categories for Jeopardy. JSON array of strings. Questions: ${questions.slice(0,10).join('|')}`,
       config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } } },
-    });
+    }));
     try { return JSON.parse(response.text || "[]"); } catch { return []; }
 };
 
@@ -465,11 +474,11 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
     const questionsJson = questions.map(q => ({
         id: q.id, text: q.text, options: q.options.map(o => o.text), type: q.questionType
     }));
-    const response = await ai.models.generateContent({
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Adapt these questions for ${platformName}. Allowed types: ${allowedTypes.join(', ')}. JSON:\n${JSON.stringify(questionsJson)}`,
         config: { responseMimeType: "application/json", responseSchema: quizSchema }
-    });
+    }));
     try {
         const data = JSON.parse(response.text || "[]");
         const items = Array.isArray(data) ? data : (data.questions || []);

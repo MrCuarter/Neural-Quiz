@@ -2,6 +2,8 @@
 import { extractTextFromPDF } from "./pdfService";
 import { analyzeKahootUrl } from "./kahootService";
 import { analyzeBlooketUrl } from "./blooketService";
+import { analyzeGimkitUrl } from "./gimkitService";
+import { extractWaygroundQA } from "./extractors/waygroundQAExtractor"; // NEW IMPORT
 import { UniversalDiscoveryReport, Quiz } from "../types";
 
 // ROBUST URL SERVICE & ORCHESTRATOR
@@ -35,21 +37,46 @@ export const extractKahootUUID = (url: string): string | null => {
 };
 
 export const isBlooketUrl = (url: string): boolean => {
-    return url.includes("blooket.com/set/");
+    return (url.includes("blooket.com") && url.includes("/set/"));
+};
+
+export const isGimkitUrl = (url: string): boolean => {
+    return (url.includes("gimkit.com") && (url.includes("/view/") || url.includes("/play/")));
+};
+
+export const isWaygroundUrl = (url: string): boolean => {
+    const lower = url.toLowerCase();
+    // Support both old Quizizz domain and new Wayground branding
+    // Matches /quiz/ID or /admin/quiz/ID
+    return (lower.includes("quizizz.com") || lower.includes("wayground.com")) && 
+           (lower.includes("/quiz/"));
 };
 
 // ORCHESTRATOR: Routes URL to specific adapter or generic fetcher
 export const analyzeUrl = async (url: string): Promise<{ quiz: Quiz, report: UniversalDiscoveryReport } | null> => {
     const targetUrl = url.trim();
 
-    // 1. KAHOOT ROUTE (Preserved Legacy)
+    // 1. KAHOOT ROUTE
     if (extractKahootUUID(targetUrl)) {
         return analyzeKahootUrl(targetUrl);
     }
 
-    // 2. BLOOKET ROUTE (New Adapter)
+    // 2. BLOOKET ROUTE
     if (isBlooketUrl(targetUrl)) {
         return analyzeBlooketUrl(targetUrl);
+    }
+
+    // 3. GIMKIT ROUTE
+    if (isGimkitUrl(targetUrl)) {
+        return analyzeGimkitUrl(targetUrl);
+    }
+
+    // 4. WAYGROUND / QUIZIZZ ROUTE (NEW QA EXTRACTOR)
+    if (isWaygroundUrl(targetUrl)) {
+        const result = await extractWaygroundQA(targetUrl);
+        // Normalize strict return type
+        if (result && result.quiz) return { quiz: result.quiz, report: result.report };
+        return null;
     }
 
     return null; // Fallback to generic AI analysis in App.tsx
