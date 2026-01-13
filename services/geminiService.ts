@@ -1,11 +1,66 @@
+
 import { GoogleGenAI, Type, Schema, GenerateContentResponse } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 
 // --- API KEY MANAGEMENT ---
+let currentKeyIndex = 0;
+
+const getAPIKeys = (): string[] => {
+  const keys: string[] = [];
+
+  // 1. VITE STATIC REPLACEMENT (CRITICAL FOR HOSTINGER/VERCEL)
+  // The bundler looks for exact string matches of 'import.meta.env.VITE_...'
+  try {
+    // @ts-ignore
+    if (import.meta.env.VITE_API_KEY) keys.push(import.meta.env.VITE_API_KEY);
+    // @ts-ignore
+    if (import.meta.env.API_KEY) keys.push(import.meta.env.API_KEY);
+    // @ts-ignore
+    if (import.meta.env.VITE_GOOGLE_API_KEY) keys.push(import.meta.env.VITE_GOOGLE_API_KEY);
+    
+    // Secondary keys for rotation
+    // @ts-ignore
+    if (import.meta.env.VITE_API_KEY_SECONDARY) keys.push(import.meta.env.VITE_API_KEY_SECONDARY);
+  } catch (e) {
+    // import.meta might not exist in some environments, ignore
+  }
+
+  // 2. PROCESS.ENV Fallback (For Node-like environments or specific builds)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.VITE_API_KEY) keys.push(process.env.VITE_API_KEY);
+      if (process.env.API_KEY) keys.push(process.env.API_KEY);
+    }
+  } catch(e) {}
+  
+  // Deduplicate and filter
+  const distinctKeys = Array.from(new Set(keys)).filter(k => 
+      !!k && 
+      k.length > 10 && 
+      !k.includes("undefined") &&
+      !k.includes("YOUR_API_KEY")
+  );
+  
+  if (distinctKeys.length === 0) {
+      console.warn("⚠️ No API Keys found. Please checking VITE_API_KEY in Hostinger variables.");
+  }
+  
+  return distinctKeys;
+};
+
 const getAI = () => {
-  // Always use process.env.API_KEY as per guidelines.
-  // Assuming process.env.API_KEY is available.
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const keys = getAPIKeys();
+  if (keys.length === 0) {
+      // Absolute fallback for strict process.env systems, though unlikely to work in browser if above failed
+      if (process.env.API_KEY) return new GoogleGenAI({ apiKey: process.env.API_KEY });
+      throw new Error("Configuration Error: No valid API Keys found. Check .env file.");
+  }
+  
+  // Ensure index is within bounds
+  if (currentKeyIndex >= keys.length) currentKeyIndex = 0;
+  
+  const activeKey = keys[currentKeyIndex];
+  return new GoogleGenAI({ apiKey: activeKey });
 };
 
 // --- GLOBAL REQUEST QUEUE (SEMAPHORE) ---
@@ -48,7 +103,7 @@ class RequestQueue {
 
 const globalQueue = new RequestQueue();
 
-// --- RETRY LOGIC ---
+// --- RETRY LOGIC WITH ROTATION ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const withRetry = async <T>(
@@ -76,10 +131,28 @@ const executeWithRetry = async <T>(
         const isQuotaError = status === 429 || status === 503 || message.includes('429') || message.includes('quota') || message.includes('RESOURCE_EXHAUSTED');
 
         if (retries > 0 && isQuotaError) {
-            // Standard backoff for single key
-            console.warn(`⚠️ Rate Limit (429). Retrying in ${baseDelay/1000}s...`);
-            await wait(baseDelay);
-            return executeWithRetry(operation, retries - 1, baseDelay * 2);
+            const keys = getAPIKeys();
+            
+            if (keys.length > 1) {
+                // Rotate Key
+                const prevIndex = currentKeyIndex;
+                currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+                console.warn(`⚠️ Quota Exceeded on Key ${prevIndex}. Rotating to Key ${currentKeyIndex}...`);
+                
+                // If we wrapped around, wait longer
+                if (currentKeyIndex === 0) {
+                    console.warn("🔄 All keys exhausted. Pausing for 5 seconds...");
+                    await wait(5000);
+                }
+                
+                // Recursive call with new key
+                return executeWithRetry(operation, retries - 1, baseDelay);
+            } else {
+                // Standard backoff for single key
+                console.warn(`⚠️ Rate Limit (429). Retrying in ${baseDelay/1000}s...`);
+                await wait(baseDelay);
+                return executeWithRetry(operation, retries - 1, baseDelay * 2);
+            }
         }
         throw error;
     }

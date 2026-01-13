@@ -57,6 +57,18 @@ const AGENTS = [
             if (!res.ok) throw new Error(`Status ${res.status}`);
             return await res.text();
         }
+    },
+    // 3. Jina Reader: Backup for Print View HTML if other proxies fail
+    {
+        name: 'Jina Reader',
+        fetch: async (target: string) => {
+            // Jina returns Markdown by default, but we can extract info from text
+            const res = await fetch(`https://r.jina.ai/${target}`, {
+                headers: { 'X-No-Cache': 'true' }
+            });
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            return await res.text();
+        }
     }
 ];
 
@@ -149,6 +161,7 @@ const parseApiJson = (json: any): Question[] => {
 
 // Parser for the Print View HTML (DOM Parsing)
 const parsePrintHtml = (html: string): Question[] => {
+    // If input is Markdown (Jina), DOMParser handles it gracefully as text content
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     const questions: Question[] = [];
@@ -257,41 +270,40 @@ export const extractWaygroundQA = async (url: string): Promise<{ quiz: Quiz | nu
         // https://quizizz.com/print/quiz/{ID}
         // The print view is simpler HTML, easier to scrape than the full admin SPA.
         debug.steps.push("STEP 3: Attempting Print View Strategy");
-        try {
-            const printUrl = `https://quizizz.com/print/quiz/${quizId}`;
-            // Use AllOrigins for HTML (It's robust for text)
-            const printAgent = AGENTS.find(a => a.name === 'AllOrigins Raw') || AGENTS[1];
-            
-            const htmlText = await printAgent.fetch(printUrl);
-            
-            // Check for blockers
-            if (htmlText.length > 500 && !htmlText.includes("challenge-platform")) {
-                const questions = parsePrintHtml(htmlText);
+        
+        // Loop through remaining agents (AllOrigins, Jina) for Print View
+        const printAgents = [AGENTS[1], AGENTS[2]];
+        
+        for (const agent of printAgents) {
+            try {
+                debug.steps.push(`Attempting Print View via ${agent.name}...`);
+                const printUrl = `https://quizizz.com/print/quiz/${quizId}`;
+                const htmlText = await agent.fetch(printUrl);
                 
-                if (questions.length > 0) {
-                    debug.steps.push(`Print Strategy SUCCESS: ${questions.length} questions`);
-                    finalizeDebug(debug, true);
+                // Check for blockers
+                if (htmlText.length > 500 && !htmlText.includes("challenge-platform")) {
+                    const questions = parsePrintHtml(htmlText);
                     
-                    // Try to grab title from title tag
-                    const titleMatch = htmlText.match(/<title>(.*?)<\/title>/);
-                    const title = titleMatch ? titleMatch[1].replace(" - Quizizz", "") : "Wayground Quiz (Print)";
+                    if (questions.length > 0) {
+                        debug.steps.push(`Print Strategy SUCCESS via ${agent.name}: ${questions.length} questions`);
+                        finalizeDebug(debug, true);
+                        
+                        // Try to grab title from title tag
+                        const titleMatch = htmlText.match(/<title>(.*?)<\/title>/);
+                        const title = titleMatch ? titleMatch[1].replace(" - Quizizz", "") : "Wayground Quiz (Print)";
 
-                    return {
-                        quiz: { title, description: "Extracted via Neural Quiz DOM Parser", questions },
-                        report: createReport(url, "print_dom", questions)
-                    };
+                        return {
+                            quiz: { title, description: "Extracted via Neural Quiz DOM Parser", questions },
+                            report: createReport(url, `print_dom_${agent.name}`, questions)
+                        };
+                    }
+                } else {
+                    debug.steps.push(`Print View Blocked or Empty via ${agent.name}`);
                 }
-            } else {
-                debug.steps.push("Print View Blocked or Empty");
+            } catch (e: any) {
+                debug.steps.push(`Print Strategy FAILED (${agent.name}): ${e.message}`);
             }
-        } catch (e: any) {
-            debug.steps.push(`Print Strategy FAILED: ${e.message}`);
         }
-
-        // --- STRATEGY C: JSON-LD (Last Resort on Input URL) ---
-        // If the user pasted a specific public URL that might have JSON-LD
-        debug.steps.push("STEP 4: Attempting JSON-LD on Input URL");
-        // ... (JSON-LD logic is rarely needed if API/Print fails, usually blocked too)
 
         throw new Error("All strategies failed. The quiz might be private or region-locked.");
 
