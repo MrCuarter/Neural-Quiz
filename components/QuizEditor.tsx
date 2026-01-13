@@ -315,7 +315,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
             const needsEnhance = (!isValid && q.options.length < 2) || (q.options.length > 0 && !q.correctOptionId);
             const isEnhancing = enhancingId === q.id;
 
-            // --- CORRECT ANSWER SUMMARY FOR FOOTER ---
+            // --- CORRECT ANSWER LOGIC UPGRADE ---
+            // Ensure we look at correctOptionIds ARRAY first, fallback to string ID
             const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
                                ? q.correctOptionIds 
                                : (q.correctOptionId ? [q.correctOptionId] : []);
@@ -438,9 +439,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       
                                       {q.options.map((opt, i) => {
                                           const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
-                                          const isSelected = isMulti 
-                                              ? (q.correctOptionIds || []).includes(opt.id)
-                                              : opt.id === q.correctOptionId;
+                                          // CRITICAL FIX: Check correctness via correctOptionIds array, not just the single ID property
+                                          const isSelected = correctIds.includes(opt.id);
 
                                           return (
                                           <div key={opt.id} className={`flex items-center gap-3 bg-black/30 p-2 rounded border transition-colors group-focus-within:border-cyan-500 ${isSelected ? 'border-green-500/50 bg-green-950/10' : 'border-gray-800 hover:border-gray-600'}`}>
@@ -468,8 +468,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               {q.questionType === QUESTION_TYPES.TRUE_FALSE && (
                                   <div className="flex gap-4">
                                       {q.options.slice(0, 2).map((opt) => (
-                                          <button key={opt.id} onClick={() => updateQuestion(q.id, { correctOptionId: opt.id, correctOptionIds: [opt.id] })} className={`flex-1 p-6 rounded border transition-all flex flex-col items-center gap-2 ${opt.id === q.correctOptionId ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-black/30 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                                              {opt.id === q.correctOptionId ? <CheckCircle2 className="w-8 h-8" /> : <Circle className="w-8 h-8" />}
+                                          <button key={opt.id} onClick={() => updateQuestion(q.id, { correctOptionId: opt.id, correctOptionIds: [opt.id] })} className={`flex-1 p-6 rounded border transition-all flex flex-col items-center gap-2 ${correctIds.includes(opt.id) ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-black/30 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                              {correctIds.includes(opt.id) ? <CheckCircle2 className="w-8 h-8" /> : <Circle className="w-8 h-8" />}
                                               <span className="text-xl font-bold">{opt.text}</span>
                                           </button>
                                       ))}

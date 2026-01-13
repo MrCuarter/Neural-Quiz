@@ -6,26 +6,55 @@ import { analyzeGimkitUrl } from "./gimkitService";
 import { extractWaygroundQA } from "./extractors/waygroundQAExtractor"; // NEW IMPORT
 import { UniversalDiscoveryReport, Quiz } from "../types";
 
+// Helper to get Env Variables
+const getEnvVar = (key: string) => {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+            // @ts-ignore
+            return import.meta.env[key];
+        }
+    } catch (e) {}
+    try {
+        if (typeof process !== 'undefined' && process.env && process.env[key]) {
+            return process.env[key];
+        }
+    } catch (e) {}
+    return "";
+};
+
+const getJinaKey = () => getEnvVar('VITE_JINA_API_KEY');
+const getCorsProxyKey = () => getEnvVar('VITE_CORSPROXY_API_KEY');
+
 // ROBUST URL SERVICE & ORCHESTRATOR
 // Solves CORS and SPA Rendering by delegating fetching to specialized external agents.
 
 const AGENTS = [
-    // Agent Alpha: Jina (Renders the page, returns clean Markdown)
-    {
-        name: "Agent Jina (Reader)",
-        getUrl: (target: string) => `https://r.jina.ai/${target}`,
-        headers: { 'X-No-Cache': 'true' }
-    },
-    // Agent Beta: CorsProxy (Raw HTML Tunnel)
-    {
-        name: "Agent Proxy (Tunnel)",
-        getUrl: (target: string) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
-        headers: {}
-    },
-    // Agent Gamma: AllOrigins (JSONP style)
+    // Agent Alpha: AllOrigins (Stable Free Proxy)
     {
         name: "Agent Origins (Backup)",
         getUrl: (target: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
+        headers: {}
+    },
+    // Agent Beta: Jina (Renders the page, returns clean Markdown)
+    {
+        name: "Agent Jina (Reader)",
+        getUrl: (target: string) => `https://r.jina.ai/${target}`,
+        headers: (() => {
+            const h: Record<string, string> = { 'X-No-Cache': 'true' };
+            const k = getJinaKey();
+            if (k) h['Authorization'] = `Bearer ${k}`;
+            return h;
+        })()
+    },
+    // Agent Gamma: CorsProxy (Tunnel) - Demoted due to frequent 403s on free tier
+    {
+        name: "Agent Proxy (Tunnel)",
+        getUrl: (target: string) => {
+            const k = getCorsProxyKey();
+            if (k) return `https://corsproxy.io/?key=${k}&url=${encodeURIComponent(target)}`;
+            return `https://corsproxy.io/?url=${encodeURIComponent(target)}`;
+        },
         headers: {}
     }
 ];
@@ -46,10 +75,9 @@ export const isGimkitUrl = (url: string): boolean => {
 
 export const isWaygroundUrl = (url: string): boolean => {
     const lower = url.toLowerCase();
-    // Support both old Quizizz domain and new Wayground branding
-    // Matches /quiz/ID or /admin/quiz/ID
+    // Support Quizizz/Wayground domains and multiple path types
     return (lower.includes("quizizz.com") || lower.includes("wayground.com")) && 
-           (lower.includes("/quiz/"));
+           (lower.includes("/quiz/") || lower.includes("/print/") || lower.includes("/admin/"));
 };
 
 // ORCHESTRATOR: Routes URL to specific adapter or generic fetcher
@@ -115,7 +143,7 @@ export const fetchUrlContent = async (url: string): Promise<string> => {
                  console.warn(`⚠️ ${agent.name} returned insufficient data.`);
                  continue;
             }
-            if (text.includes("Access Denied") || text.includes("Cloudflare") || text.includes("Just a moment...")) {
+            if (text.includes("Access Denied") || text.includes("Cloudflare") || text.includes("Just a moment...") || text.includes("403 Forbidden")) {
                 console.warn(`🛡️ ${agent.name} was blocked by WAF.`);
                 continue;
             }

@@ -1,7 +1,7 @@
 
 import { Quiz, Question, Option, QUESTION_TYPES, UniversalDiscoveryReport } from "../../types";
 
-// --- GLOBAL DEBUG SETUP ---
+// --- GLOBAL DEBUG TYPE ---
 declare global {
   interface Window {
     NQ_DEBUG: any;
@@ -10,360 +10,460 @@ declare global {
 
 if (typeof window !== 'undefined') {
     window.NQ_DEBUG = window.NQ_DEBUG || {};
-    window.NQ_DEBUG.wayground = window.NQ_DEBUG.wayground || { runs: [] };
+    window.NQ_DEBUG.wayground = window.NQ_DEBUG.wayground || { runs: [], lastRun: null };
 }
 
 const uuid = () => Math.random().toString(36).substring(2, 9);
 
-// --- 1. FETCH AGENTS (Removed corsproxy) ---
+// Helper to get Env Variables
+const getEnvVar = (key: string) => {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+            // @ts-ignore
+            return import.meta.env[key];
+        }
+    } catch (e) {}
+    try {
+        if (typeof process !== 'undefined' && process.env && process.env[key]) {
+            return process.env[key];
+        }
+    } catch (e) {}
+    return "";
+};
+
+const getJinaKey = () => getEnvVar('VITE_JINA_API_KEY');
+const getCorsProxyKey = () => getEnvVar('VITE_CORSPROXY_API_KEY');
+
+// --- FETCH AGENTS LADDER (REORDERED FOR STABILITY) ---
 const AGENTS = [
-    { 
-        id: 'allorigins_raw', 
-        name: 'AllOrigins (Raw)', 
-        url: (target: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
-        type: 'text'
+    // 1. AllOrigins: Currently the most stable free HTML tunnel
+    {
+        name: 'AllOrigins Raw',
+        fetch: async (target: string) => {
+            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            return await res.text();
+        }
     },
-    { 
-        id: 'allorigins_get', 
-        name: 'AllOrigins (Wrapper)', 
-        url: (target: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`,
-        type: 'json_wrapper'
+    {
+        name: 'AllOrigins Get',
+        fetch: async (target: string) => {
+            const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(target)}`);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const data = await res.json();
+            return data.contents;
+        }
     },
-    { 
-        id: 'jina', 
-        name: 'Jina Reader', 
-        url: (target: string) => `https://r.jina.ai/${target}`,
-        type: 'text'
+    // 2. Jina: Premium rendering (Good for JS-heavy sites, but returns MD, so might miss raw JSON scripts)
+    {
+        name: 'Jina Reader',
+        fetch: async (target: string) => {
+            const headers: Record<string, string> = {};
+            const key = getJinaKey();
+            if (key) headers['Authorization'] = `Bearer ${key}`;
+            
+            const res = await fetch(`https://r.jina.ai/${target}`, { headers });
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            return await res.text();
+        }
+    },
+    // 3. CorsProxy: Moved to bottom due to frequent 403s on free tier
+    {
+        name: 'CorsProxy',
+        fetch: async (target: string) => {
+            let proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(target)}`;
+            
+            // If user has a paid key, try to inject it (common format)
+            const key = getCorsProxyKey();
+            if (key) {
+                // Support generic key param injection if the user has a premium service compatible
+                proxyUrl = `https://corsproxy.io/?key=${key}&url=${encodeURIComponent(target)}`;
+            }
+
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`Status ${res.status} (Likely Rate Limited)`);
+            return await res.text();
+        }
     }
 ];
 
-// --- 2. DEEP FINDER ---
+// --- HELPERS ---
 
-interface Candidate {
-    array: any[];
-    score: number;
-    path: string;
-}
+const extractQuizId = (url: string): string | null => {
+    const match = url.match(/([a-f0-9]{24})/);
+    return match ? match[1] : null;
+};
 
-// Heurística simple y efectiva
-const isWaygroundQuestion = (obj: any): boolean => {
-    if (!obj || typeof obj !== 'object') return false;
+const cleanText = (text: string | undefined): string => {
+    if (!text) return "";
+    return text.replace(/<[^>]*>?/gm, '').trim();
+};
+
+const isBlockedByBot = (html: string): boolean => {
+    const lower = html.toLowerCase();
+    return (
+        lower.includes("challenge-platform") ||
+        lower.includes("cloudflare") ||
+        lower.includes("verify you are human") ||
+        lower.includes("access denied") ||
+        lower.includes("403 forbidden")
+    );
+};
+
+// --- STRATEGY 1: JSON-LD PARSING ---
+
+const parseJsonLdContent = (json: any): Question[] => {
+    const questions: Question[] = [];
+    let rawItems = json.hasPart || json.question || [];
     
-    // Check keys presence
-    const hasText = obj.structure?.query?.text || obj.text || obj.question || obj.title;
-    const hasOptions = obj.structure?.options || obj.options || obj.choices || obj.answers;
-
-    return !!(hasText && hasOptions);
-};
-
-const deepFindQuestions = (root: any, path = "", candidates: Candidate[] = [], depth = 0): Candidate[] => {
-    if (depth > 12 || !root) return candidates;
-
-    if (Array.isArray(root)) {
-        let validCount = 0;
-        // Check density of valid questions in array
-        root.forEach(item => { if (isWaygroundQuestion(item)) validCount++; });
-
-        // Score: High density or absolute number
-        if (validCount > 0 && (validCount >= root.length * 0.5 || validCount >= 2)) {
-            candidates.push({
-                array: root,
-                score: validCount * 10,
-                path
-            });
-        }
-        
-        // Recurse into array items (sometimes questions are wrapped or nested)
-        root.forEach((item, i) => deepFindQuestions(item, `${path}[${i}]`, candidates, depth + 1));
-    } else if (typeof root === 'object') {
-        // Optimization: Prioritize 'questions' key
-        if (Array.isArray(root.questions)) {
-             deepFindQuestions(root.questions, `${path}.questions`, candidates, depth + 1);
-        }
-
-        Object.keys(root).forEach(key => {
-            // Optimization: Skip clearly irrelevant large objects
-            if (!['config', 'theme', 'assets', 'locales', 'i18n'].includes(key)) {
-                deepFindQuestions(root[key], `${path}.${key}`, candidates, depth + 1);
-            }
-        });
+    if (!Array.isArray(rawItems) && typeof rawItems === 'object') {
+        rawItems = [rawItems];
     }
-    return candidates;
-};
 
-// --- 3. NORMALIZATION ---
+    rawItems.forEach((item: any) => {
+        if (item['@type'] !== 'Question') return;
 
-const normalizeWaygroundQuestions = (rawQs: any[]): Question[] => {
-    return rawQs.map(q => {
-        // 1. TEXT
-        let text = "Untitled Question";
-        if (q.structure?.query?.text) text = q.structure.query.text;
-        else if (q.text) text = q.text;
-        else if (q.question) text = q.question;
-        
-        // Remove HTML
-        text = text.replace(/<[^>]*>?/gm, '').trim();
-
-        // 2. OPTIONS & CORRECT INDICES
+        const text = cleanText(item.text || "Untitled Question");
         const options: Option[] = [];
-        let correctIndices: number[] = [];
+        const correctOptionIds: string[] = [];
 
-        // Wayground Correctness Logic
-        if (typeof q.structure?.answer === 'number') correctIndices = [q.structure.answer];
-        else if (Array.isArray(q.structure?.answer)) correctIndices = q.structure.answer;
-
-        const rawOpts = q.structure?.options || q.options || q.choices || [];
-        
-        if (Array.isArray(rawOpts)) {
-            rawOpts.forEach((opt: any, idx: number) => {
+        // Process Correct Answer(s) (acceptedAnswer)
+        let accepted = item.acceptedAnswer;
+        if (accepted) {
+            if (!Array.isArray(accepted)) accepted = [accepted];
+            accepted.forEach((ans: any) => {
                 const optId = uuid();
-                let optText = opt.text;
-                // Fallback for media-only options
-                if (!optText && Array.isArray(opt.media)) {
-                    const txtMedia = opt.media.find((m:any) => m.type === 'text');
-                    if (txtMedia) optText = txtMedia.text;
-                }
-                if (!optText) optText = `Option ${idx + 1}`;
-
-                options.push({ id: optId, text: String(optText).trim() });
-
-                // Check boolean flags in option object
-                if (opt.correct || opt.isCorrect) {
-                    if (!correctIndices.includes(idx)) correctIndices.push(idx);
+                const ansText = cleanText(ans.text);
+                if (ansText) {
+                    options.push({ id: optId, text: ansText });
+                    correctOptionIds.push(optId);
                 }
             });
         }
 
-        // Map indices to IDs
-        const correctOptionIds = correctIndices
-            .map(idx => options[idx]?.id)
-            .filter(id => !!id);
+        // Process Distractors (suggestedAnswer)
+        let suggested = item.suggestedAnswer;
+        if (suggested) {
+            if (!Array.isArray(suggested)) suggested = [suggested];
+            suggested.forEach((ans: any) => {
+                const optId = uuid();
+                const ansText = cleanText(ans.text);
+                if (ansText) {
+                    options.push({ id: optId, text: ansText });
+                }
+            });
+        }
 
-        // 3. TYPE
-        let type = QUESTION_TYPES.MULTIPLE_CHOICE;
-        const kind = (q.structure?.kind || q.type || "").toUpperCase();
-        if (kind.includes('BLANK') || kind.includes('FILL')) type = QUESTION_TYPES.FILL_GAP;
-        else if (kind.includes('OPEN')) type = QUESTION_TYPES.OPEN_ENDED;
-        else if (kind.includes('POLL')) type = QUESTION_TYPES.POLL;
-        else if (correctOptionIds.length > 1) type = QUESTION_TYPES.MULTI_SELECT;
+        let qType = QUESTION_TYPES.MULTIPLE_CHOICE;
+        if (correctOptionIds.length > 1) qType = QUESTION_TYPES.MULTI_SELECT;
+        if (item.eduQuestionType === 'Checkbox') qType = QUESTION_TYPES.MULTI_SELECT;
 
-        // 4. FLAGS
-        // Needs Enhance if < 2 options (unless Open/Poll) OR no correct answer found (unless Open/Poll)
-        const needsEnhanceAI = (options.length < 2 && type !== QUESTION_TYPES.OPEN_ENDED && type !== QUESTION_TYPES.POLL) || 
-                               (correctOptionIds.length === 0 && type !== QUESTION_TYPES.POLL && type !== QUESTION_TYPES.OPEN_ENDED);
-
-        return {
+        questions.push({
             id: uuid(),
             text,
             options,
             correctOptionId: correctOptionIds[0] || "",
             correctOptionIds,
-            questionType: type,
-            timeLimit: q.time ? Math.round(q.time/1000) : 30,
-            feedback: q.structure?.explanation?.text || "",
-            imageUrl: "", // Explicitly ignored
+            imageUrl: "", // Explicitly ignored per requirements
+            timeLimit: 30,
+            questionType: qType,
             reconstructed: false,
-            needsEnhanceAI,
-            enhanceReason: needsEnhanceAI ? "wayground_missing_data" : undefined
-        };
+            sourceEvidence: "JSON-LD"
+        });
     });
+
+    return questions;
+};
+
+// --- STRATEGY 2: HYDRATION DATA PARSING (__NEXT_DATA__) ---
+
+const parseHydrationData = (json: any): Question[] => {
+    // Traverse to find 'questions' array
+    const questions: Question[] = [];
+    
+    // Attempt to locate the main quiz object in props
+    let rawQuestions: any[] = [];
+    if (json.props?.pageProps?.quiz?.questions) rawQuestions = json.props.pageProps.quiz.questions;
+    else if (json.quiz?.questions) rawQuestions = json.quiz.questions;
+    
+    if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) return [];
+
+    rawQuestions.forEach((q: any) => {
+        // Text is often in structure.query.text
+        const text = cleanText(q.structure?.query?.text || q.text);
+        
+        const options: Option[] = [];
+        const correctOptionIds: string[] = [];
+
+        // Options logic
+        const rawOpts = q.structure?.options || q.options || [];
+        
+        // Correctness logic (indices or boolean)
+        let correctIndices: number[] = [];
+        const answer = q.structure?.answer;
+        if (typeof answer === 'number') correctIndices = [answer];
+        else if (Array.isArray(answer)) correctIndices = answer;
+
+        if (Array.isArray(rawOpts)) {
+            rawOpts.forEach((opt: any, idx: number) => {
+                const optId = uuid();
+                const optText = cleanText(opt.text || (opt.media && opt.media[0]?.text)); // Sometimes text is inside media array
+                
+                if (optText) {
+                    options.push({ id: optId, text: optText });
+                    if (opt.correct || correctIndices.includes(idx)) {
+                        correctOptionIds.push(optId);
+                    }
+                }
+            });
+        }
+
+        let qType = QUESTION_TYPES.MULTIPLE_CHOICE;
+        if (q.type === 'BLANK' || q.structure?.kind === 'BLANK') qType = QUESTION_TYPES.FILL_GAP;
+        else if (q.type === 'POLL') qType = QUESTION_TYPES.POLL;
+        else if (q.type === 'OPEN') qType = QUESTION_TYPES.OPEN_ENDED;
+        else if (correctOptionIds.length > 1) qType = QUESTION_TYPES.MULTI_SELECT;
+
+        questions.push({
+            id: uuid(),
+            text,
+            options,
+            correctOptionId: correctOptionIds[0] || "",
+            correctOptionIds,
+            imageUrl: "", // Ignored
+            timeLimit: q.time ? Math.round(q.time / 1000) : 30,
+            questionType: qType,
+            feedback: cleanText(q.structure?.explain?.text), // Explanation extraction
+            reconstructed: false,
+            sourceEvidence: "Hydration Data"
+        });
+    });
+
+    return questions;
+};
+
+// --- STRATEGY 3: DOM PARSING (HTML FALLBACK) ---
+
+const parseHtmlDom = (html: string): Question[] => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const questions: Question[] = [];
+
+    // Selectors for typical quizizz/wayground public/print pages
+    // Note: These classes are heuristic based on common CSS frameworks used in these sites
+    const cardSelectors = ['.question-card', '.quiz-question', '[data-testid="question-card"]'];
+    let cards = doc.querySelectorAll(cardSelectors.join(','));
+    
+    // If no cards found, try generic list items if it looks like a print view
+    if (cards.length === 0) {
+        cards = doc.querySelectorAll('.print-question');
+    }
+
+    cards.forEach((card) => {
+        // Text Extraction
+        const textEl = card.querySelector('.question-text, .query-text, p');
+        const text = cleanText(textEl?.textContent || "");
+        if (!text) return;
+
+        const options: Option[] = [];
+        const correctOptionIds: string[] = [];
+
+        // Option Extraction
+        const optEls = card.querySelectorAll('.answer-option, .option-row, li');
+        optEls.forEach((optEl) => {
+            const optText = cleanText(optEl.textContent || "");
+            if (!optText) return;
+
+            const id = uuid();
+            options.push({ id, text: optText });
+
+            // Semantic Analysis for Correctness in HTML
+            // Check for specific classes or icons
+            const htmlContent = optEl.outerHTML;
+            const isCorrect = 
+                optEl.classList.contains('correct') || 
+                optEl.classList.contains('correct-answer') || 
+                htmlContent.includes('fa-check') || 
+                htmlContent.includes('text-green') ||
+                htmlContent.includes('color: green'); // Inline style check
+
+            if (isCorrect) correctOptionIds.push(id);
+        });
+
+        // Time Limit Extraction (often "30s" or similar text)
+        let timeLimit = 30;
+        const metaText = card.textContent || "";
+        const timeMatch = metaText.match(/(\d+)\s*(s|sec|seconds)/);
+        if (timeMatch) timeLimit = parseInt(timeMatch[1]);
+
+        questions.push({
+            id: uuid(),
+            text,
+            options,
+            correctOptionId: correctOptionIds[0] || "",
+            correctOptionIds,
+            imageUrl: "", // Ignored
+            timeLimit,
+            questionType: correctOptionIds.length > 1 ? QUESTION_TYPES.MULTI_SELECT : QUESTION_TYPES.MULTIPLE_CHOICE,
+            reconstructed: true, // Marked as reconstructed since it's from DOM
+            sourceEvidence: "DOM Parser"
+        });
+    });
+
+    return questions;
 };
 
 // --- MAIN EXTRACTOR ---
 
 export const extractWaygroundQA = async (url: string): Promise<{ quiz: Quiz | null, report: UniversalDiscoveryReport }> => {
     const runId = uuid();
+    const ts = Date.now();
     
-    // DEBUG STATE
     const debug: any = {
+        ts,
         runId,
         inputUrl: url,
-        attempts: [],
-        winnerAttemptIndex: -1,
-        winnerPreview2kb: "",
-        parse: {
-            foundNextData: false,
-            nextDataBytes: 0,
-            jsonScriptCount: 0,
-            candidateJsonBytes: 0,
-            methodsTried: []
-        },
-        extracted: {
-            qCount: 0,
-            sampleQ1: null
-        },
-        errors: []
+        steps: [],
+        error: null
     };
 
-    let winnerText = "";
-    let fetchSuccess = false;
+    let html = "";
 
-    // 1. FETCH LADDER
-    for (let i = 0; i < AGENTS.length; i++) {
-        const agent = AGENTS[i];
-        const attemptLog: any = {
-            source: agent.name,
-            targetUrl: agent.url(url),
-            status: 0,
-            ok: false,
-            bytes: 0,
-            snippet200: ""
-        };
-
-        try {
-            const res = await fetch(attemptLog.targetUrl);
-            attemptLog.status = res.status;
-            attemptLog.contentType = res.headers.get('content-type');
-            
-            if (res.ok) {
-                let text = await res.text();
-                
-                // Handle JSON Wrapper
-                if (agent.type === 'json_wrapper') {
-                    try {
-                        const json = JSON.parse(text);
-                        if (json.contents) text = json.contents;
-                    } catch(e) { /* wrapper parse error */ }
-                }
-
-                attemptLog.bytes = text.length;
-                attemptLog.snippet200 = text.substring(0, 200);
-
-                // Validation: Must be substantive content
-                if (text.length > 3000 && !text.includes("Challenge") && !text.includes("Just a moment")) {
-                    attemptLog.ok = true;
-                    winnerText = text;
-                    debug.winnerAttemptIndex = i;
-                    debug.winnerPreview2kb = text.substring(0, 2000);
-                    fetchSuccess = true;
-                    debug.attempts.push(attemptLog);
-                    break; // Winner found, stop ladder
-                }
-            }
-        } catch (e: any) {
-            attemptLog.error = e.message;
-        }
-        debug.attempts.push(attemptLog);
-    }
-
-    if (!fetchSuccess) {
-        debug.errors.push("fetch_blocked_or_empty");
-        finalizeDebug(debug);
-        return { 
-            quiz: null, 
-            report: makeReport(debug, url, false) 
-        };
-    }
-
-    // 2. PARSING
-    let candidates: Candidate[] = [];
-    const winnerTrimmed = winnerText.trim();
-
-    // Strategy A: Direct JSON
-    if (winnerTrimmed.startsWith('{') || winnerTrimmed.startsWith('[')) {
-        debug.parse.methodsTried.push("direct_json");
-        try {
-            const json = JSON.parse(winnerTrimmed);
-            candidates = deepFindQuestions(json, "root_json");
-        } catch(e) { debug.errors.push("direct_json_parse_fail"); }
-    } 
-    // Strategy B: HTML Embedding
-    else {
-        debug.parse.methodsTried.push("html_embedding");
+    try {
+        debug.steps.push("STEP 1: ID Extraction");
+        const quizId = extractQuizId(url);
+        // If ID found, construct canonical URL to ensure best chance of JSON-LD
+        const targetUrl = quizId ? `https://quizizz.com/admin/quiz/${quizId}` : url;
         
-        // B1. __NEXT_DATA__
-        const nextRegex = /<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/;
-        const nextMatch = winnerText.match(nextRegex);
-        if (nextMatch && nextMatch[1]) {
-            debug.parse.foundNextData = true;
-            debug.parse.nextDataBytes = nextMatch[1].length;
+        let usedAgent = "";
+
+        debug.steps.push("STEP 2: Fetching via Agent Ladder");
+
+        // FETCH LOOP
+        for (const agent of AGENTS) {
             try {
-                const json = JSON.parse(nextMatch[1]);
-                candidates = [...candidates, ...deepFindQuestions(json, "next_data")];
-            } catch(e) { debug.errors.push("next_data_parse_fail"); }
-        }
-
-        // B2. Generic Scripts (Fallback)
-        // Regex to capture script content, conservatively
-        const scriptRegex = /<script[^>]*>(.*?)<\/script>/gs;
-        let m;
-        while ((m = scriptRegex.exec(winnerText)) !== null) {
-            const content = m[1];
-            // Only try parsing huge scripts that look promising
-            if (content.length > 5000 && (
-                content.includes("questions") || 
-                content.includes("structure") || 
-                content.includes("dehydratedState") ||
-                content.includes("initialState")
-            )) {
-                debug.parse.jsonScriptCount++;
-                // Try extracting outermost JSON object
-                const firstBrace = content.indexOf('{');
-                const lastBrace = content.lastIndexOf('}');
-                if (firstBrace > -1 && lastBrace > firstBrace) {
-                    const jsonStr = content.substring(firstBrace, lastBrace + 1);
-                    try {
-                        const json = JSON.parse(jsonStr);
-                        debug.parse.candidateJsonBytes += jsonStr.length;
-                        candidates = [...candidates, ...deepFindQuestions(json, "generic_script")];
-                    } catch(e) {}
+                const content = await agent.fetch(targetUrl);
+                if (content && content.length > 500) {
+                    if (isBlockedByBot(content)) {
+                        debug.steps.push(`Agent ${agent.name} BLOCKED`);
+                        continue;
+                    }
+                    html = content;
+                    usedAgent = agent.name;
+                    debug.steps.push(`Agent ${agent.name} SUCCESS`);
+                    break;
                 }
+            } catch (e: any) {
+                debug.steps.push(`Agent ${agent.name} FAILED: ${e.message}`);
             }
         }
-    }
 
-    // 3. SELECTION
-    candidates.sort((a, b) => b.score - a.score);
-    
-    if (candidates.length > 0) {
-        const best = candidates[0];
-        const questions = normalizeWaygroundQuestions(best.array);
-        
-        debug.extracted.qCount = questions.length;
-        if (questions.length > 0) debug.extracted.sampleQ1 = questions[0];
+        if (!html) {
+            throw new Error("All fetch agents failed or were blocked. Try opening the quiz in Incognito or use the 'Paste' tab.");
+        }
 
-        finalizeDebug(debug);
+        // PARSING PIPELINE
+        let bestQuestions: Question[] = [];
+        let methodUsed = `fetch_${usedAgent}`;
+
+        // 1. JSON-LD Strategy (Most Reliable for SEO data)
+        debug.steps.push("STEP 3: Attempting JSON-LD");
+        const jsonLdRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+        let match;
+        while ((match = jsonLdRegex.exec(html)) !== null) {
+            try {
+                const json = JSON.parse(match[1]);
+                const qs = parseJsonLdContent(json);
+                if (qs.length > bestQuestions.length) {
+                    bestQuestions = qs;
+                    methodUsed += "_json_ld";
+                }
+            } catch (e) {}
+        }
+
+        // 2. Hydration Strategy (__NEXT_DATA__)
+        if (bestQuestions.length === 0) {
+            debug.steps.push("STEP 4: Attempting Hydration Data");
+            const hydrationRegex = /<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/;
+            const hydMatch = html.match(hydrationRegex);
+            if (hydMatch && hydMatch[1]) {
+                try {
+                    const json = JSON.parse(hydMatch[1]);
+                    const qs = parseHydrationData(json);
+                    if (qs.length > 0) {
+                        bestQuestions = qs;
+                        methodUsed += "_hydration";
+                    }
+                } catch (e) {}
+            }
+        }
+
+        // 3. DOM Parser Strategy (Fallback for Print/Static views)
+        if (bestQuestions.length === 0) {
+            debug.steps.push("STEP 5: Attempting DOM Parsing");
+            const qs = parseHtmlDom(html);
+            if (qs.length > 0) {
+                bestQuestions = qs;
+                methodUsed += "_dom";
+            }
+        }
+
+        if (bestQuestions.length === 0) {
+            throw new Error("No questions found via any strategy.");
+        }
+
+        // Finalize
+        const resultQuiz: Quiz = {
+            title: "Wayground/Quizizz Quiz", // Title extraction could be improved but focusing on Qs
+            description: "Extracted via Neural Quiz",
+            questions: bestQuestions
+        };
+
+        finalizeDebug(debug, true);
 
         return {
-            quiz: {
-                title: "Wayground Quiz",
-                description: "Imported via Wayground QA",
-                questions
-            },
-            report: makeReport(debug, url, true)
+            quiz: resultQuiz,
+            report: {
+                platform: 'wayground',
+                originalUrl: url,
+                methodUsed,
+                blockedByBot: false,
+                parseOk: true,
+                questionsFound: bestQuestions.length,
+                hasChoices: true,
+                hasCorrectFlags: bestQuestions.some(q => q.correctOptionIds && q.correctOptionIds.length > 0),
+                hasImages: false, // Disabled by design
+                attempts: [],
+                missing: { options: false, correct: false, image: false, reasons: [] }
+            }
+        };
+
+    } catch (e: any) {
+        debug.error = e.message;
+        finalizeDebug(debug, false);
+
+        return {
+            quiz: null,
+            report: {
+                platform: 'wayground',
+                originalUrl: url,
+                methodUsed: 'failed',
+                blockedByBot: html?.includes("challenge") || false,
+                parseOk: false,
+                questionsFound: 0,
+                hasChoices: false, hasCorrectFlags: false, hasImages: false,
+                attempts: [],
+                missing: { options: true, correct: true, image: true, reasons: [e.message] }
+            }
         };
     }
-
-    // If we are here, we parsed content but found no questions
-    debug.errors.push("NO_QUESTIONS_FOUND");
-    finalizeDebug(debug);
-    return { quiz: null, report: makeReport(debug, url, false) };
 };
 
-// HELPERS
-const finalizeDebug = (debug: any) => {
-    window.NQ_DEBUG.wayground.lastRun = debug;
-    window.NQ_DEBUG.wayground.runs.push(debug);
-    console.log("WAYGROUND_QA_LASTRUN", debug);
-};
-
-const makeReport = (debug: any, url: string, success: boolean): UniversalDiscoveryReport => {
-    return {
-        platform: 'wayground',
-        originalUrl: url,
-        methodUsed: debug.extracted.qCount > 0 ? 'deep_find_success' : 'failed',
-        blockedByBot: debug.errors.includes("fetch_blocked_or_empty"),
-        parseOk: success,
-        attempts: debug.attempts,
-        questionsFound: debug.extracted.qCount,
-        hasChoices: debug.extracted.qCount > 0,
-        hasCorrectFlags: debug.extracted.qCount > 0,
-        hasImages: false,
-        missing: {
-            options: false,
-            correct: false,
-            image: true,
-            reasons: debug.errors
-        }
-    };
+const finalizeDebug = (debug: any, success: boolean) => {
+    if (window.NQ_DEBUG && window.NQ_DEBUG.wayground) {
+        window.NQ_DEBUG.wayground.lastRun = { ...debug, success };
+        window.NQ_DEBUG.wayground.runs.push({ ...debug, success });
+        console.log("WAYGROUND_EXTRACTOR_RUN", debug);
+    }
 };
