@@ -65,7 +65,7 @@ const questionSchema: Schema = {
     },
     correctAnswerIndex: { type: Type.INTEGER, description: "Index of correct option. 0 for Order/FillGap." },
     correctAnswerIndices: { type: Type.ARRAY, items: { type: Type.INTEGER } },
-    feedback: { type: Type.STRING },
+    feedback: { type: Type.STRING, description: "ONLY include if explicitly present in source. Otherwise empty." },
     type: { type: Type.STRING },
     imageUrl: { type: Type.STRING, description: "URL of the image if present." },
     
@@ -282,7 +282,7 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
       contents.push({ text: "Extract questions from this image." });
     }
     
-    const prompt = `You are a Quiz Reverse-Engineering Engine.
+    const prompt = `You are a Quiz Data Extraction Engine.
     Output Language: ${language}
     Your task is NOT to read the page like a human.
     Your task is to reconstruct the internal quiz data model used by the platform.
@@ -302,7 +302,14 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
     Detect 'Multi-Select' if multiple answers are correct.
     Detect 'Order' questions.
     Populate the 'sourceEvidence' field explaining where you found the data.
-    Populate 'imageReconstruction' with 'direct', 'partial' (if you built the URL), or 'none'.`;
+    Populate 'imageReconstruction' with 'direct', 'partial' (if you built the URL), or 'none'.
+    
+    CRITICAL FEEDBACK RULE:
+    - Field 'feedback': LEAVE EMPTY ("") unless the source text specifically contains an explicit explanation block (e.g. "Explanation:", "Rational:", "Why is this correct?").
+    - DO NOT invent educational context.
+    - DO NOT explain why an answer is correct using your own knowledge.
+    - DO NOT mention grade levels or curriculum alignment.
+    - If no explanation text is found in source, 'feedback' MUST be empty string.`;
 
     contents.push({ text: prompt });
 

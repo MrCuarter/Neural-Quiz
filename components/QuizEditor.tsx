@@ -315,8 +315,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
             const needsEnhance = (!isValid && q.options.length < 2) || (q.options.length > 0 && !q.correctOptionId);
             const isEnhancing = enhancingId === q.id;
 
-            // --- CORRECT ANSWER LOGIC UPGRADE ---
-            // Ensure we look at correctOptionIds ARRAY first, fallback to string ID
+            // --- CORRECT ANSWER LOGIC ---
             const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
                                ? q.correctOptionIds 
                                : (q.correctOptionId ? [q.correctOptionId] : []);
@@ -379,6 +378,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               </div>
                           )}
 
+                          {/* TYPE & TIMER ROW */}
                           <div className="flex flex-col md:flex-row gap-4">
                               <div className="flex-1">
                                   <CyberSelect label={t.q_type_label} options={allowedTypes.map(type => ({ value: type, label: getTranslatedType(type) }))} value={q.questionType || QUESTION_TYPES.MULTIPLE_CHOICE} onChange={(e) => handleTypeChange(q.id, e.target.value)} />
@@ -389,41 +389,51 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               </div>
                           </div>
 
+                          {/* QUESTION TEXT */}
                           <div className="space-y-2">
                               <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
-                              
-                              <div className="flex flex-col gap-2">
-                                <div className="flex items-center gap-2 bg-gray-900/50 p-2 rounded border border-gray-800 focus-within:border-cyan-500/50 transition-colors">
+                          </div>
+
+                          {/* IMAGE URL & PREVIEW (MOVED HERE FOR VISIBILITY) */}
+                          <div className="bg-black/20 p-3 rounded border border-gray-800/50">
+                                <div className="flex items-center gap-2 mb-2">
                                     <LinkIcon className="w-4 h-4 text-gray-500" />
-                                    <input type="text" placeholder={t.media_url} value={q.imageUrl || ''} onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })} className="bg-transparent w-full text-xs font-mono text-gray-400 focus:outline-none focus:text-cyan-300" />
+                                    <span className="text-xs font-mono text-gray-500 uppercase">{t.media_url}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="https://..." 
+                                        value={q.imageUrl || ''} 
+                                        onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })} 
+                                        className="bg-black/40 border border-gray-700 p-2 rounded w-full text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500" 
+                                    />
                                 </div>
                                 
                                 {q.imageUrl && (
-                                    <div className="relative mt-2 group w-full md:w-48 aspect-video bg-black/50 rounded border border-gray-700 overflow-hidden self-start">
-                                        <div className="absolute inset-0 flex items-center justify-center text-gray-600">
-                                            <ImageIcon className="w-6 h-6" />
-                                        </div>
+                                    <div className="mt-3 relative w-full h-48 bg-black/50 rounded border border-gray-700 overflow-hidden flex items-center justify-center">
                                         <img 
                                             src={q.imageUrl} 
                                             alt="Preview" 
-                                            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+                                            className="max-h-full max-w-full object-contain"
                                             onError={(e) => {
-                                                (e.target as HTMLImageElement).style.opacity = '0';
+                                                (e.target as HTMLImageElement).style.opacity = '0.3';
                                             }}
                                         />
-                                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="absolute top-2 right-2">
                                             <button 
                                                 onClick={() => updateQuestion(q.id, { imageUrl: '' })}
-                                                className="bg-red-900/80 text-red-200 p-1 rounded-full hover:bg-red-700"
+                                                className="bg-red-900/80 text-white p-1 rounded hover:bg-red-600 transition-colors"
+                                                title="Remove Image"
                                             >
                                                 <XCircle className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
                                 )}
-                              </div>
                           </div>
 
+                          {/* OPTIONS AREA */}
                           <div className="bg-black/20 p-4 rounded border border-gray-800/50">
                               {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || !q.questionType) && (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -439,7 +449,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       
                                       {q.options.map((opt, i) => {
                                           const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
-                                          // CRITICAL FIX: Check correctness via correctOptionIds array, not just the single ID property
                                           const isSelected = correctIds.includes(opt.id);
 
                                           return (
@@ -522,7 +531,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               )}
                           </div>
                           
-                          {/* VISUAL FOOTER FOR CORRECT ANSWER (NEW) */}
+                          {/* VISUAL FOOTER FOR CORRECT ANSWER */}
                           {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE) && (
                             <div className="mt-4 pt-4 border-t border-gray-800 flex items-start gap-2 text-xs font-mono">
                                 <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${hasExposedCorrect ? 'text-green-500' : 'text-red-500'}`} />
