@@ -154,7 +154,6 @@ const generateKahootXLSX = (quiz: Quiz, title: string) => {
 // BLOOKET EXPORT (UPDATED TO OFFICIAL TEMPLATE STRUCTURE WITH IMAGE SUPPORT)
 const generateBlooketCSV = (quiz: Quiz, title: string) => {
     // Row 1: Official Template Header (Now 9 columns)
-    // 1 header cell + 8 empty cells = 9 columns
     const row1 = ['"Blooket\nImport Template"', "", "", "", "", "", "", "", ""].join(",");
 
     // Row 2: Strict Column Headers
@@ -172,20 +171,16 @@ const generateBlooketCSV = (quiz: Quiz, title: string) => {
 
     // Data Rows
     const rows = quiz.questions.map((q, index) => {
-        // Options padding (Blooket template shows 4 answer columns)
         const opts = q.options.slice(0, 4);
-        
-        // Calculate 1-based indices for correct answers
         const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
             ? q.correctOptionIds 
             : (q.correctOptionId ? [q.correctOptionId] : []);
         
-        // Map correct ID to its 1-based index in the sliced options array
         let correctIndices = opts
             .map((o, i) => correctIds.includes(o.id) ? i + 1 : null)
             .filter(i => i !== null);
             
-        if (correctIndices.length === 0 && opts.length > 0) correctIndices = [1]; // Fallback to first if none marked
+        if (correctIndices.length === 0 && opts.length > 0) correctIndices = [1];
 
         return [
             String(index + 1),
@@ -195,13 +190,84 @@ const generateBlooketCSV = (quiz: Quiz, title: string) => {
             escapeCSV(opts[2]?.text || ""),
             escapeCSV(opts[3]?.text || ""),
             String(q.timeLimit || 20),
-            escapeCSV(correctIndices.join(",")), // "1,4"
+            escapeCSV(correctIndices.join(",")),
             escapeCSV(q.imageUrl || "")
         ].join(",");
     }).join("\n");
 
     return { 
         filename: `${title}_blooket.csv`, 
+        content: `${row1}\n${headers}\n${rows}`, 
+        mimeType: 'text/csv' 
+    };
+};
+
+// GIMKIT CLASSIC (Multiple Choice)
+const generateGimkitClassicCSV = (quiz: Quiz, title: string) => {
+    // Row 1: "Gimkit Spreadsheet Import Template" in first column, total 5 cols
+    const row1 = "Gimkit Spreadsheet Import Template,,,,";
+    
+    // Row 2: Headers
+    const headers = [
+        "Question",
+        "Correct Answer",
+        "Incorrect Answer 1",
+        "Incorrect Answer 2 (Optional)",
+        "Incorrect Answer 3 (Optional)"
+    ].map(escapeCSV).join(",");
+
+    const rows = quiz.questions.map(q => {
+        // Find correct option
+        const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+            ? q.correctOptionIds 
+            : (q.correctOptionId ? [q.correctOptionId] : []);
+        
+        const correctOption = q.options.find(o => correctIds.includes(o.id));
+        const incorrectOptions = q.options.filter(o => !correctIds.includes(o.id));
+
+        return [
+            escapeCSV(q.text),
+            escapeCSV(correctOption?.text || q.options[0]?.text || ""), // Fallback to first if no correct marked
+            escapeCSV(incorrectOptions[0]?.text || ""),
+            escapeCSV(incorrectOptions[1]?.text || ""),
+            escapeCSV(incorrectOptions[2]?.text || "")
+        ].join(",");
+    }).join("\n");
+
+    return { 
+        filename: `${title}_gimkit_classic.csv`, 
+        content: `${row1}\n${headers}\n${rows}`, 
+        mimeType: 'text/csv' 
+    };
+};
+
+// GIMKIT TEXT (Short Answer)
+const generateGimkitTextCSV = (quiz: Quiz, title: string) => {
+    // Row 1: "Gimkit Spreadsheet Import Template 2" in first column, total 2 cols
+    const row1 = "Gimkit Spreadsheet Import Template 2,";
+    
+    // Row 2: Headers
+    const headers = [
+        "Question",
+        "Correct Answer"
+    ].map(escapeCSV).join(",");
+
+    const rows = quiz.questions.map(q => {
+        const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+            ? q.correctOptionIds 
+            : (q.correctOptionId ? [q.correctOptionId] : []);
+        
+        // Use first correct option found, or first available option
+        const correctOption = q.options.find(o => correctIds.includes(o.id));
+
+        return [
+            escapeCSV(q.text),
+            escapeCSV(correctOption?.text || q.options[0]?.text || "")
+        ].join(",");
+    }).join("\n");
+
+    return { 
+        filename: `${title}_gimkit_text.csv`, 
         content: `${row1}\n${headers}\n${rows}`, 
         mimeType: 'text/csv' 
     };
@@ -229,8 +295,6 @@ const generateWaygroundXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
 const generateQuizalizeCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t); // Quizalize might need adjustment if it differs from Blooket, but kept for now.
 const generateIdoceoXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
 const generatePlickers = (q:Quiz, t:string) => generateWordwall(q,t);
-const generateGimkitClassicCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t); // Gimkit accepts Blooket format
-const generateGimkitTextCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t);
 const generateFlippityXLSX = (q:Quiz, t:string, o:any) => generateKahootXLSX(q,t);
 const generateSandbox = (q:Quiz, t:string) => generateWordwall(q,t);
 const generateWooclapXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
