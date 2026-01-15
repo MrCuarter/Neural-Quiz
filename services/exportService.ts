@@ -14,7 +14,7 @@ export const exportQuiz = (quiz: Quiz, format: ExportFormat, options?: any): Gen
     case ExportFormat.KAHOOT: return generateKahootXLSX(quiz, sanitizedTitle);
     case ExportFormat.WAYGROUND: return generateWaygroundXLSX(quiz, sanitizedTitle);
     case ExportFormat.SOCRATIVE: return generateSocrativeXLSX(quiz, sanitizedTitle);
-    case ExportFormat.QUIZALIZE: return generateQuizalizeCSV(quiz, sanitizedTitle);
+    case ExportFormat.QUIZALIZE: return generateQuizalizeXLSX(quiz, sanitizedTitle);
     case ExportFormat.IDOCEO: return generateIdoceoXLSX(quiz, sanitizedTitle);
     case ExportFormat.PLICKERS: return generatePlickers(quiz, sanitizedTitle);
     case ExportFormat.BAAMBOOZLE: const baam = generateKahootXLSX(quiz, sanitizedTitle); return { ...baam, filename: `${sanitizedTitle}_baamboozle.xlsx` };
@@ -202,6 +202,66 @@ const generateBlooketCSV = (quiz: Quiz, title: string) => {
     };
 };
 
+// QUIZALIZE EXPORT (XLSX Format with Questions and Meta sheets)
+const generateQuizalizeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
+    // Sheet 1: Questions
+    const headersQ = ["QUESTION", "A", "B", "C", "D", "CORRECT", "FIXED_ORDER", "TIME_LIMIT"];
+    const dataQ: any[][] = [headersQ];
+
+    quiz.questions.forEach(q => {
+        // 1. Prepare options (max 4)
+        const opts = q.options.slice(0, 4);
+        const a = opts[0]?.text || "";
+        const b = opts[1]?.text || "";
+        const c = opts[2]?.text || "";
+        const d = opts[3]?.text || "";
+
+        // 2. Determine Correct Letter (A, B, C, D)
+        let correctLetter = "A";
+        const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+            ? q.correctOptionIds 
+            : (q.correctOptionId ? [q.correctOptionId] : []);
+        
+        const correctIdx = opts.findIndex(o => correctIds.includes(o.id));
+        if (correctIdx !== -1) {
+            correctLetter = String.fromCharCode(65 + correctIdx); // 0->A, 1->B...
+        }
+
+        // 3. Construct Row
+        dataQ.push([
+            q.text,
+            a, b, c, d,
+            correctLetter,
+            false, // FIXED_ORDER default to false
+            q.timeLimit || 30
+        ]);
+    });
+
+    const wsQ = XLSX.utils.aoa_to_sheet(dataQ);
+
+    // Sheet 2: Meta
+    const headersMeta = ["QUIZ_NAME", "USER_EMAIL"];
+    // Fallback title logic as requested
+    const finalTitle = quiz.title && quiz.title.trim() !== "" ? quiz.title : "Importado con Neural Quiz";
+    const dataMeta: any[][] = [
+        headersMeta,
+        [finalTitle, "hola@mistercuarter.es"]
+    ];
+    
+    const wsMeta = XLSX.utils.aoa_to_sheet(dataMeta);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsQ, "Questions");
+    XLSX.utils.book_append_sheet(wb, wsMeta, "Meta");
+    
+    return { 
+        filename: `${title}_quizalize.xlsx`, 
+        content: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), 
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+        isBase64: true 
+    };
+};
+
 // GIMKIT CLASSIC (Multiple Choice)
 const generateGimkitClassicCSV = (quiz: Quiz, title: string) => {
     // Row 1: "Gimkit Spreadsheet Import Template" in first column, total 5 cols
@@ -273,26 +333,129 @@ const generateGimkitTextCSV = (quiz: Quiz, title: string) => {
     };
 };
 
-const generateSocrativeXLSX = (quiz: Quiz, title: string) => {
-    const data = [["Quiz Name:", quiz.title],["Question","Answer A","Answer B","Answer C","Answer D","Answer E","Correct","Explanation"]];
+// SOCRATIVE EXPORT (UPDATED to Official Template)
+const generateSocrativeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
+    // 1. Define Fixed Header Structure
+    const data: any[][] = [];
+
+    // Row 1: Instructions
+    data.push([
+        "Instructions:", 
+        "Please fill in the below quiz according to the 5 steps below. You may then import the quiz into your Socrative account by selecting \"My Quizzes\" --> \"Import Quiz\" --> and selecting the relevant quiz to import. Please use only alphanumeric characters in the template. You can use the 'Example Sheet' as a reference."
+    ]);
+
+    // Row 2: Empty
+    data.push([]);
+
+    // Row 3: Quiz Name
+    data.push(["1. Quiz Name:", quiz.title]);
+
+    // Row 4: Empty
+    data.push([]);
+
+    // Row 5: Helper Headers (Contextual)
+    // Structure spans 13 columns.
+    // Indexes: 0..12.
+    const row5 = new Array(13).fill("");
+    row5[2] = "4. If you selected multiple choice question, enter answers below each column:";
+    row5[7] = "5. Optional (Choose correct answer - you may leave this blank, or choose one or more correct answers. Students must select all the correct answers to be scored correct.)";
+    data.push(row5);
+
+    // Row 6: Main Headers
+    const row6 = [
+        "2. Question Type:",
+        "3. Question:",
+        "Answer A:",
+        "Answer B:",
+        "Answer C:",
+        "Answer D:",
+        "Answer E:",
+        "Correct Answer", // Col H (index 7)
+        "Correct Answer", // Col I (index 8)
+        "Correct Answer", // Col J (index 9)
+        "Correct Answer", // Col K (index 10)
+        "Correct Answer", // Col L (index 11)
+        "6. Explanation (Optional):" // Col M (index 12)
+    ];
+    data.push(row6);
+
+    // 2. Data Rows
     quiz.questions.forEach(q => {
-        const row = [q.text];
-        q.options.slice(0,5).forEach(o => row.push(o.text));
-        while(row.length < 6) row.push("");
-        const cIdx = q.options.findIndex(o => o.id === q.correctOptionId);
-        row.push(cIdx !== -1 ? String.fromCharCode(65+cIdx) : "");
-        row.push(q.feedback || "");
+        const row = new Array(13).fill("");
+        
+        // Determine Type
+        let socrativeType = "multiple choice"; // Default
+        const qTypeLower = (q.questionType || "").toLowerCase();
+        
+        if (qTypeLower.includes("true") || qTypeLower.includes("verdadero")) socrativeType = "true/false";
+        else if (qTypeLower.includes("open") || qTypeLower.includes("short") || qTypeLower.includes("fill")) socrativeType = "open-ended";
+        
+        row[0] = socrativeType;
+        row[1] = q.text;
+
+        const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+            ? q.correctOptionIds 
+            : (q.correctOptionId ? [q.correctOptionId] : []);
+
+        if (socrativeType === "multiple choice") {
+            q.options.slice(0, 5).forEach((opt, i) => {
+                row[2 + i] = opt.text;
+                if (correctIds.includes(opt.id)) {
+                    row[7 + i] = "X"; // Mark Correct Answer column (starts at index 7)
+                }
+            });
+        } 
+        else if (socrativeType === "true/false") {
+            // Socrative logic: A=True, B=False. No text in Answer columns usually needed, but implies A/B.
+            // Check if True is correct
+            const trueOption = q.options.find(o => 
+                o.text.toLowerCase() === 'true' || 
+                o.text.toLowerCase() === 'verdadero' || 
+                (o.text.toLowerCase().includes('verdadero') && correctIds.includes(o.id))
+            );
+            const falseOption = q.options.find(o => 
+                o.text.toLowerCase() === 'false' || 
+                o.text.toLowerCase() === 'falso'
+            );
+
+            let isTrue = false;
+            if (trueOption && correctIds.includes(trueOption.id)) isTrue = true;
+            else if (falseOption && correctIds.includes(falseOption.id)) isTrue = false;
+            else {
+                // Fallback: If 1st option matches correctness, assume True
+                if (q.options.length > 0 && correctIds.includes(q.options[0].id)) isTrue = true;
+            }
+
+            if (isTrue) row[7] = "X"; // Column H (Answer A -> True)
+            else row[8] = "X";      // Column I (Answer B -> False)
+        }
+        else if (socrativeType === "open-ended") {
+            // Socrative allows listing acceptable answers in Answer columns
+            q.options.slice(0, 5).forEach((opt, i) => {
+                if (opt.text.trim()) row[2 + i] = opt.text;
+            });
+        }
+
+        row[12] = q.feedback || "";
         data.push(row);
     });
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "Quiz");
-    return { filename: `${title}_socrative.xlsx`, content: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', isBase64: true };
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Quiz");
+    
+    return { 
+        filename: `${title}_socrative.xlsx`, 
+        content: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), 
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+        isBase64: true 
+    };
 };
 
 const generateWordwall = (q:Quiz, t:string) => ({ filename: `${t}_wordwall.txt`, content: q.questions.map(q => q.text).join("\n"), mimeType: 'text/plain' });
 const generateAiken = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "Aiken", mimeType: 'text/plain' });
 const generateGIFT = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "GIFT", mimeType: 'text/plain' });
 const generateWaygroundXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
-const generateQuizalizeCSV = (q:Quiz, t:string) => generateBlooketCSV(q,t); // Quizalize might need adjustment if it differs from Blooket, but kept for now.
 const generateIdoceoXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
 const generatePlickers = (q:Quiz, t:string) => generateWordwall(q,t);
 const generateFlippityXLSX = (q:Quiz, t:string, o:any) => generateKahootXLSX(q,t);

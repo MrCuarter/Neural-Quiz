@@ -1,10 +1,18 @@
 
-
 import { Quiz, Question, Option, QUESTION_TYPES, UniversalDiscoveryReport } from "../types";
 import { deepFindQuizCandidate } from "./deepFindService";
 
 // --- HELPERS ---
 const uuid = () => Math.random().toString(36).substring(2, 9);
+
+const decodeHtmlEntities = (str: any): string => {
+    if (!str) return "";
+    const text = String(str);
+    if (!text.includes('&')) return text; // Optimization
+    const txt = document.createElement("textarea");
+    txt.innerHTML = text;
+    return txt.value;
+};
 
 const debugLog = (tag: string, message: any, data?: any) => {
     console.log(`%c[${tag}]`, 'color: #00ffff; font-weight: bold;', message);
@@ -41,7 +49,8 @@ const normalizeToQuiz = (rawQuestions: any[], sourceTitle: string, methodUsed: a
     const missingReasons: string[] = [];
 
     const questions: Question[] = rawQuestions.map((q: any) => {
-        const text = q.question || q.title || q.query || q.text || "Untitled Question";
+        let text = q.question || q.title || q.query || q.text || "Untitled Question";
+        text = decodeHtmlEntities(text); // Fix encoding
         
         // Find Choices
         const rawChoices = q.choices || q.answers || q.options || [];
@@ -59,9 +68,10 @@ const normalizeToQuiz = (rawQuestions: any[], sourceTitle: string, methodUsed: a
                     correctOptionIds.push(optId);
                     hasCorrect = true;
                 }
+                const rawText = c.answer || c.text || c.title || `Option ${idx+1}`;
                 options.push({
                     id: optId,
-                    text: c.answer || c.text || c.title || `Option ${idx+1}`
+                    text: decodeHtmlEntities(rawText) // Fix encoding
                 });
             });
         }
@@ -117,7 +127,7 @@ const normalizeToQuiz = (rawQuestions: any[], sourceTitle: string, methodUsed: a
 
     return {
         quiz: {
-            title: sourceTitle,
+            title: decodeHtmlEntities(sourceTitle),
             description: "Imported via Neural Quiz Deep Discovery",
             questions
         },

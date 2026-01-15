@@ -22,6 +22,17 @@ const PROXIES = [
 
 const uuid = () => Math.random().toString(36).substring(2, 9);
 
+// --- HELPERS ---
+
+const decodeHtmlEntities = (str: any): string => {
+    if (!str) return "";
+    const text = String(str);
+    if (!text.includes('&')) return text;
+    const txt = document.createElement("textarea");
+    txt.innerHTML = text;
+    return txt.value;
+};
+
 // --- FORENSIC HELPERS ---
 
 /**
@@ -202,7 +213,8 @@ export const analyzeGimkitUrl = async (url: string): Promise<{ quiz: Quiz, repor
 
     rawQuestions.forEach((q: any) => {
         // Text
-        const text = q.text || q.questionText || "Untitled Question";
+        let text = q.text || q.questionText || "Untitled Question";
+        text = decodeHtmlEntities(text); // Fix encoding
         
         // Options & Correct
         const options: Option[] = [];
@@ -212,7 +224,8 @@ export const analyzeGimkitUrl = async (url: string): Promise<{ quiz: Quiz, repor
         if (Array.isArray(rawAnswers)) {
             rawAnswers.forEach((ans: any) => {
                 const optId = uuid();
-                const ansText = typeof ans === 'string' ? ans : (ans.text || ans.answer || "");
+                let ansText = typeof ans === 'string' ? ans : (ans.text || ans.answer || "");
+                ansText = decodeHtmlEntities(ansText); // Fix encoding
                 options.push({ id: optId, text: ansText });
                 
                 // Gimkit often marks correct answers by ID matching or 'correct' flag
@@ -315,7 +328,7 @@ export const analyzeGimkitUrl = async (url: string): Promise<{ quiz: Quiz, repor
     window.NQ_DEBUG.gimkit.lastRun = runLog;
 
     // 6. RETURN RESULT
-    const title = rawData.kit?.title || rawData.title || "Gimkit Quiz";
+    const title = decodeHtmlEntities(rawData.kit?.title || rawData.title || "Gimkit Quiz");
     const report: UniversalDiscoveryReport = {
         platform: 'unknown', // Gimkit not in union type explicitly yet, mapped via generic
         originalUrl: url,

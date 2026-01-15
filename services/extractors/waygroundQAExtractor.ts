@@ -80,9 +80,18 @@ const extractQuizId = (url: string): string | null => {
     return match ? match[1] : null;
 };
 
+// IMPROVED CLEANER: Strips HTML + Decodes Entities
 const cleanText = (text: string | undefined): string => {
     if (!text) return "";
-    return text.replace(/<[^>]*>?/gm, '').trim(); // Strip HTML
+    let clean = text.replace(/<[^>]*>?/gm, '').trim(); // Strip HTML tags
+    
+    // Decode Entities
+    if (clean.includes('&')) {
+        const txt = document.createElement("textarea");
+        txt.innerHTML = clean;
+        clean = txt.value;
+    }
+    return clean;
 };
 
 // --- PARSERS ---
@@ -253,7 +262,7 @@ export const extractWaygroundQA = async (url: string): Promise<{ quiz: Quiz | nu
                 if (questions.length > 0) {
                     debug.steps.push(`API Strategy SUCCESS: ${questions.length} questions`);
                     
-                    const title = json.data?.quiz?.info?.name || json.quiz?.info?.name || "Wayground Quiz";
+                    const title = cleanText(json.data?.quiz?.info?.name || json.quiz?.info?.name || "Wayground Quiz");
                     finalizeDebug(debug, true);
                     
                     return {
@@ -293,7 +302,7 @@ export const extractWaygroundQA = async (url: string): Promise<{ quiz: Quiz | nu
                         const title = titleMatch ? titleMatch[1].replace(" - Quizizz", "") : "Wayground Quiz (Print)";
 
                         return {
-                            quiz: { title, description: "Extracted via Neural Quiz DOM Parser", questions },
+                            quiz: { title: cleanText(title), description: "Extracted via Neural Quiz DOM Parser", questions },
                             report: createReport(url, `print_dom_${agent.name}`, questions)
                         };
                     }

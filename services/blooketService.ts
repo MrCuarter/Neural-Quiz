@@ -30,6 +30,15 @@ const uuid = () => Math.random().toString(36).substring(2, 9);
 
 // --- HELPERS ---
 
+const decodeHtmlEntities = (str: any): string => {
+    if (!str) return "";
+    const text = String(str);
+    if (!text.includes('&')) return text;
+    const txt = document.createElement("textarea");
+    txt.innerHTML = text;
+    return txt.value;
+};
+
 /**
  * Recursive Image Finder: Scans the entire JSON tree for potential image candidates.
  */
@@ -220,13 +229,14 @@ export const analyzeBlooketUrl = async (url: string): Promise<{ quiz: Quiz, repo
     runLog.imageCandidatePaths = Array.from(imageCandidates);
 
     const normalizedQuestions: Question[] = questionsArray.map((rawQ: any) => {
-        const qText = rawQ.question || rawQ.text || "Untitled Question";
-        
+        let qText = rawQ.question || rawQ.text || "Untitled Question";
+        qText = decodeHtmlEntities(qText); // Fix encoding
+
         // Options
         const rawAnswers = rawQ.answers || rawQ.choices || rawQ.options || rawQ.typingAnswers || [];
         // Determine correct answers (Array of strings usually)
         const correctRaw = rawQ.correctAnswers || rawQ.typingAnswers || [];
-        const correctSet = new Set(Array.isArray(correctRaw) ? correctRaw.map(String) : [String(correctRaw)]);
+        const correctSet = new Set(Array.isArray(correctRaw) ? correctRaw.map(s => decodeHtmlEntities(String(s))) : [decodeHtmlEntities(String(correctRaw))]);
 
         const options: Option[] = [];
         const correctOptionIds: string[] = [];
@@ -236,7 +246,9 @@ export const analyzeBlooketUrl = async (url: string): Promise<{ quiz: Quiz, repo
 
         if (Array.isArray(rawAnswers)) {
             rawAnswers.forEach((ans: any) => {
-                const txt = typeof ans === 'string' ? ans : (ans.text || String(ans));
+                let txt = typeof ans === 'string' ? ans : (ans.text || String(ans));
+                txt = decodeHtmlEntities(txt); // Fix encoding
+                
                 const id = uuid();
                 const opt: Option = { id, text: txt };
                 
@@ -298,7 +310,7 @@ export const analyzeBlooketUrl = async (url: string): Promise<{ quiz: Quiz, repo
     console.groupEnd();
 
     // Construct Result
-    const title = foundData.title || foundData.setInfo?.title || foundData.name || "Blooket Quiz";
+    const title = decodeHtmlEntities(foundData.title || foundData.setInfo?.title || foundData.name || "Blooket Quiz");
     const report: UniversalDiscoveryReport = {
         platform: 'blooket',
         originalUrl: url,

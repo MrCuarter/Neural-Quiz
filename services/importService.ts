@@ -1,13 +1,20 @@
+
 import { Question, Option } from "../types";
 import * as XLSX from 'xlsx';
 
 // Helper: Generate UUID
 const uuid = () => Math.random().toString(36).substring(2, 9);
 
-// Helper: Clean cell value
+// Helper: Clean cell value and decode HTML entities
 const clean = (val: any): string => {
   if (val === undefined || val === null) return "";
-  return String(val).trim();
+  const str = String(val).trim();
+  if (str.includes('&')) {
+      const txt = document.createElement("textarea");
+      txt.innerHTML = str;
+      return txt.value;
+  }
+  return str;
 };
 
 /**
