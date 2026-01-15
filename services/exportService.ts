@@ -333,7 +333,7 @@ const generateGimkitTextCSV = (quiz: Quiz, title: string) => {
     };
 };
 
-// SOCRATIVE EXPORT (UPDATED to Official Template)
+// SOCRATIVE EXPORT (STRICTLY CONFORMING TO OFFICIAL SCHEMA)
 const generateSocrativeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
     // 1. Define Fixed Header Structure
     const data: any[][] = [];
@@ -354,8 +354,6 @@ const generateSocrativeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
     data.push([]);
 
     // Row 5: Helper Headers (Contextual)
-    // Structure spans 13 columns.
-    // Indexes: 0..12.
     const row5 = new Array(13).fill("");
     row5[2] = "4. If you selected multiple choice question, enter answers below each column:";
     row5[7] = "5. Optional (Choose correct answer - you may leave this blank, or choose one or more correct answers. Students must select all the correct answers to be scored correct.)";
@@ -370,12 +368,12 @@ const generateSocrativeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
         "Answer C:",
         "Answer D:",
         "Answer E:",
-        "Correct Answer", // Col H (index 7)
-        "Correct Answer", // Col I (index 8)
-        "Correct Answer", // Col J (index 9)
-        "Correct Answer", // Col K (index 10)
-        "Correct Answer", // Col L (index 11)
-        "6. Explanation (Optional):" // Col M (index 12)
+        "Correct Answer", // H
+        "Correct Answer", // I
+        "Correct Answer", // J
+        "Correct Answer", // K
+        "Correct Answer", // L
+        "6. Explanation (Optional):" // M
     ];
     data.push(row6);
 
@@ -384,11 +382,11 @@ const generateSocrativeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
         const row = new Array(13).fill("");
         
         // Determine Type
-        let socrativeType = "multiple choice"; // Default
+        let socrativeType = "Multiple choice"; // Default format matches user example
         const qTypeLower = (q.questionType || "").toLowerCase();
         
-        if (qTypeLower.includes("true") || qTypeLower.includes("verdadero")) socrativeType = "true/false";
-        else if (qTypeLower.includes("open") || qTypeLower.includes("short") || qTypeLower.includes("fill")) socrativeType = "open-ended";
+        if (qTypeLower.includes("true") || qTypeLower.includes("verdadero")) socrativeType = "True/False";
+        else if (qTypeLower.includes("open") || qTypeLower.includes("short") || qTypeLower.includes("fill")) socrativeType = "Open-ended";
         
         row[0] = socrativeType;
         row[1] = q.text;
@@ -397,39 +395,48 @@ const generateSocrativeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
             ? q.correctOptionIds 
             : (q.correctOptionId ? [q.correctOptionId] : []);
 
-        if (socrativeType === "multiple choice") {
+        if (socrativeType === "Multiple choice") {
+            const correctLetters: string[] = [];
+            
             q.options.slice(0, 5).forEach((opt, i) => {
                 row[2 + i] = opt.text;
                 if (correctIds.includes(opt.id)) {
-                    row[7 + i] = "X"; // Mark Correct Answer column (starts at index 7)
+                    // Logic Update: Use Letter (A, B, C...) instead of positional checkmark 'X'
+                    // The standard template provided by user shows:
+                    // Col 8="A", Col 9="B" if both A and B are correct.
+                    correctLetters.push(String.fromCharCode(65 + i)); // 65 is 'A'
+                }
+            });
+
+            // Fill Correct Answer Columns (Starting at Index 7 / Col H)
+            correctLetters.forEach((letter, idx) => {
+                if (7 + idx < 12) { // Ensure we don't overflow into Explanation
+                    row[7 + idx] = letter;
                 }
             });
         } 
-        else if (socrativeType === "true/false") {
-            // Socrative logic: A=True, B=False. No text in Answer columns usually needed, but implies A/B.
-            // Check if True is correct
-            const trueOption = q.options.find(o => 
-                o.text.toLowerCase() === 'true' || 
-                o.text.toLowerCase() === 'verdadero' || 
-                (o.text.toLowerCase().includes('verdadero') && correctIds.includes(o.id))
-            );
-            const falseOption = q.options.find(o => 
-                o.text.toLowerCase() === 'false' || 
-                o.text.toLowerCase() === 'falso'
-            );
+        else if (socrativeType === "True/False") {
+            // Socrative logic: Option 1 is True (A), Option 2 is False (B) implicit?
+            // Usually Socrative T/F is handled as Multiple Choice with "True" and "False" text
+            // But let's follow the standard mapping if type is explicitly True/False.
+            // Since User example focuses on MC, let's map T/F to MC structure to be safe, or stick to simple logic.
+            // Usually for T/F: Answer A=True, Answer B=False.
+            // row[2] = "True"; row[3] = "False";
+            
+            // Check Correctness
+            // Find which option is correct in our data
+            const trueOption = q.options.find(o => o.text.match(/true|verdadero/i));
+            const falseOption = q.options.find(o => o.text.match(/false|falso/i));
+            
+            let correctLetter = "";
+            if (trueOption && correctIds.includes(trueOption.id)) correctLetter = "A";
+            else if (falseOption && correctIds.includes(falseOption.id)) correctLetter = "B";
+            else if (q.options.length > 0 && correctIds.includes(q.options[0].id)) correctLetter = "A"; // Fallback
 
-            let isTrue = false;
-            if (trueOption && correctIds.includes(trueOption.id)) isTrue = true;
-            else if (falseOption && correctIds.includes(falseOption.id)) isTrue = false;
-            else {
-                // Fallback: If 1st option matches correctness, assume True
-                if (q.options.length > 0 && correctIds.includes(q.options[0].id)) isTrue = true;
-            }
-
-            if (isTrue) row[7] = "X"; // Column H (Answer A -> True)
-            else row[8] = "X";      // Column I (Answer B -> False)
+            // Usually T/F in Socrative doesn't need Answer text columns filled, just the correct answer letter
+            row[7] = correctLetter; 
         }
-        else if (socrativeType === "open-ended") {
+        else if (socrativeType === "Open-ended") {
             // Socrative allows listing acceptable answers in Answer columns
             q.options.slice(0, 5).forEach((opt, i) => {
                 if (opt.text.trim()) row[2 + i] = opt.text;

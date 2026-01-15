@@ -137,28 +137,42 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
         formOptions.push({ value: "Option 1" });
     }
 
+    // Construct the Question Item
+    const questionItemPayload: any = {
+        question: {
+            required: true,
+            choiceQuestion: {
+                type: 'RADIO', // Multiple choice
+                options: formOptions,
+                shuffle: true
+            },
+            grading: { // Set correct answer (Quiz Mode)
+                pointValue: 1,
+                correctAnswers: {
+                    answers: [{ value: correctOpt ? correctOpt.text : formOptions[0].value }]
+                },
+                whenRight: { text: "¡Correcto!" },
+                whenWrong: { text: q.feedback || "Respuesta incorrecta" }
+            }
+        }
+    };
+
+    // Inject Image if URL exists and is valid (HTTP/HTTPS)
+    // Google Forms requires the image to be publicly accessible.
+    if (q.imageUrl && q.imageUrl.startsWith('http')) {
+        questionItemPayload.image = {
+            sourceUri: q.imageUrl,
+            properties: {
+                alignment: 'CENTER'
+            }
+        };
+    }
+
     requests.push({
       createItem: {
         item: {
           title: q.text,
-          questionItem: {
-            question: {
-              required: true,
-              choiceQuestion: {
-                type: 'RADIO', // Multiple choice
-                options: formOptions,
-                shuffle: true
-              },
-              grading: { // Set correct answer (Quiz Mode)
-                pointValue: 1,
-                correctAnswers: {
-                  answers: [{ value: correctOpt ? correctOpt.text : formOptions[0].value }]
-                },
-                whenRight: { text: "¡Correcto!" },
-                whenWrong: { text: q.feedback || "Respuesta incorrecta" }
-              }
-            }
-          }
+          questionItem: questionItemPayload
         },
         location: { index: index }
       }
