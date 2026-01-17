@@ -12,6 +12,7 @@ interface ExportPanelProps {
   quiz: Quiz;
   setQuiz?: React.Dispatch<React.SetStateAction<Quiz>>; 
   t: any;
+  initialTargetPlatform?: string;
 }
 
 // --- SUB-COMPONENT: Individual Export Card ---
@@ -95,6 +96,23 @@ const ExportPreviewCard: React.FC<{
         } catch (e) { alert("Download failed"); }
     };
 
+    // Specific handler for Plickers Splits
+    const handleDownloadSplit = () => {
+        try {
+            const splitData = exportQuiz(quiz, ExportFormat.PLICKERS, { splitInBlocks: true });
+            const bom = '\uFEFF';
+            const blob = new Blob([bom + splitData.content], { type: `${splitData.mimeType};charset=utf-8` });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = splitData.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) { alert("Download failed"); }
+    };
+
     const handleCopy = () => {
         if (!exportData.isBase64) {
             navigator.clipboard.writeText(exportData.content);
@@ -105,18 +123,19 @@ const ExportPreviewCard: React.FC<{
 
     const renderTable = (csv: string) => {
         if (!csv) return null;
-        const lines = csv.split('\n').slice(0, 8);
+        // Show all lines, rely on scrolling
+        const lines = csv.split('\n'); 
         return (
-            <div className="overflow-x-auto custom-scrollbar">
+            <div className="overflow-auto custom-scrollbar h-full">
                 <table className="min-w-full text-[10px] font-mono text-left border-collapse">
                     <tbody>
                         {lines.map((line, i) => {
                             const cells = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
                             if (cells.length === 1 && cells[0] === "") return null;
                             return (
-                                <tr key={i} className={i === 0 ? "bg-gray-800 text-cyan-400 font-bold" : "border-b border-gray-800 hover:bg-white/5"}>
+                                <tr key={i} className={i === 0 ? "bg-gray-800 text-cyan-400 font-bold sticky top-0 z-10" : "border-b border-gray-800 hover:bg-white/5"}>
                                     {cells.map((cell, j) => (
-                                        <td key={j} className="p-2 border-r border-gray-800 whitespace-nowrap max-w-[150px] overflow-hidden text-ellipsis">
+                                        <td key={j} className="p-2 border-r border-gray-800 whitespace-nowrap max-w-[150px] overflow-hidden text-ellipsis bg-inherit">
                                             {cell.replace(/^"|"$/g, '')}
                                         </td>
                                     ))}
@@ -168,7 +187,7 @@ const ExportPreviewCard: React.FC<{
                     renderTable(tablePreview)
                 ) : !exportData.isBase64 ? (
                     <pre className="p-3 text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all h-full overflow-y-auto custom-scrollbar">
-                        {exportData.content.slice(0, 1000)}...
+                        {exportData.content}
                     </pre>
                 ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 gap-2">
@@ -179,30 +198,50 @@ const ExportPreviewCard: React.FC<{
             </div>
 
             {/* ACTIONS */}
-            <div className="flex gap-2">
-                {!exportData.isBase64 && !isGoogle && (
-                    <button onClick={handleCopy} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded border border-gray-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors">
-                        {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        {copied ? t.copied : t.copy_clipboard}
-                    </button>
+            <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                    {!exportData.isBase64 && !isGoogle && (
+                        <button onClick={handleCopy} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded border border-gray-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors">
+                            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            {copied ? t.copied : t.copy_clipboard}
+                        </button>
+                    )}
+                    <CyberButton 
+                        onClick={handleDownload} 
+                        isLoading={isExportingGoogle}
+                        disabled={!!googleFormLink && isGoogle}
+                        className={`flex-1 py-2 text-xs h-auto ${isGoogle ? 'bg-purple-700 hover:bg-purple-600' : ''}`}
+                    >
+                        {isGoogle ? t.connect_create : t.download_file}
+                    </CyberButton>
+                </div>
+                
+                {/* Special Plickers Button */}
+                {format.id === ExportFormat.PLICKERS && (
+                    <CyberButton variant="secondary" onClick={handleDownloadSplit} className="text-[10px] py-2">
+                        <List className="w-3 h-3" /> Descargar en bloques de 5
+                    </CyberButton>
                 )}
-                <CyberButton 
-                    onClick={handleDownload} 
-                    isLoading={isExportingGoogle}
-                    disabled={!!googleFormLink && isGoogle}
-                    className={`flex-1 py-2 text-xs h-auto ${isGoogle ? 'bg-purple-700 hover:bg-purple-600' : ''}`}
-                >
-                    {isGoogle ? t.connect_create : t.download_file}
-                </CyberButton>
             </div>
         </CyberCard>
     );
 };
 
 
-export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t }) => {
+export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, initialTargetPlatform }) => {
+  // Determine default selection based on prop, or fallback to Kahoot
+  // 'UNIVERSAL' is not a specific export format, so we default to Kahoot if that's the selection.
+  const getDefaultSelection = () => {
+      if (initialTargetPlatform && initialTargetPlatform !== 'UNIVERSAL') {
+          // Check if the platform exists in ExportFormat enum (loose check)
+          const isValid = Object.values(ExportFormat).includes(initialTargetPlatform as ExportFormat);
+          if (isValid) return [initialTargetPlatform as ExportFormat];
+      }
+      return [ExportFormat.KAHOOT];
+  };
+
   // Multi-selection state
-  const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>([ExportFormat.KAHOOT]);
+  const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>(getDefaultSelection);
   const [isFixing, setIsFixing] = useState(false);
   
   // Flippity specific state (Global for now, applies if Flippity is selected)

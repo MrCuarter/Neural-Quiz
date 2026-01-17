@@ -16,7 +16,7 @@ export const exportQuiz = (quiz: Quiz, format: ExportFormat, options?: any): Gen
     case ExportFormat.SOCRATIVE: return generateSocrativeXLSX(quiz, sanitizedTitle);
     case ExportFormat.QUIZALIZE: return generateQuizalizeXLSX(quiz, sanitizedTitle);
     case ExportFormat.IDOCEO: return generateIdoceoXLSX(quiz, sanitizedTitle);
-    case ExportFormat.PLICKERS: return generatePlickers(quiz, sanitizedTitle);
+    case ExportFormat.PLICKERS: return generatePlickers(quiz, sanitizedTitle, options);
     case ExportFormat.BAAMBOOZLE: const baam = generateKahootXLSX(quiz, sanitizedTitle); return { ...baam, filename: `${sanitizedTitle}_baamboozle.xlsx` };
     case ExportFormat.BLOOKET: return generateBlooketCSV(quiz, sanitizedTitle);
     case ExportFormat.GIMKIT_CLASSIC: return generateGimkitClassicCSV(quiz, sanitizedTitle);
@@ -459,12 +459,173 @@ const generateSocrativeXLSX = (quiz: Quiz, title: string): GeneratedFile => {
     };
 };
 
+// IDOCEO EXPORT (STRICT TEMPLATE STRUCTURE)
+const generateIdoceoXLSX = (quiz: Quiz, title: string): GeneratedFile => {
+  const data: any[][] = [];
+
+  // Row 1: Title in Column 3 (C) - Index 2
+  const row1 = new Array(30).fill("");
+  row1[2] = "iDoceo Connect\n Plantilla de examen";
+  data.push(row1);
+
+  // Row 2: Empty
+  data.push([]);
+
+  // Row 3: Headers (Strictly aligned with provided JSON schema)
+  const row3 = new Array(30).fill("");
+  row3[0] = "N.\n (opcional)";
+  // Col 2 (Index 1) empty
+  row3[2] = "Pregunta";
+  row3[3] = "Respuesta 1";
+  row3[4] = "Respuesta 2";
+  row3[5] = "Respuesta 3\n (opcional)";
+  row3[6] = "Respuesta 4\n (opcional)";
+  row3[7] = "Respuesta 5\n (opcional)";
+  row3[8] = "Respuesta 6\n (opcional)";
+  row3[9] = "Respuesta 7\n (opcional)";
+  row3[10] = "Respuesta 8\n (opcional)";
+  row3[11] = "Respuesta 9\n (opcional)";
+  row3[12] = "Respuesta 10\n (opcional)";
+  row3[13] = "Código de respuesta(s) correcta(s)";
+  row3[14] = "Puntos\n (si ≠ 1)";
+  // Cols 16-19 (Index 15-18) empty
+  row3[19] = "Feedback de Respuesta 1\n (opcional)";
+  row3[20] = "Feedback de Respuesta 2\n (opcional)";
+  row3[21] = "Feedback de Respuesta 3\n (opcional)";
+  row3[22] = "Feedback de Respuesta 4\n (opcional)";
+  row3[23] = "Feedback de Respuesta 5\n (opcional)";
+  row3[24] = "Feedback de Respuesta 6\n (opcional)";
+  row3[25] = "Feedback de Respuesta 7\n (opcional)";
+  row3[26] = "Feedback de Respuesta 8\n (opcional)";
+  row3[27] = "Feedback de Respuesta 9\n (opcional)";
+  row3[28] = "Feedback de Respuesta 10\n (opcional)";
+  data.push(row3);
+
+  // Data Rows
+  quiz.questions.forEach((q, index) => {
+    const row = new Array(30).fill("");
+    
+    // Col 1: Index
+    row[0] = index + 1;
+    
+    // Col 3: Question Text
+    row[2] = q.text;
+
+    // Col 4-13: Options (up to 10)
+    const options = q.options.slice(0, 10);
+    options.forEach((opt, i) => {
+        row[3 + i] = opt.text;
+    });
+
+    // Col 14: Correct Code
+    // iDoceo Logic:
+    // - Single Choice: Index (1-based)
+    // - Multiple Choice: Sum of powers of 2 (1, 2, 4, 8...) aka Bitmask
+    
+    const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+        ? q.correctOptionIds 
+        : (q.correctOptionId ? [q.correctOptionId] : []);
+    
+    let code = 0;
+    
+    if (q.questionType === QUESTION_TYPES.MULTI_SELECT || correctIds.length > 1) {
+        // Bitmask for multi-select
+        options.forEach((opt, i) => {
+            if (correctIds.includes(opt.id)) {
+                code += Math.pow(2, i); // 1, 2, 4, 8...
+            }
+        });
+    } else {
+        // Simple index for single choice (1-based)
+        const idx = options.findIndex(o => correctIds.includes(o.id));
+        if (idx !== -1) code = idx + 1;
+    }
+    
+    if (code > 0) row[13] = code;
+
+    // Col 15: Points (optional) - Leaving default empty as per user instruction if 1
+
+    // Col 20+: Feedback
+    // Mapping global feedback to first option slot if available, though typically iDoceo has specific feedback per option.
+    // Leaving blank to match clean template style unless specifically requested to map content.
+    
+    data.push(row);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "iDoceo");
+  
+  return { 
+      filename: `${title}_idoceo.xlsx`, 
+      content: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }), 
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+      isBase64: true 
+  };
+};
+
+// PLICKERS EXPORT (Bulk Paste Format)
+const generatePlickers = (quiz: Quiz, title: string, options?: any): GeneratedFile => {
+  const lines: string[] = [];
+  const blockSize = 5;
+  const isSplit = options?.splitInBlocks;
+  
+  quiz.questions.forEach((q, index) => {
+    // SEPARATOR LOGIC FOR BLOCKS
+    if (isSplit && index > 0 && index % blockSize === 0) {
+        const blockNum = (index / blockSize) + 1;
+        lines.push("");
+        lines.push("---------------------------------------------------------");
+        lines.push(`--- BLOQUE ${blockNum} (Copiar desde aquí) ---`);
+        lines.push("---------------------------------------------------------");
+        lines.push("");
+    } else if (isSplit && index === 0) {
+        lines.push("---------------------------------------------------------");
+        lines.push(`--- BLOQUE 1 (Copiar desde aquí) ---`);
+        lines.push("---------------------------------------------------------");
+        lines.push("");
+    }
+
+    // 1. Question Text (Single line)
+    lines.push(q.text.replace(/[\r\n]+/g, " ").trim());
+
+    // 2. Identify Correct and Incorrect
+    // The format requires: Line 2=Correct, Lines 3-5=Incorrect
+    const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
+        ? q.correctOptionIds 
+        : (q.correctOptionId ? [q.correctOptionId] : []);
+    
+    const correctOption = q.options.find(o => correctIds.includes(o.id));
+    const otherOptions = q.options.filter(o => !correctIds.includes(o.id));
+
+    // Fallback: If no correct answer marked, assume first option is correct
+    const firstLine = correctOption ? correctOption.text : (otherOptions.length > 0 ? otherOptions[0].text : "Option A");
+    const remaining = correctOption ? otherOptions : otherOptions.slice(1);
+
+    lines.push(firstLine.replace(/[\r\n]+/g, " ").trim());
+
+    // 3. Fill remaining 3 slots (Plickers uses A,B,C,D - max 4 options)
+    for (let i = 0; i < 3; i++) {
+        if (i < remaining.length) {
+            lines.push(remaining[i].text.replace(/[\r\n]+/g, " ").trim());
+        } else {
+            lines.push(""); // Empty line required if fewer than 4 options
+        }
+    }
+  });
+
+  return { 
+      filename: `${title}_plickers${isSplit ? '_blocks' : ''}.txt`, 
+      content: lines.join("\n"), 
+      mimeType: 'text/plain' 
+  };
+};
+
 const generateWordwall = (q:Quiz, t:string) => ({ filename: `${t}_wordwall.txt`, content: q.questions.map(q => q.text).join("\n"), mimeType: 'text/plain' });
 const generateAiken = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "Aiken", mimeType: 'text/plain' });
 const generateGIFT = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "GIFT", mimeType: 'text/plain' });
 const generateWaygroundXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
-const generateIdoceoXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
-const generatePlickers = (q:Quiz, t:string) => generateWordwall(q,t);
+const generateIdoceoXLSX_LEGACY = (q:Quiz, t:string) => generateKahootXLSX(q,t); // Kept for reference but unused
 const generateFlippityXLSX = (q:Quiz, t:string, o:any) => generateKahootXLSX(q,t);
 const generateSandbox = (q:Quiz, t:string) => generateWordwall(q,t);
 const generateWooclapXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);

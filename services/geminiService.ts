@@ -169,7 +169,7 @@ const questionSchema: Schema = {
     },
     correctAnswerIndex: { type: Type.INTEGER, description: "Index of correct option. 0 for Order/FillGap." },
     correctAnswerIndices: { type: Type.ARRAY, items: { type: Type.INTEGER } },
-    feedback: { type: Type.STRING, description: "ONLY include if explicitly present in source. Otherwise empty." },
+    feedback: { type: Type.STRING, description: "Educational feedback/explanation for the answer." },
     type: { type: Type.STRING },
     imageUrl: { type: Type.STRING, description: "URL of the image if present." },
     reconstructed: { type: Type.BOOLEAN, description: "True if the question, answers or image were inferred rather than read directly." },
@@ -225,7 +225,8 @@ interface GenParams {
   age: string;
   context?: string;
   urls?: string[]; 
-  language?: string; 
+  language?: string;
+  includeFeedback?: boolean; // NEW: Request explicit feedback generation
 }
 
 const sanitizeQuestion = (q: any, allowedTypes: string[], language: string): any => {
@@ -302,7 +303,7 @@ const sanitizeQuestion = (q: any, allowedTypes: string[], language: string): any
 export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Question, 'id' | 'options' | 'correctOptionId'> & { rawOptions: string[], correctIndex: number, correctIndices?: number[] })[]> => {
   return withRetry(async () => {
     const ai = getAI();
-    const { topic, count, types, age, context, urls, language = 'Spanish' } = params;
+    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback } = params;
     const safeCount = Math.min(Math.max(count, 1), 30); // Reduced batch size to help quota
 
     let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
@@ -317,6 +318,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<(Omit<Qu
     2. 'Multiple Choice': ONLY ONE correct answer.
     3. 'Multi-Select': SEVERAL correct answers.
     4. 'Order': Options MUST be in the CORRECT FINAL ORDER.
+    ${includeFeedback ? "5. You MUST generate educational feedback/explanation for the correct answer in the 'feedback' field." : ""}
     `;
 
     const response = await ai.models.generateContent({

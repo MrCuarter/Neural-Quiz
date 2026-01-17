@@ -27,6 +27,18 @@ const initialQuiz: Quiz = {
   questions: []
 };
 
+// Platforms that natively support feedback/explanation fields
+const PLATFORMS_WITH_FEEDBACK = [
+    ExportFormat.KAHOOT, // Has some limited support via newer features, but useful generally
+    ExportFormat.GOOGLE_FORMS,
+    ExportFormat.SOCRATIVE,
+    ExportFormat.QUIZALIZE,
+    ExportFormat.IDOCEO,
+    ExportFormat.GENIALLY,
+    ExportFormat.WAYGROUND,
+    ExportFormat.UNIVERSAL_CSV
+];
+
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('home');
   const [quiz, setQuiz] = useState<Quiz>(initialQuiz);
@@ -234,6 +246,9 @@ const App: React.FC = () => {
           setTimeout(() => reject(new Error("Timeout: AI took too long. Try requesting fewer questions or simpler types.")), 45000)
       );
 
+      // Check if platform supports feedback
+      const includeFeedback = PLATFORMS_WITH_FEEDBACK.includes(targetPlatform as ExportFormat);
+
       const apiPromise = generateQuizQuestions({
         topic: genParams.topic,
         count: Number(genParams.count) || 5,
@@ -241,7 +256,8 @@ const App: React.FC = () => {
         age: genParams.age,
         context: genParams.context,
         urls: urlList,
-        language: selectedLang
+        language: selectedLang,
+        includeFeedback
       });
 
       // Race against timeout
@@ -1192,7 +1208,7 @@ const App: React.FC = () => {
                 {quiz.questions.length > 0 && (
                    <div ref={exportSectionRef} className="border-t border-gray-800 pt-12">
                       <h3 className="text-2xl font-cyber text-center mb-8 text-white">{t.export_data}</h3>
-                      <ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} />
+                      <ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} initialTargetPlatform={targetPlatform} />
                    </div>
                 )}
              </div>
