@@ -1,7 +1,9 @@
 
-import React from 'react';
-import { Globe, FlaskConical, Sprout, Map, HelpCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Globe, FlaskConical, Sprout, Map, HelpCircle, LogIn, LogOut, User } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
+// IMPORTANTE: Importamos todo desde nuestro servicio local, no desde 'firebase/auth'
+import { auth, signInWithGoogle, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
 
 interface HeaderProps {
   language: Language;
@@ -10,6 +12,43 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp }) => {
+  const [user, setUser] = useState<any>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+
+  // Escuchar cambios en la autenticación (Login/Logout)
+  useEffect(() => {
+    // PROTECCIÓN CONTRA PANTALLA NEGRA
+    // Si Firebase falló al cargar, auth o onAuthStateChanged serán undefined.
+    if (!auth || !onAuthStateChanged) {
+        console.warn("Firebase Auth not initialized correctly. Auth features disabled.");
+        setIsLoadingAuth(false);
+        return;
+    }
+
+    try {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
+          setUser(currentUser);
+          setIsLoadingAuth(false);
+        });
+        return () => unsubscribe();
+    } catch (e) {
+        console.error("Error setting up auth listener:", e);
+        setIsLoadingAuth(false);
+    }
+  }, []);
+
+  const handleLogin = async () => {
+      try {
+          await signInWithGoogle();
+      } catch (e) {
+          alert("Error al iniciar sesión. Verifica tu conexión.");
+      }
+  };
+
+  const handleLogout = async () => {
+      await logoutFirebase();
+  };
+
   const languages: { code: Language; flag: string; label: string }[] = [
     { code: 'es', flag: '🇪🇸', label: 'ES' },
     { code: 'en', flag: '🇬🇧', label: 'EN' },
@@ -50,6 +89,34 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp })
         
         {/* SECCIÓN DERECHA: ACCIONES */}
         <div className="flex items-center gap-3">
+             
+             {/* LOGIN/USER BUTTON */}
+             {!isLoadingAuth && (
+                 user ? (
+                    <div className="flex items-center gap-2 px-2 py-1 bg-gray-900 border border-cyan-900/50 rounded hover:border-cyan-500/50 transition-all group">
+                        {user.photoURL ? (
+                            <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-gray-700" />
+                        ) : (
+                            <User className="w-4 h-4 text-cyan-400" />
+                        )}
+                        <span className="text-[10px] font-mono font-bold text-cyan-200 hidden md:inline truncate max-w-[80px]">
+                            {user.displayName?.split(' ')[0] || 'User'}
+                        </span>
+                        <button onClick={handleLogout} className="ml-1 p-1 text-gray-500 hover:text-red-400 transition-colors" title="Logout">
+                            <LogOut className="w-3 h-3" />
+                        </button>
+                    </div>
+                 ) : (
+                    <button 
+                        onClick={handleLogin}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/20 border border-blue-500/50 rounded hover:bg-blue-900/40 text-blue-200 transition-all group"
+                    >
+                        <LogIn className="w-3 h-3" />
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider">LOGIN</span>
+                    </button>
+                 )
+             )}
+
              {/* Help Button */}
              <button 
                 onClick={onHelp}
