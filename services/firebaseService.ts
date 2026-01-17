@@ -3,7 +3,6 @@
 import { Quiz } from "../types";
 
 // IMPORTACIONES DIRECTAS DESDE CDN OFICIAL (VERSION 10.13.0)
-// Esto evita el error "Component auth has not been registered" al garantizar que App y Auth usan la misma instancia.
 // @ts-ignore
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 // @ts-ignore
@@ -28,22 +27,15 @@ let db: any;
 let provider: any;
 
 try {
-    // 1. Inicializar Firebase
     app = initializeApp(firebaseConfig);
-    
-    // 2. Inicializar Auth
     auth = getAuth(app);
     provider = new GoogleAuthProvider();
-
-    // 3. Inicializar Firestore
     db = getFirestore(app);
-    
     console.log("Firebase & Firestore initialized successfully");
 } catch (e) {
     console.error("CRITICAL: Firebase Initialization Failed", e);
 }
 
-// Exportar instancias y funciones
 export { auth, onAuthStateChanged, db };
 
 // --- AUTH FUNCTIONS ---
@@ -79,9 +71,9 @@ export const logoutFirebase = async () => {
 export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: boolean = false): Promise<string> => {
     if (!db) throw new Error("Firestore not initialized");
 
-    const collectionRef = collection(db, "quizzes");
+    // NOMBRE DE COLECCIÓN CORREGIDO: 'quizes' (minúsculas)
+    const collectionRef = collection(db, "quizes");
     
-    // Datos base
     const quizData = {
         userId,
         title: quiz.title || "Untitled Quiz",
@@ -93,17 +85,15 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
 
     try {
         if (quiz.id && !asCopy) {
-            // ACTUALIZAR (UPDATE)
-            const docRef = doc(db, "quizzes", quiz.id);
+            // UPDATE
+            const docRef = doc(db, "quizes", quiz.id);
             await updateDoc(docRef, quizData);
             return quiz.id;
         } else {
-            // CREAR NUEVO (CREATE)
-            // Si es copia, añadimos flag al título o simplemente creamos nuevo doc
+            // CREATE
             if (asCopy) {
                 quizData.title = `${quizData.title} (Copy)`;
             }
-            // Add createdAt only for new docs
             const newDocData = { ...quizData, createdAt: serverTimestamp() };
             const docRef = await addDoc(collectionRef, newDocData);
             return docRef.id;
@@ -121,32 +111,53 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
     if (!db) return [];
 
     try {
-        const q = query(
-            collection(db, "quizzes"),
-            where("userId", "==", userId),
-            orderBy("updatedAt", "desc")
-        );
+        // INTENTO 1: Consulta Óptima con Ordenación (Requiere Índice Compuesto)
+        // Si ves un error en consola con un enlace azul, HAZ CLIC EN EL ENLACE para crear el índice.
+        try {
+            const q = query(
+                collection(db, "quizes"),
+                where("userId", "==", userId),
+                orderBy("updatedAt", "desc")
+            );
+            const querySnapshot = await getDocs(q);
+            return mapSnapshotToQuizzes(querySnapshot);
 
-        const querySnapshot = await getDocs(q);
-        const quizzes: Quiz[] = [];
-
-        querySnapshot.forEach((doc: any) => {
-            const data = doc.data();
-            quizzes.push({
-                id: doc.id,
-                ...data,
-                // Convert Firestore timestamps to JS Date objects or keep as is if needed
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-                updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date()
-            });
-        });
-
-        return quizzes;
+        } catch (indexError: any) {
+            // FALLBACK: Si falla por falta de índice (FAILED_PRECONDITION), hacemos consulta simple sin orden
+            // y ordenamos en el cliente (menos eficiente pero no rompe la app).
+            if (indexError.code === 'failed-precondition' || indexError.message.includes('index')) {
+                console.warn("⚠️ FALTA ÍNDICE EN FIRESTORE. Revisa la consola para el enlace de creación. Usando fallback sin ordenación.");
+                console.warn(indexError.message); // AQUÍ APARECE EL LINK
+                
+                const qSimple = query(
+                    collection(db, "quizes"),
+                    where("userId", "==", userId)
+                );
+                const snapshot = await getDocs(qSimple);
+                return mapSnapshotToQuizzes(snapshot); // El ordenamiento se hará en el componente si es necesario
+            }
+            throw indexError;
+        }
     } catch (e) {
         console.error("Error fetching quizzes:", e);
         throw e;
     }
 };
+
+// Helper para mapear datos
+const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
+    const quizzes: Quiz[] = [];
+    snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        quizzes.push({
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date()
+        });
+    });
+    return quizzes;
+}
 
 /**
  * Borrar Quiz
@@ -154,7 +165,7 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
 export const deleteQuizFromFirestore = async (quizId: string) => {
     if (!db) return;
     try {
-        await deleteDoc(doc(db, "quizzes", quizId));
+        await deleteDoc(doc(db, "quizes", quizId));
     } catch (e) {
         console.error("Error deleting quiz:", e);
         throw e;
