@@ -5,8 +5,6 @@ export const translations = {
   es: {
     // ... existing ...
     app_subtitle: "SISTEMA DE CONVERSIÓN UNIVERSAL",
-    home_title_main: "Tus ideas, convertidas en quizes al instante.",
-    home_subtitle_main: "Genera, edita y gestiona tus exámenes con el poder de la IA.",
     home_description: "Crea, genera, edita, importa y exporta quizzes a tus plataformas favoritas.",
     create_quiz: "CREAR QUIZ",
     create_quiz_desc: "GENERACIÓN IA // EDITOR MANUAL",
@@ -194,8 +192,6 @@ export const translations = {
   en: {
     // ... existing ...
     app_subtitle: "UNIVERSAL CONVERTER SYSTEM",
-    home_title_main: "Your ideas, turned into quizzes instantly.",
-    home_subtitle_main: "Generate, edit, and manage your exams with the power of AI.",
     home_description: "Create, generate, edit, import, and export quizzes to your favorite platforms.",
     create_quiz: "CREATE QUIZ",
     create_quiz_desc: "AI GENERATION // MANUAL EDITOR",

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Quiz } from '../types';
 import { getUserQuizzes, deleteQuizFromFirestore } from '../services/firebaseService';
 import { CyberButton, CyberCard, CyberInput, CyberSelect } from './ui/CyberUI';
-import { ArrowLeft, Edit, Trash2, Calendar, Hash, Search, Filter, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Calendar, Hash, Tag, Search, Filter, Loader2 } from 'lucide-react';
 
 interface MyQuizzesProps {
     user: any;
@@ -68,7 +68,7 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
     });
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 w-full pb-20 pt-8">
+        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 w-full pb-20">
             <div className="flex items-center gap-4 border-b border-gray-800 pb-4">
                 <CyberButton variant="ghost" onClick={onBack} className="pl-0 gap-2">
                     <ArrowLeft className="w-4 h-4" /> VOLVER
@@ -107,19 +107,8 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
                     <span className="font-mono text-sm">CARGANDO NEURAL CLOUD...</span>
                 </div>
             ) : filteredQuizzes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-gray-800 rounded-lg bg-black/10 text-center">
-                    <Sparkles className="w-12 h-12 text-cyan-500/50 mb-4" />
-                    <h3 className="text-xl font-cyber text-white mb-2">
-                        {searchTerm ? "No se encontraron resultados" : "Aún no tienes quizes"}
-                    </h3>
-                    <p className="text-gray-500 font-mono text-sm max-w-md">
-                        {searchTerm ? "Intenta con otro término de búsqueda." : "¡Es hora de crear el primero! Ve al generador y empieza a crear contenido increíble."}
-                    </p>
-                    {!searchTerm && (
-                        <CyberButton variant="neural" onClick={onBack} className="mt-6">
-                            CREAR NUEVO QUIZ
-                        </CyberButton>
-                    )}
+                <div className="text-center py-20 text-gray-500 font-mono border-2 border-dashed border-gray-800 rounded-lg">
+                    {searchTerm ? "No se encontraron resultados para tu búsqueda." : "Aún no has guardado ningún quiz."}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
