@@ -1,5 +1,4 @@
 
-
 export interface Option {
   id: string;
   text: string;
@@ -39,9 +38,14 @@ export interface Question {
 }
 
 export interface Quiz {
+  id?: string; // Firestore Document ID
+  userId?: string; // Owner UID
   title: string;
   description: string;
   questions: Question[];
+  tags?: string[]; // Organization tags
+  createdAt?: any; // Timestamp
+  updatedAt?: any; // Timestamp
 }
 
 export interface DiscoveryAttempt {

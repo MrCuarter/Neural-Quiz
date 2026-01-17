@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import * as XLSX from 'xlsx';
@@ -11,11 +11,14 @@ interface QuizEditorProps {
   quiz: Quiz;
   setQuiz: React.Dispatch<React.SetStateAction<Quiz>>;
   onExport: () => void;
+  onSave: (asCopy?: boolean) => void; // New prop
+  isSaving?: boolean; // New prop
+  user?: any; // New prop
   showImportOptions?: boolean;
   t: any; // Translation object
 }
 
-export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, showImportOptions = true, t }) => {
+export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t }) => {
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   const [targetPlatform, setTargetPlatform] = useState<string>('UNIVERSAL');
   const [hasSelectedPlatform, setHasSelectedPlatform] = useState(false);
@@ -24,6 +27,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [aiCount, setAiCount] = useState(3);
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  const [newTag, setNewTag] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,6 +36,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
+  // ... (Keep existing CRUD functions: addQuestion, removeQuestion, updateQuestion, etc.) ...
   const addQuestion = () => {
     const newQ: Question = {
       id: uuid(),
@@ -103,10 +108,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }));
   };
 
-  // STRICT SEPARATION: Single Choice vs Multi-Select
   const handleCorrectSelection = (q: Question, optionId: string) => {
       if (q.questionType === QUESTION_TYPES.MULTI_SELECT) {
-          // TOGGLE LOGIC (Checkbox)
           let currentIds = q.correctOptionIds || [];
           if (currentIds.length === 0 && q.correctOptionId) currentIds = [q.correctOptionId];
 
@@ -120,8 +123,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
               correctOptionId: currentIds.length > 0 ? currentIds[0] : ""
           });
       } else {
-          // RADIO LOGIC (Single)
-          // Unselect everything else, select only this one.
           updateQuestion(q.id, { correctOptionId: optionId, correctOptionIds: [optionId] });
       }
   };
@@ -210,7 +211,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }));
   };
 
-  // Safe Option Initialization
   const ensureOptions = (q: Question) => {
       if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.length === 0) {
           const newOpts = [
@@ -247,22 +247,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
     } catch (e) { alert(t.alert_fail); } finally { setIsGenerating(false); }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.readAsArrayBuffer(file);
-    reader.onload = (event) => {
-      try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const newQuestions = detectAndParseStructure(workbook);
-        if (!newQuestions || newQuestions.length === 0) { alert(t.alert_no_valid_csv); return; }
-        setQuiz(prev => ({ ...prev, questions: [...prev.questions, ...newQuestions] }));
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        setHasSelectedPlatform(true);
-      } catch (err: any) { alert(`${t.alert_import_error}: ${err.message}`); }
-    };
+  // --- TAGS HANDLER ---
+  const handleAddTag = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && newTag.trim()) {
+          const currentTags = quiz.tags || [];
+          if (!currentTags.includes(newTag.trim())) {
+              setQuiz(prev => ({ ...prev, tags: [...currentTags, newTag.trim()] }));
+          }
+          setNewTag('');
+      }
+  };
+
+  const removeTag = (tag: string) => {
+      setQuiz(prev => ({ ...prev, tags: (prev.tags || []).filter(t => t !== tag) }));
   };
 
   const getTranslatedType = (type: string) => {
@@ -274,20 +271,91 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       return type;
   };
 
+  const getTypeIcon = (type?: string) => {
+      if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />;
+      if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />;
+      if (type === QUESTION_TYPES.OPEN_ENDED) return <AlignLeft className="w-4 h-4" />;
+      if (type === QUESTION_TYPES.DRAW) return <Palette className="w-4 h-4" />;
+      if (type === QUESTION_TYPES.ORDER) return <ArrowDownUp className="w-4 h-4" />;
+      if (type === QUESTION_TYPES.MULTI_SELECT) return <CheckSquare className="w-4 h-4" />;
+      return <Zap className="w-4 h-4" />; 
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-800 pb-4 gap-4">
+      
+      {/* --- SAVE / META ACTIONS --- */}
+      <div className="flex flex-col gap-4 border-b border-gray-800 pb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="w-full">
+                  <input 
+                      type="text" 
+                      value={quiz.title} 
+                      onChange={(e) => setQuiz(prev => ({...prev, title: e.target.value}))}
+                      className="bg-transparent text-3xl font-cyber text-cyan-400 border-b border-transparent hover:border-cyan-500/50 focus:border-cyan-500 focus:outline-none w-full transition-all"
+                      placeholder="Quiz Title..."
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                          {(quiz.tags || []).map(tag => (
+                              <span key={tag} className="flex items-center gap-1 bg-cyan-950/40 text-cyan-300 text-xs px-2 py-1 rounded border border-cyan-900/50">
+                                  <Tag className="w-3 h-3" /> {tag}
+                                  <button onClick={() => removeTag(tag)} className="hover:text-white"><XCircle className="w-3 h-3" /></button>
+                              </span>
+                          ))}
+                          <div className="relative">
+                              <input 
+                                  type="text" 
+                                  value={newTag}
+                                  onChange={(e) => setNewTag(e.target.value)}
+                                  onKeyDown={handleAddTag}
+                                  placeholder="+ Tag"
+                                  className="bg-black/20 text-xs text-gray-400 border border-gray-800 rounded px-2 py-1 w-20 focus:w-32 transition-all focus:border-cyan-500 focus:outline-none"
+                              />
+                          </div>
+                      </div>
+                  </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                  {user ? (
+                      <>
+                          {quiz.id ? (
+                              <>
+                                  <CyberButton onClick={() => onSave(false)} isLoading={isSaving} className="flex-1 md:flex-none text-xs h-10 px-4">
+                                      <Save className="w-4 h-4 mr-1" /> ACTUALIZAR
+                                  </CyberButton>
+                                  <CyberButton variant="secondary" onClick={() => onSave(true)} isLoading={isSaving} className="flex-1 md:flex-none text-xs h-10 px-4">
+                                      <Copy className="w-4 h-4 mr-1" /> COPIAR
+                                  </CyberButton>
+                              </>
+                          ) : (
+                              <CyberButton variant="neural" onClick={() => onSave(false)} isLoading={isSaving} className="flex-1 md:flex-none h-10">
+                                  <Save className="w-4 h-4 mr-2" /> GUARDAR EN MIS QUIZES
+                              </CyberButton>
+                          )}
+                      </>
+                  ) : (
+                      <div className="text-xs text-gray-500 font-mono italic px-2">
+                          Inicia sesión para guardar
+                      </div>
+                  )}
+              </div>
+          </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-cyber text-cyan-400">{t.questions_db} [{quiz.questions.length}]</h2>
+            <h2 className="text-xl font-cyber text-gray-300">{t.questions_db} [{quiz.questions.length}]</h2>
             <div className="flex items-center gap-2 text-xs font-mono text-gray-500 mt-1">
                 <span className="text-cyan-600 font-bold">{t.editor_targeting}</span>
                 <span className="bg-gray-900 px-2 py-0.5 rounded border border-gray-800">{PLATFORM_SPECS[targetPlatform].name}</span>
             </div>
           </div>
           <div className="flex items-center gap-4 w-full md:w-auto">
-             <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
-             <CyberButton onClick={() => setShowAiModal(!showAiModal)} variant="neural" className="flex-1 md:flex-none flex items-center gap-2"><Bot className="w-4 h-4" /> {t.add_gen_ai}</CyberButton>
-             {quiz.questions.length > 0 && <CyberButton variant="secondary" onClick={onExport} className="flex-1 md:flex-none flex items-center gap-2"><Download className="w-4 h-4" /> {t.go_export}</CyberButton>}
+             <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
+             <CyberButton onClick={() => setShowAiModal(!showAiModal)} variant="secondary" className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Bot className="w-4 h-4" /> {t.add_gen_ai}</CyberButton>
+             {quiz.questions.length > 0 && <CyberButton variant="ghost" onClick={onExport} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9 border border-gray-700 bg-black/40"><Download className="w-4 h-4" /> {t.go_export}</CyberButton>}
           </div>
       </div>
 
@@ -322,16 +390,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
             
             const correctTexts = q.options.filter(o => correctIds.includes(o.id)).map(o => o.text).join(", ");
             const hasExposedCorrect = correctIds.length > 0;
-
-            const getTypeIcon = (type?: string) => {
-                if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />;
-                if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />;
-                if (type === QUESTION_TYPES.OPEN_ENDED) return <AlignLeft className="w-4 h-4" />;
-                if (type === QUESTION_TYPES.DRAW) return <Palette className="w-4 h-4" />;
-                if (type === QUESTION_TYPES.ORDER) return <ArrowDownUp className="w-4 h-4" />;
-                if (type === QUESTION_TYPES.MULTI_SELECT) return <CheckSquare className="w-4 h-4" />;
-                return <Zap className="w-4 h-4" />; // Single Choice
-            };
 
             return (
               <div key={q.id} className={`transition-all duration-300 ${isExpanded ? 'scale-[1.01] z-10' : ''}`}>
@@ -394,7 +452,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
                           </div>
 
-                          {/* IMAGE URL & PREVIEW (MOVED HERE FOR VISIBILITY) */}
+                          {/* IMAGE URL & PREVIEW */}
                           <div className="bg-black/20 p-3 rounded border border-gray-800/50">
                                 <div className="flex items-center gap-2 mb-2">
                                     <LinkIcon className="w-4 h-4 text-gray-500" />
@@ -473,7 +531,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                   </div>
                               )}
 
-                              {/* ... (Other types kept same) ... */}
                               {q.questionType === QUESTION_TYPES.TRUE_FALSE && (
                                   <div className="flex gap-4">
                                       {q.options.slice(0, 2).map((opt) => (
@@ -485,7 +542,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                   </div>
                               )}
                               
-                              {/* ... (Keeping ORDER, FILL_GAP, OPEN_ENDED as they were) ... */}
                               {q.questionType === QUESTION_TYPES.ORDER && (
                                   <div className="space-y-4">
                                       <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 text-sm text-blue-200 font-mono flex items-start gap-2">

@@ -6,20 +6,22 @@ import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HelpView } from './components/HelpView';
-import { PrivacyView } from './components/PrivacyView'; // Import
-import { TermsView } from './components/TermsView'; // Import
+import { PrivacyView } from './components/PrivacyView'; 
+import { TermsView } from './components/TermsView'; 
+import { MyQuizzes } from './components/MyQuizzes'; // NEW IMPORT
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info, FileType } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info, FileType, Save } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
 import { fetchUrlContent, analyzeUrl } from './services/urlService';
 import { getRandomMessage, getDetectionMessage } from './services/messageService';
+import { auth, onAuthStateChanged, saveQuizToFirestore } from './services/firebaseService'; // FIREBASE IMPORTS
 import * as XLSX from 'xlsx';
 
 // Types
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms';
+type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -45,6 +47,10 @@ const App: React.FC = () => {
   const [isClassroomMode, setIsClassroomMode] = useState(false);
   const [language, setLanguage] = useState<Language>('es');
   
+  // USER STATE
+  const [user, setUser] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   // Translation Helper
   const t = translations[language];
 
@@ -89,7 +95,15 @@ const App: React.FC = () => {
   // Helper for ID generation
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
-  // --- Effects: Persistence & Theme ---
+  // --- Effects: Persistence & Theme & Auth ---
+
+  useEffect(() => {
+    // Auth Listener
+    const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
+        setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (isClassroomMode) {
@@ -157,6 +171,50 @@ const App: React.FC = () => {
       });
   };
 
+  // --- SAVE / LOAD HANDLERS ---
+
+  const handleSaveQuiz = async (asCopy: boolean = false) => {
+      if (!user) {
+          alert("Debes iniciar sesión para guardar en la nube.");
+          return;
+      }
+      if (!quiz.title.trim()) {
+          alert("El quiz necesita un título para ser guardado.");
+          return;
+      }
+
+      setIsSaving(true);
+      try {
+          const docId = await saveQuizToFirestore(quiz, user.uid, asCopy);
+          
+          // If we saved as copy or new, update the local quiz with the new ID
+          if (!quiz.id || asCopy) {
+              setQuiz(prev => ({ ...prev, id: docId }));
+          }
+          
+          alert(asCopy ? "Copia guardada con éxito." : "Quiz guardado con éxito.");
+      } catch (e) {
+          alert("Error al guardar el quiz. Revisa la consola.");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleLoadQuiz = (loadedQuiz: Quiz) => {
+      setQuiz(loadedQuiz);
+      setView('create_manual');
+  };
+
+  const handleSafeExit = (targetView: ViewState) => {
+      // Warn if leaving editor with unsaved changes (roughly) or content
+      if (view === 'create_manual' && quiz.questions.length > 0) {
+          if (!confirm("Si sales del editor sin guardar, podrías perder cambios recientes. ¿Continuar?")) {
+              return;
+          }
+      }
+      setView(targetView);
+  };
+
   // --- Context File Handling (Drag & Drop) ---
   const handleDrag = (e: React.DragEvent) => {
       e.preventDefault();
@@ -218,8 +276,7 @@ const App: React.FC = () => {
       processContextFiles(e.target.files);
   };
 
-  // ---
-
+  // ... (rest of AI and Conversion logic remains same) ...
   const handleCreateAI = async () => {
     if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) {
       alert(t.alert_topic);
@@ -285,7 +342,8 @@ const App: React.FC = () => {
       setQuiz({
         title: genParams.topic || 'AI Generated Quiz',
         description: `Generated for ${genParams.age} - ${targetPlatform}`,
-        questions: newQuestions
+        questions: newQuestions,
+        tags: ['AI Generated', targetPlatform] // Auto-tag
       });
       
       setView('create_manual'); 
@@ -404,7 +462,6 @@ const App: React.FC = () => {
         setAnalysisStatus(getRandomMessage('success'));
         
         // --- MISSING ANSWERS CHECK ---
-        // Check if we have multiple choice questions BUT they are empty
         const missingAnswers = questions.some(q => 
             (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && 
             q.options.filter(o => o.text.trim() !== "").length < 2
@@ -423,7 +480,8 @@ const App: React.FC = () => {
              setQuiz({
                 title: sourceName,
                 description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI',
-                questions: questions
+                questions: questions,
+                tags: ['Imported', isAlreadyStructured ? 'Template' : 'AI']
             });
             setTimeout(() => {
                 setView('create_manual');
@@ -449,7 +507,7 @@ const App: React.FC = () => {
           const enhancedQuestionsRaw = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish');
           
           const finalQuestions = enhancedQuestionsRaw.map(gq => {
-            const qId = gq.id || uuid(); // Keep existing ID if possible? Actually gq is from AI, better map back
+            const qId = gq.id || uuid(); 
             const options: Option[] = gq.rawOptions.map((optText: string) => ({ id: uuid(), text: optText }));
             const indices = gq.correctIndices || [gq.correctIndex || 0];
             const correctIds = indices.map((i: number) => options[i]?.id).filter((id: string) => !!id);
@@ -470,7 +528,8 @@ const App: React.FC = () => {
               ...initialQuiz,
               title: tempQuizInfo.title,
               description: tempQuizInfo.desc,
-              questions: finalQuestions
+              questions: finalQuestions,
+              tags: ['AI Repair']
           });
           
           setShowMissingAnswersModal(false);
@@ -519,11 +578,9 @@ const App: React.FC = () => {
          return; // Logic continues in onload
       }
 
-      // HANDLE EXCEL AND CSV (Using ArrayBuffer to fix encoding issues)
+      // HANDLE EXCEL AND CSV
       if (file.name.match(/\.(xlsx|xls|csv)$/i)) {
         const arrayBuffer = await file.arrayBuffer();
-        
-        // Ensure we pass a typed array (Uint8Array) to XLSX.read
         const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         
@@ -533,11 +590,10 @@ const App: React.FC = () => {
         if (strictQuestions && strictQuestions.length > 0) {
             await performAnalysis("", file.name.split('.')[0], true, strictQuestions);
         } else {
-             // 2. Fallback to AI (Convert sheets to text)
+             // 2. Fallback to AI
              let contentToAnalyze = "";
              workbook.SheetNames.forEach(name => {
                  contentToAnalyze += `\n--- SHEET: ${name} ---\n`;
-                 // Use CSV output for AI consumption
                  contentToAnalyze += XLSX.utils.sheet_to_csv(workbook.Sheets[name]);
              });
              await performAnalysis(contentToAnalyze, file.name.split('.')[0]);
@@ -615,15 +671,13 @@ const App: React.FC = () => {
         const structuredResult = await analyzeUrl(urlToConvert);
         
         if (structuredResult) {
-            // SPECIALIZED ADAPTER HIT (Kahoot/Blooket)
+            // SPECIALIZED ADAPTER HIT
             const { quiz: quizData, report } = structuredResult;
             
             setAnalysisProgress(80);
             
             if (report.blockedByBot) {
                 setAnalysisStatus("ERROR: Bloqueo Anti-Bot detectado.");
-                // Fallback to AI scraping if blocked, or alert user?
-                // For now, let's alert and fallback to generic if possible
             }
 
             // Quality Check for Missing Answers
@@ -640,7 +694,7 @@ const App: React.FC = () => {
             } else {
                 setAnalysisProgress(100);
                 setAnalysisStatus(getRandomMessage('success'));
-                setQuiz(quizData);
+                setQuiz({ ...quizData, tags: [report.platform, 'Imported'] });
                 setTimeout(() => setView('create_manual'), 1000);
             }
         } else {
@@ -663,7 +717,7 @@ const App: React.FC = () => {
 
   const Stepper = () => {
     let step = 1;
-    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms'].includes(view)) step = 1;
+    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms', 'my_quizzes'].includes(view)) step = 1;
     if (view === 'create_ai' || view === 'convert_analysis') step = 2;
     if (view === 'create_manual') step = 3;
     if (view === 'convert_result') step = 4;
@@ -751,7 +805,6 @@ const App: React.FC = () => {
            {t.app_subtitle}
          </p>
          
-         {/* Description Paragraph */}
          <div className="mt-6 p-6 bg-cyan-950/20 border border-cyan-500/30 rounded-lg backdrop-blur-sm relative overflow-hidden">
              <div className="absolute top-0 right-0 p-2 opacity-20">
                  <BrainCircuit className="w-16 h-16 text-cyan-400" />
@@ -778,20 +831,18 @@ const App: React.FC = () => {
                     <div className="text-center">
                         <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-cyan-300">{t.create_quiz}</h2>
                         <p className="font-mono text-gray-400 text-sm mb-2">{t.create_quiz_desc}</p>
-                        <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
-                            {t.create_quiz_help}
-                        </p>
                     </div>
                 </div>
             </button>
-            <a 
-                href="https://mistercuarter.es/privacy-policy" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-xs font-mono text-cyan-600 hover:text-cyan-400 text-center uppercase tracking-widest border border-transparent hover:border-cyan-900/50 py-2 rounded transition-colors"
-            >
-                Política de privacidad
-            </a>
+            {user && (
+                <CyberButton 
+                    onClick={() => setView('my_quizzes')} 
+                    variant="ghost" 
+                    className="w-full text-cyan-400 border border-cyan-900/50 hover:border-cyan-500 hover:bg-cyan-950/30"
+                >
+                    <Save className="w-4 h-4 mr-2" /> MIS QUIZES GUARDADOS
+                </CyberButton>
+            )}
          </div>
 
          {/* Convert Column */}
@@ -808,20 +859,9 @@ const App: React.FC = () => {
                     <div className="text-center">
                         <h2 className="text-3xl font-cyber text-white mb-2 group-hover:text-pink-300">{t.convert_quiz}</h2>
                         <p className="font-mono text-gray-400 text-sm mb-2">{t.convert_quiz_desc}</p>
-                        <p className="font-mono text-gray-500 text-xs max-w-[250px] mx-auto border-t border-gray-800/50 pt-2 italic">
-                            {t.convert_quiz_help}
-                        </p>
                     </div>
                 </div>
             </button>
-            <a 
-                href="https://mistercuarter.es/condiciones" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-xs font-mono text-pink-600 hover:text-pink-400 text-center uppercase tracking-widest border border-transparent hover:border-pink-900/50 py-2 rounded transition-colors"
-            >
-                Condiciones del servicio
-            </a>
          </div>
        </div>
     </div>
@@ -837,7 +877,7 @@ const App: React.FC = () => {
 
       <div className="grid gap-4">
         <button 
-          onClick={() => setView('create_ai')}
+          onClick={() => { setQuiz(initialQuiz); setView('create_ai'); }}
           className="flex items-center gap-6 p-6 bg-black/40 border border-gray-700 hover:border-purple-500 hover:bg-purple-950/10 transition-all group text-left"
         >
           <Sparkles className="w-10 h-10 text-purple-400 group-hover:scale-110 transition-transform" />
@@ -848,7 +888,7 @@ const App: React.FC = () => {
         </button>
 
         <button 
-          onClick={() => setView('create_manual')}
+          onClick={() => { setQuiz(initialQuiz); setView('create_manual'); }}
           className="flex items-center gap-6 p-6 bg-black/40 border border-gray-700 hover:border-cyan-500 hover:bg-cyan-950/10 transition-all group text-left"
         >
           <PenTool className="w-10 h-10 text-cyan-400 group-hover:scale-110 transition-transform" />
@@ -861,6 +901,7 @@ const App: React.FC = () => {
     </div>
   );
 
+  // ... (renderCreateAI, renderConvertUpload, renderAnalysis remain largely same) ...
   const renderCreateAI = () => (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 w-full">
       <CyberButton variant="ghost" onClick={() => setView('create_menu')} className="pl-0 gap-2">
@@ -1182,9 +1223,10 @@ const App: React.FC = () => {
 
         <Stepper />
         
-        {view === 'help' && <HelpView onBack={() => setView('home')} t={t} />}
-        {view === 'privacy' && <PrivacyView onBack={() => setView('home')} />}
-        {view === 'terms' && <TermsView onBack={() => setView('home')} />}
+        {view === 'help' && <HelpView onBack={() => handleSafeExit('home')} t={t} />}
+        {view === 'privacy' && <PrivacyView onBack={() => handleSafeExit('home')} />}
+        {view === 'terms' && <TermsView onBack={() => handleSafeExit('home')} />}
+        {view === 'my_quizzes' && user && <MyQuizzes user={user} onBack={() => handleSafeExit('home')} onEdit={handleLoadQuiz} />}
 
         {view === 'home' && renderHome()}
         {view === 'create_menu' && renderCreateMenu()}
@@ -1192,7 +1234,7 @@ const App: React.FC = () => {
         {view === 'create_manual' && (
           <div className="animate-in fade-in duration-500">
              <div className="flex justify-between items-center mb-6">
-                <CyberButton variant="ghost" onClick={() => setView('create_menu')}><ArrowLeft className="w-4 h-4 mr-2"/> {t.back}</CyberButton>
+                <CyberButton variant="ghost" onClick={() => handleSafeExit('create_menu')}><ArrowLeft className="w-4 h-4 mr-2"/> {t.back}</CyberButton>
                 <h2 className="font-cyber text-2xl text-cyan-400">{t.manual_override}</h2>
              </div>
              
@@ -1201,6 +1243,9 @@ const App: React.FC = () => {
                   quiz={quiz} 
                   setQuiz={setQuiz} 
                   onExport={scrollToExport}
+                  onSave={handleSaveQuiz}
+                  isSaving={isSaving}
+                  user={user}
                   showImportOptions={quiz.questions.length === 0}
                   t={t} 
                 />
@@ -1220,7 +1265,7 @@ const App: React.FC = () => {
       </main>
 
       {/* New Footer */}
-      <Footer onPrivacy={() => setView('privacy')} onTerms={() => setView('terms')} />
+      <Footer onPrivacy={() => handleSafeExit('privacy')} onTerms={() => handleSafeExit('terms')} />
 
     </div>
   );
