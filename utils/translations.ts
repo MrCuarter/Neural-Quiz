@@ -5,7 +5,7 @@ export const translations = {
   es: {
     // ... existing ...
     app_subtitle: "SISTEMA DE CONVERSIÓN UNIVERSAL",
-    home_description: "Neural Quiz es tu navaja suiza digital. ¿Tienes unas directrices vagas? La IA te crea el examen. ¿Tienes un PDF aburrido, una web o incluso una foto de un examen arrugado? Lo transformamos en un Kahoot, Google Form o lo que necesites en segundos. Tú pones la fuente, Neural Quiz hace la magia y exporta a cualquier plataforma educativa actual.",
+    home_description: "Crea, genera, edita, importa y exporta quizzes a tus plataformas favoritas.",
     create_quiz: "CREAR QUIZ",
     create_quiz_desc: "GENERACIÓN IA // EDITOR MANUAL",
     create_quiz_help: "No tengo las preguntas, necesito empezar de cero.",
@@ -192,7 +192,7 @@ export const translations = {
   en: {
     // ... existing ...
     app_subtitle: "UNIVERSAL CONVERTER SYSTEM",
-    home_description: "Neural Quiz is your digital Swiss Army knife. Vague guidelines? AI creates the exam. Boring PDF, website, or crumbled exam photo? We transform it into a Kahoot, Google Form, or whatever you need in seconds. You provide the source, Neural Quiz does the magic and exports to any current educational platform.",
+    home_description: "Create, generate, edit, import, and export quizzes to your favorite platforms.",
     create_quiz: "CREATE QUIZ",
     create_quiz_desc: "AI GENERATION // MANUAL EDITOR",
     create_quiz_help: "I don't have questions, I need to start from scratch.",
@@ -378,7 +378,7 @@ export const translations = {
   },
   fr: {
     // ... existing fr translations ...
-    home_description: "Neural Quiz est votre couteau suisse numérique. Vous avez des directives vagues ? L'IA crée l'examen. Un PDF ennuyeux, un site web ou même une photo d'un examen froissé ? Nous le transformons en Kahoot ou Google Form en quelques secondes. Vous fournissez la source, Neural Quiz fait la magie.",
+    home_description: "Créez, générez, éditez, importez et exportez des quiz vers vos plateformes préférées.",
     supports_fmt: "Supporte : .CSV, .XLSX, .TXT, .PDF, .PNG, .JPG",
     autodetect_fmt: "Détection auto et OCR pour images.",
     q_type_label: "TYPE DE QUESTION",
