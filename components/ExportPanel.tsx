@@ -3,9 +3,11 @@ import React, { useState, useMemo } from 'react';
 import { ExportFormat, Quiz, Question } from '../types';
 import { exportQuiz } from '../services/exportService';
 import { exportToGoogleForms } from '../services/googleFormsService';
+import { exportToGoogleSlides } from '../services/googleSlidesService'; // NEW IMPORT
+import { signInWithGoogle } from '../services/firebaseService'; // AUTH IMPORT
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
-import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X, Image as ImageIcon, FileText } from 'lucide-react';
+import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X, Image as ImageIcon, FileText, Presentation } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ExportPanelProps {
@@ -25,14 +27,17 @@ const ExportPreviewCard: React.FC<{
 }> = ({ format, quiz, exportOptions, t, onClose }) => {
     const [copied, setCopied] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const [googleFormLink, setGoogleFormLink] = useState('');
+    const [externalLink, setExternalLink] = useState('');
     const [previewContent, setPreviewContent] = useState<any>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
 
     // Initial load of text preview (only for text formats, to avoid heavy async on render)
     React.useEffect(() => {
-        // Skip preview generation for Google Forms or PDF (too heavy or not text)
-        if (format.id === ExportFormat.GOOGLE_FORMS || format.id === ExportFormat.PDF_PRINT) {
+        // Skip preview generation for APIs and heavy binaries
+        if (format.id === ExportFormat.GOOGLE_FORMS || 
+            format.id === ExportFormat.GOOGLE_SLIDES_API ||
+            format.id === ExportFormat.PDF_PRINT || 
+            format.id === ExportFormat.GOOGLE_SLIDES_PPTX) {
             return;
         }
         
@@ -56,13 +61,27 @@ const ExportPreviewCard: React.FC<{
             // Special Handler: Google Forms
             if (format.id === ExportFormat.GOOGLE_FORMS) {
                 const link = await exportToGoogleForms(quiz.title, quiz.questions);
-                setGoogleFormLink(link);
+                setExternalLink(link);
                 setIsExporting(false);
                 return;
             }
 
-            // Standard & PDF Export
-            // We pass { includeImages: true/false } to the service
+            // Special Handler: Google Slides API (Cloud)
+            if (format.id === ExportFormat.GOOGLE_SLIDES_API) {
+                // 1. Get Token (Triggers Popup if needed or returns current if valid/refreshed logic exists)
+                // Since we need scopes 'presentations', we rely on signInWithGoogle from firebaseService
+                // which we updated to include these scopes.
+                const { token } = await signInWithGoogle();
+                if (!token) throw new Error("Authentication failed or window closed.");
+                
+                // 2. Call Service
+                const link = await exportToGoogleSlides(quiz.title, quiz.questions, token);
+                setExternalLink(link);
+                setIsExporting(false);
+                return;
+            }
+
+            // Standard, PDF & PPTX Export (Client-side)
             const exportData = await exportQuiz(quiz, format.id, { ...exportOptions, includeImages: withImages });
 
             // Browser Download Trigger
@@ -80,7 +99,7 @@ const ExportPreviewCard: React.FC<{
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // Add suffix if images included to differentiate
+            
             const filename = withImages && format.id === ExportFormat.PDF_PRINT 
                 ? exportData.filename.replace('.pdf', '_IMAGES.pdf') 
                 : exportData.filename || `quiz_${format.id}.txt`;
@@ -92,7 +111,7 @@ const ExportPreviewCard: React.FC<{
             URL.revokeObjectURL(url);
 
         } catch (e) { 
-            alert("Download failed: " + (e as Error).message); 
+            alert("Export failed: " + (e as Error).message); 
         } finally {
             setIsExporting(false);
         }
@@ -151,7 +170,9 @@ const ExportPreviewCard: React.FC<{
 
     // Preview Logic Helpers
     const isGoogle = format.id === ExportFormat.GOOGLE_FORMS;
+    const isGoogleSlides = format.id === ExportFormat.GOOGLE_SLIDES_API;
     const isPDF = format.id === ExportFormat.PDF_PRINT;
+    const isPPTX = format.id === ExportFormat.GOOGLE_SLIDES_PPTX;
     
     const tablePreview = useMemo(() => {
         if (!previewContent) return null;
@@ -172,6 +193,8 @@ const ExportPreviewCard: React.FC<{
         return null;
     }, [previewContent, format.id]);
 
+    const isCloudExport = isGoogle || isGoogleSlides;
+
     return (
         <CyberCard className="border-cyan-900/50 overflow-hidden flex flex-col h-full">
             {/* HEADER WITH LOGO */}
@@ -183,7 +206,7 @@ const ExportPreviewCard: React.FC<{
                     <div>
                         <h4 className="text-cyan-400 font-cyber font-bold text-sm">{format.name}</h4>
                         <span className="text-[10px] text-gray-500 font-mono uppercase">
-                            {isGoogle ? "API INTEGRATION" : (isPDF ? "DOCUMENT GENERATOR" : (previewContent?.isBase64 ? "BINARY FILE" : "TEXT FILE"))}
+                            {isCloudExport ? "API INTEGRATION" : (isPDF || isPPTX ? "DOCUMENT GENERATOR" : (previewContent?.isBase64 ? "BINARY FILE" : "TEXT FILE"))}
                         </span>
                     </div>
                 </div>
@@ -198,15 +221,15 @@ const ExportPreviewCard: React.FC<{
                     <div className="absolute inset-0 flex items-center justify-center">
                         <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
                     </div>
-                ) : googleFormLink ? (
+                ) : externalLink ? (
                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-gray-900">
                          <Check className="w-8 h-8 text-green-500 mb-2" />
-                         <p className="text-xs text-gray-300 mb-4">{t.google_success_title}</p>
-                         <a href={googleFormLink} target="_blank" rel="noopener noreferrer" className="text-xs bg-green-600 text-white px-4 py-2 rounded hover:bg-green-500 flex items-center gap-2">
-                             {t.open_form} <ExternalLink className="w-3 h-3" />
+                         <p className="text-xs text-gray-300 mb-4">{isGoogleSlides ? t.google_slides_success : t.google_success_title}</p>
+                         <a href={externalLink} target="_blank" rel="noopener noreferrer" className="text-xs bg-green-600 text-white px-4 py-2 rounded hover:bg-green-500 flex items-center gap-2">
+                             {t.open_result} <ExternalLink className="w-3 h-3" />
                          </a>
                      </div>
-                ) : isGoogle ? (
+                ) : isCloudExport ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 gap-2 p-4 text-center">
                         <img src={format.logo} className="w-12 h-12 opacity-20 grayscale" />
                         <p className="text-[10px] font-mono">{t.google_preview_unavailable}</p>
@@ -218,6 +241,11 @@ const ExportPreviewCard: React.FC<{
                             <ImageIcon className="w-12 h-12" />
                         </div>
                         <p className="text-[10px] font-mono text-gray-400">PDF Generator Ready.<br/>Select option below.</p>
+                    </div>
+                ) : isPPTX ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 gap-4 p-4 text-center">
+                        <Presentation className="w-16 h-16 opacity-30" />
+                        <p className="text-[10px] font-mono text-gray-400">Presentation Generator Ready.<br/>Exports as .pptx (Compatible with Google Slides)</p>
                     </div>
                 ) : tablePreview ? (
                     renderTable(tablePreview)
@@ -239,7 +267,7 @@ const ExportPreviewCard: React.FC<{
                 {/* STANDARD ACTIONS */}
                 {!isPDF && (
                     <div className="flex gap-2">
-                        {previewContent && !previewContent.isBase64 && !isGoogle && (
+                        {previewContent && !previewContent.isBase64 && !isCloudExport && (
                             <button onClick={handleCopy} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded border border-gray-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors">
                                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                                 {copied ? t.copied : t.copy_clipboard}
@@ -248,10 +276,10 @@ const ExportPreviewCard: React.FC<{
                         <CyberButton 
                             onClick={() => handleDownload(false)} 
                             isLoading={isExporting}
-                            disabled={!!googleFormLink && isGoogle}
-                            className={`flex-1 py-2 text-xs h-auto ${isGoogle ? 'bg-purple-700 hover:bg-purple-600' : ''}`}
+                            disabled={!!externalLink && isCloudExport}
+                            className={`flex-1 py-2 text-xs h-auto ${isCloudExport ? 'bg-purple-700 hover:bg-purple-600' : ''}`}
                         >
-                            {isGoogle ? t.connect_create : t.download_file}
+                            {isCloudExport ? t.connect_create : t.download_file}
                         </CyberButton>
                     </div>
                 )}
@@ -291,44 +319,38 @@ const ExportPreviewCard: React.FC<{
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, initialTargetPlatform }) => {
   // Determine default selection based on prop, or fallback to Kahoot
-  // 'UNIVERSAL' is not a specific export format, so we default to Kahoot if that's the selection.
   const getDefaultSelection = () => {
       if (initialTargetPlatform && initialTargetPlatform !== 'UNIVERSAL') {
-          // Check if the platform exists in ExportFormat enum (loose check)
           const isValid = Object.values(ExportFormat).includes(initialTargetPlatform as ExportFormat);
           if (isValid) return [initialTargetPlatform as ExportFormat];
       }
       return [ExportFormat.KAHOOT];
   };
 
-  // Multi-selection state
   const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>(getDefaultSelection);
   const [isFixing, setIsFixing] = useState(false);
-  
-  // Flippity specific state (Global for now, applies if Flippity is selected)
   const [flippityMode, setFlippityMode] = useState<'30' | '6'>('30');
   const [flippitySelection, setFlippitySelection] = useState<string[]>([]);
   const [flippityCategories, setFlippityCategories] = useState<string[]>(["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"]);
   const [isGeneratingCats, setIsGeneratingCats] = useState(false);
 
-  // Define allowed types per platform.
   const formats = [
     // --- TIER 1: THE BIG ONES ---
     { id: ExportFormat.KAHOOT, name: "Kahoot!", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.GOOGLE_SLIDES_API, name: "Google Slides (API)", desc: t.fmt_google_slides_api, logo: "https://upload.wikimedia.org/wikipedia/commons/1/1e/Google_Slides_2020_Logo.svg", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.PDF_PRINT, name: "PDF Printable", desc: t.fmt_pdf_print, logo: "https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg", allowedTypes: ['*'] },
+    { id: ExportFormat.GOOGLE_SLIDES_PPTX, name: "Google Slides (File)", desc: t.fmt_google_slides, logo: "https://upload.wikimedia.org/wikipedia/commons/1/1e/Google_Slides_2020_Logo.svg", allowedTypes: ['*'] },
     { id: ExportFormat.BLOOKET, name: "Blooket", desc: t.fmt_blooket, logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit", desc: t.fmt_gimkit_classic, logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
     
-    // --- TIER 2: POPULAR CLASSROOM TOOLS ---
+    // --- TIER 2 & 3: Unchanged ---
     { id: ExportFormat.SOCRATIVE, name: "Socrative", desc: t.fmt_socrative, logo: "https://i.postimg.cc/ZCD0Wmwy/Socrative.png", allowedTypes: ['Multiple Choice', 'True/False', 'Short Answer'] },
     { id: ExportFormat.QUIZALIZE, name: "Quizalize", desc: t.fmt_quizalize, logo: "https://i.postimg.cc/ZCD0WmwB/Quizalize.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer'] },
     { id: ExportFormat.WORDWALL, name: "Wordwall", desc: t.fmt_wordwall, logo: "https://i.postimg.cc/3dbWkht2/Wordwall.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GENIALLY, name: "Genially", desc: t.fmt_genially, logo: "https://i.postimg.cc/rKpKysNw/Genially.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.PLICKERS, name: "Plickers", desc: t.fmt_plickers, logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.WOOCLAP, name: "Wooclap", desc: t.fmt_wooclap, logo: "https://i.postimg.cc/SKc8L982/Wooclap.png", allowedTypes: ['Multiple Choice'] },
-    
-    // --- TIER 3: SPECIFIC & NICHE ---
     { id: ExportFormat.IDOCEO, name: "iDoceo", desc: t.fmt_idoceo, logo: "https://i.postimg.cc/2VX31Y0S/i-Doceo.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.FLIPPITY, name: "Flippity", desc: t.fmt_flippity, logo: "https://i.postimg.cc/jdTHMZvS/Flippity.png", allowedTypes: ['*'] },
     { id: ExportFormat.QUIZLET_QA, name: "Quizlet", desc: t.fmt_quizlet, logo: "https://i.postimg.cc/Cz6dR0cZ/Quizlet.png", allowedTypes: ['*'] },
@@ -336,8 +358,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
     { id: ExportFormat.WAYGROUND, name: "Wayground", desc: t.fmt_wayground, logo: "https://i.postimg.cc/HVPjrm6X/Wayground.png", allowedTypes: ['*'] },
     { id: ExportFormat.SANDBOX, name: "Sandbox Edu", desc: t.fmt_sandbox, logo: "https://i.postimg.cc/hf3hXn2X/Sandbox.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.BAAMBOOZLE, name: "Baamboozle", desc: t.fmt_baamboozle, logo: "https://i.postimg.cc/3dwdrNFw/Baamboozle.png", allowedTypes: ['*'] },
-    
-    // --- TIER 4: TECHNICAL & BACKUP ---
     { id: ExportFormat.AIKEN, name: "Moodle/LMS (Aiken)", desc: t.fmt_aiken, logo: "https://i.postimg.cc/SKc8L98N/LMS.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GIFT, name: "Moodle (GIFT)", desc: t.fmt_gift, logo: "https://i.postimg.cc/JhjJ3XJ0/Moodle.png", allowedTypes: ['*'] },
     { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
@@ -351,20 +371,17 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
       });
   };
 
-  // Helper logic for specific modes
   const isGimkitSelected = selectedFormats.includes(ExportFormat.GIMKIT_CLASSIC) || selectedFormats.includes(ExportFormat.GIMKIT_TEXT);
   const isFlippitySelected = selectedFormats.includes(ExportFormat.FLIPPITY);
 
   const switchGimkitMode = (mode: ExportFormat) => {
-      // Remove any gimkit mode and add the new one
       const withoutGimkit = selectedFormats.filter(f => f !== ExportFormat.GIMKIT_CLASSIC && f !== ExportFormat.GIMKIT_TEXT);
       setSelectedFormats([...withoutGimkit, mode]);
   };
 
-  // Calculate Incompatible Questions (Union of incompatibilities for all selected)
+  // Compatibility Check
   const incompatibleQuestions = useMemo(() => {
      let badQs = new Set<Question>();
-     
      selectedFormats.forEach(fmtId => {
          const fmt = formats.find(f => f.id === fmtId);
          if (fmt && fmt.allowedTypes && !fmt.allowedTypes.includes('*')) {
@@ -382,12 +399,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
       if (!setQuiz || incompatibleQuestions.length === 0) return;
       setIsFixing(true);
       try {
-          // Attempt to adapt to Generic Multiple Choice as a baseline for compatibility
-          const adaptedQuestions = await adaptQuestionsToPlatform(
-              incompatibleQuestions, 
-              "Multiple Choice Universal", 
-              ['Multiple Choice']
-          );
+          const adaptedQuestions = await adaptQuestionsToPlatform(incompatibleQuestions, "Multiple Choice Universal", ['Multiple Choice']);
           setQuiz(prev => {
               const newQs = [...prev.questions];
               adaptedQuestions.forEach(aq => {
@@ -401,7 +413,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
       finally { setIsFixing(false); }
   };
 
-  // Prepare Quiz Data (e.g. for Flippity filtering)
   const getPreparedQuiz = (): Quiz => {
     if (!isFlippitySelected) return quiz;
     if (flippityMode === '6' && flippitySelection.length > 0) {
@@ -417,7 +428,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
 
   const preparedQuiz = useMemo(() => getPreparedQuiz(), [quiz, flippityMode, flippitySelection, isFlippitySelected]);
 
-  // Flippity Helpers
   const handleGenerateCategories = async () => {
       setIsGeneratingCats(true);
       const questionTexts = quiz.questions.slice(0, 30).map(q => q.text);
@@ -435,7 +445,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
         <p className="text-gray-400 font-mono-cyber text-xs md:text-sm">{t.export_subtitle} (Multi-Select Enabled)</p>
       </div>
 
-      {/* SELECTION GRID */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {formats.map(fmt => {
            const isActive = selectedFormats.includes(fmt.id);
@@ -454,7 +463,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                   <Check className="w-3 h-3" />
                 </div>
               )}
-              
               {fmt.logo && (
                 <div className="w-20 h-full bg-white/5 flex items-center justify-center p-3 shrink-0 border-r border-white/5">
                      <img 
@@ -464,7 +472,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                     />
                 </div>
               )}
-
               <div className="flex-1 p-3 flex flex-col justify-center min-w-0 h-full">
                 <h3 className={`font-cyber text-xs md:text-sm mb-1 leading-tight ${isActive ? 'text-cyan-300' : 'text-gray-300 group-hover:text-white'}`}>
                     {fmt.name}
@@ -478,10 +485,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
         })}
       </div>
 
-      {/* PREVIEW & ACTIONS AREA */}
       <div className="mt-8 space-y-6">
-          
-          {/* 1. Global Config Panels (Gimkit/Flippity) */}
+          {/* ... Configuration panels unchanged ... */}
           {isGimkitSelected && (
             <div className="flex flex-col sm:flex-row gap-4 p-4 bg-black/40 border border-cyan-900/50 rounded-lg">
               <div className="flex-1">
@@ -500,6 +505,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
 
           {isFlippitySelected && (
             <div className="flex flex-col gap-4 p-4 bg-black/40 border border-orange-500/50 rounded-lg animate-in fade-in">
+               {/* ... Flippity contents ... */}
                <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
                     <p className="text-orange-400 font-mono-cyber text-sm mb-2 uppercase">{t.flippity_config}</p>
@@ -529,7 +535,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
             </div>
           )}
 
-          {/* 2. Incompatibility Warning */}
           {incompatibleQuestions.length > 0 && (
              <div className="bg-red-950/30 border border-red-500 rounded p-4 animate-pulse">
                 <div className="flex items-center gap-3 mb-2 text-red-400 font-cyber font-bold">
@@ -549,7 +554,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
              </div>
           )}
 
-          {/* 3. PREVIEW CARDS GRID */}
           {selectedFormats.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-gray-800 rounded-lg">
                   <p className="text-gray-600 font-mono">Select a platform above to generate files.</p>

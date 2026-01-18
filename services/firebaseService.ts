@@ -29,9 +29,15 @@ let provider: any;
 try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
+    
+    // --- AUTH PROVIDER CONFIGURATION ---
     provider = new GoogleAuthProvider();
+    // Scopes for Google Drive and Slides API
+    provider.addScope('https://www.googleapis.com/auth/presentations');
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    
     db = getFirestore(app);
-    console.log("Firebase & Firestore initialized successfully");
+    console.log("Firebase & Firestore initialized successfully with Slides scopes");
 } catch (e) {
     console.error("CRITICAL: Firebase Initialization Failed", e);
 }
@@ -40,14 +46,18 @@ export { auth, onAuthStateChanged, db };
 
 // --- AUTH FUNCTIONS ---
 
-export const signInWithGoogle = async () => {
+export const signInWithGoogle = async (): Promise<{ user: any, token: string | null }> => {
   if (!auth) {
       alert("Firebase no está disponible en este momento.");
-      return;
+      throw new Error("Firebase auth not initialized");
   }
   try {
     const result = await signInWithPopup(auth, provider);
-    return result.user;
+    // This gives you a Google Access Token. You can use it to access the Google API.
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken || null;
+    
+    return { user: result.user, token };
   } catch (error) {
     console.error("Error al iniciar sesión con Google:", error);
     throw error;
