@@ -32,9 +32,11 @@ try {
     
     // --- AUTH PROVIDER CONFIGURATION ---
     provider = new GoogleAuthProvider();
-    // Scopes for Google Drive and Slides API
-    provider.addScope('https://www.googleapis.com/auth/presentations');
-    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    
+    // SCOPES CRÍTICOS PARA GOOGLE SLIDES Y DRIVE
+    // Estos permiten a la app crear archivos en nombre del usuario
+    provider.addScope('https://www.googleapis.com/auth/presentations'); // Crear/Editar Slides
+    provider.addScope('https://www.googleapis.com/auth/drive.file');    // Ver/Editar archivos creados por la app
     
     db = getFirestore(app);
     console.log("Firebase & Firestore initialized successfully with Slides scopes");
@@ -52,10 +54,18 @@ export const signInWithGoogle = async (): Promise<{ user: any, token: string | n
       throw new Error("Firebase auth not initialized");
   }
   try {
+    // Forzamos el popup para asegurar que se soliciten los scopes si no se han concedido antes
     const result = await signInWithPopup(auth, provider);
-    // This gives you a Google Access Token. You can use it to access the Google API.
+    
+    // IMPORTANTE: Recuperar el OAuth Access Token
+    // Este token es el que se necesita enviar en la cabecera 'Authorization: Bearer <token>'
+    // a la API de Google Slides. Sin esto, la API dará error 401/403.
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential?.accessToken || null;
+    
+    if (!token) {
+        console.warn("Google Sign-In success but no Access Token returned.");
+    }
     
     return { user: result.user, token };
   } catch (error) {
@@ -95,7 +105,6 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
     const collectionRef = collection(db, "quizes");
     
     // Construimos el objeto base.
-    // NOTA: No incluimos serverTimestamp aquí todavía para que no se pierda en el stringify.
     const rawData = {
         userId: effectiveUid,
         title: quiz.title || "Untitled Quiz",
@@ -105,8 +114,6 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
     };
 
     // 2. LIMPIEZA DE DATOS (JSON TRICK)
-    // Esto elimina recursivamente cualquier propiedad con valor 'undefined',
-    // que es lo que causa el error "Unsupported field value: undefined" en Firestore.
     let cleanData: any;
     try {
         cleanData = JSON.parse(JSON.stringify(rawData));
@@ -118,7 +125,6 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
     try {
         if (quiz.id && !asCopy) {
             // --- UPDATE FLOW ---
-            // Añadimos el timestamp DESPUÉS de la limpieza JSON
             const payload = {
                 ...cleanData,
                 updatedAt: serverTimestamp()
@@ -134,7 +140,6 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
                 cleanData.title = `${cleanData.title} (Copy)`;
             }
             
-            // Añadimos timestamps DESPUÉS de la limpieza JSON
             const payload = { 
                 ...cleanData, 
                 createdAt: serverTimestamp(),
@@ -145,9 +150,8 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
             return docRef.id;
         }
     } catch (e: any) {
-        // 3. CONSOLA DETALLADA
         console.error("🔥 Error al guardar en Firestore.");
-        console.error(">> Datos limpiados enviados:", cleanData); // Vemos qué intentamos mandar
+        console.error(">> Datos limpiados enviados:", cleanData);
         console.error(">> Error original:", e);
         throw e;
     }
@@ -160,8 +164,6 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
     if (!db) return [];
 
     try {
-        // INTENTO 1: Consulta Óptima con Ordenación (Requiere Índice Compuesto en Firebase)
-        // IMPORTANTE: Si ves un error en consola con un enlace azul, HAZ CLIC EN EL ENLACE para crear el índice.
         try {
             const q = query(
                 collection(db, "quizes"),
@@ -172,18 +174,14 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
             return mapSnapshotToQuizzes(querySnapshot);
 
         } catch (indexError: any) {
-            // FALLBACK: Si falla por falta de índice (FAILED_PRECONDITION), hacemos consulta simple sin orden
-            // y ordenamos en el cliente.
             if (indexError.code === 'failed-precondition' || indexError.message.includes('index')) {
-                console.warn("⚠️ FALTA ÍNDICE EN FIRESTORE. Revisa la consola para el enlace de creación. Usando fallback sin ordenación.");
-                console.warn(indexError.message); // AQUÍ APARECE EL LINK AZUL
+                console.warn("⚠️ FALTA ÍNDICE EN FIRESTORE. Usando fallback.");
                 
                 const qSimple = query(
                     collection(db, "quizes"),
                     where("userId", "==", userId)
                 );
                 const snapshot = await getDocs(qSimple);
-                // Ordenamos en cliente como fallback
                 const results = mapSnapshotToQuizzes(snapshot);
                 return results.sort((a, b) => {
                     const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date();
@@ -191,7 +189,7 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
                     return dateB.getTime() - dateA.getTime();
                 });
             }
-            throw indexError; // Si es otro error, lanzarlo
+            throw indexError;
         }
     } catch (e) {
         console.error("Error fetching quizzes:", e);
@@ -199,7 +197,6 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
     }
 };
 
-// Helper para mapear datos
 const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
     const quizzes: Quiz[] = [];
     snapshot.forEach((doc: any) => {
@@ -214,9 +211,6 @@ const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
     return quizzes;
 }
 
-/**
- * Borrar Quiz
- */
 export const deleteQuizFromFirestore = async (quizId: string) => {
     if (!db) return;
     try {
