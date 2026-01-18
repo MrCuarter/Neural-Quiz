@@ -36,7 +36,16 @@ const getCorsProxyKey = () => getEnvVar('VITE_CORSPROXY_API_KEY');
 
 // --- CONSTANTS ---
 const AGENTS = [
-    // 1. CorsProxy: Best for JSON APIs
+    // 1. NeuralProxy (Vercel): Best for JSON APIs & WAF evasion
+    {
+        name: 'NeuralProxy (Vercel)',
+        fetch: async (target: string) => {
+            const res = await fetch(`https://neural-quiz.vercel.app/api/proxy?url=${encodeURIComponent(target)}`);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            return await res.text();
+        }
+    },
+    // 2. CorsProxy: Backup
     {
         name: 'CorsProxy',
         fetch: async (target: string) => {
@@ -49,7 +58,7 @@ const AGENTS = [
             return await res.text();
         }
     },
-    // 2. AllOrigins Raw: Best for HTML
+    // 3. AllOrigins Raw: Best for HTML
     {
         name: 'AllOrigins Raw',
         fetch: async (target: string) => {
@@ -58,7 +67,7 @@ const AGENTS = [
             return await res.text();
         }
     },
-    // 3. Jina Reader: Backup for Print View HTML if other proxies fail
+    // 4. Jina Reader: Backup for Print View HTML if other proxies fail
     {
         name: 'Jina Reader',
         fetch: async (target: string) => {
@@ -251,8 +260,8 @@ export const extractWaygroundQA = async (url: string): Promise<{ quiz: Quiz | nu
         debug.steps.push("STEP 2: Attempting API Strategy");
         try {
             const apiUrl = `https://quizizz.com/api/main/quiz/${quizId}`;
-            // Use CorsProxy for API JSON (AllOrigins often corrupts JSON)
-            const apiAgent = AGENTS.find(a => a.name === 'CorsProxy') || AGENTS[0]; 
+            // Use NeuralProxy for API JSON (best reliability)
+            const apiAgent = AGENTS[0]; 
             
             const jsonText = await apiAgent.fetch(apiUrl);
             if (jsonText.startsWith('{')) {
@@ -281,7 +290,7 @@ export const extractWaygroundQA = async (url: string): Promise<{ quiz: Quiz | nu
         debug.steps.push("STEP 3: Attempting Print View Strategy");
         
         // Loop through remaining agents (AllOrigins, Jina) for Print View
-        const printAgents = [AGENTS[1], AGENTS[2]];
+        const printAgents = [AGENTS[2], AGENTS[3]];
         
         for (const agent of printAgents) {
             try {

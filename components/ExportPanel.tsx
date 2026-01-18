@@ -5,7 +5,7 @@ import { exportQuiz } from '../services/exportService';
 import { exportToGoogleForms } from '../services/googleFormsService';
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
-import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X } from 'lucide-react';
+import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X, Image as ImageIcon, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ExportPanelProps {
@@ -24,56 +24,48 @@ const ExportPreviewCard: React.FC<{
     onClose: () => void
 }> = ({ format, quiz, exportOptions, t, onClose }) => {
     const [copied, setCopied] = useState(false);
-    const [isExportingGoogle, setIsExportingGoogle] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [googleFormLink, setGoogleFormLink] = useState('');
+    const [previewContent, setPreviewContent] = useState<any>(null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
 
-    // Generate Export Content
-    const exportData = useMemo(() => {
-        try {
-            if (format.id === ExportFormat.GOOGLE_FORMS) {
-                return { content: "", isBase64: true, mimeType: "application/json", filename: "google_forms_placeholder.json" };
-            }
-            return exportQuiz(quiz, format.id, exportOptions);
-        } catch(e) {
-            console.error("Export Error:", e);
-            return { content: "Error generating preview.", isBase64: false, mimeType: "text/plain", filename: "error.txt" };
-        }
-    }, [quiz, format.id, exportOptions]);
-
-    // Generate Visual Table Preview (if XLSX/CSV)
-    const tablePreview = useMemo(() => {
-        const mime = exportData.mimeType || "";
-        const isXLSX = exportData.isBase64 && mime.includes('spreadsheetml');
-        const isCSV = format.id && (format.id.includes('CSV') || format.id === ExportFormat.BLOOKET || format.id === ExportFormat.QUIZALIZE);
-        
-        if (isXLSX) {
-            try {
-                const wb = XLSX.read(exportData.content, { type: 'base64' });
-                if (wb.SheetNames.length > 0) {
-                    const ws = wb.Sheets[wb.SheetNames[0]];
-                    return XLSX.utils.sheet_to_csv(ws);
-                }
-            } catch (e) { return null; }
-        }
-        if (isCSV) return exportData.content;
-        return null;
-    }, [exportData, format.id]);
-
-    const handleDownload = async () => {
-        if (format.id === ExportFormat.GOOGLE_FORMS) {
-            setIsExportingGoogle(true);
-            try {
-                const link = await exportToGoogleForms(quiz.title, quiz.questions);
-                setGoogleFormLink(link);
-            } catch (error: any) {
-                alert(`Error: ${error.message}`);
-            } finally {
-                setIsExportingGoogle(false);
-            }
+    // Initial load of text preview (only for text formats, to avoid heavy async on render)
+    React.useEffect(() => {
+        // Skip preview generation for Google Forms or PDF (too heavy or not text)
+        if (format.id === ExportFormat.GOOGLE_FORMS || format.id === ExportFormat.PDF_PRINT) {
             return;
         }
+        
+        const loadPreview = async () => {
+            setLoadingPreview(true);
+            try {
+                const result = await exportQuiz(quiz, format.id, exportOptions);
+                setPreviewContent(result);
+            } catch(e) {
+                console.error(e);
+            } finally {
+                setLoadingPreview(false);
+            }
+        };
+        loadPreview();
+    }, [quiz, format.id, exportOptions]);
 
+    const handleDownload = async (withImages: boolean = false) => {
+        setIsExporting(true);
         try {
+            // Special Handler: Google Forms
+            if (format.id === ExportFormat.GOOGLE_FORMS) {
+                const link = await exportToGoogleForms(quiz.title, quiz.questions);
+                setGoogleFormLink(link);
+                setIsExporting(false);
+                return;
+            }
+
+            // Standard & PDF Export
+            // We pass { includeImages: true/false } to the service
+            const exportData = await exportQuiz(quiz, format.id, { ...exportOptions, includeImages: withImages });
+
+            // Browser Download Trigger
             let blob: Blob;
             if (exportData.isBase64) {
                 const binaryString = window.atob(exportData.content);
@@ -88,18 +80,28 @@ const ExportPreviewCard: React.FC<{
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = exportData.filename || `quiz_${format.id}.txt`;
+            // Add suffix if images included to differentiate
+            const filename = withImages && format.id === ExportFormat.PDF_PRINT 
+                ? exportData.filename.replace('.pdf', '_IMAGES.pdf') 
+                : exportData.filename || `quiz_${format.id}.txt`;
+                
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        } catch (e) { alert("Download failed"); }
+
+        } catch (e) { 
+            alert("Download failed: " + (e as Error).message); 
+        } finally {
+            setIsExporting(false);
+        }
     };
 
-    // Specific handler for Plickers Splits
-    const handleDownloadSplit = () => {
+    // Special handler for Plickers Splits
+    const handleDownloadSplit = async () => {
         try {
-            const splitData = exportQuiz(quiz, ExportFormat.PLICKERS, { splitInBlocks: true });
+            const splitData = await exportQuiz(quiz, ExportFormat.PLICKERS, { splitInBlocks: true });
             const bom = '\uFEFF';
             const blob = new Blob([bom + splitData.content], { type: `${splitData.mimeType};charset=utf-8` });
             const url = URL.createObjectURL(blob);
@@ -114,8 +116,8 @@ const ExportPreviewCard: React.FC<{
     };
 
     const handleCopy = () => {
-        if (!exportData.isBase64) {
-            navigator.clipboard.writeText(exportData.content);
+        if (previewContent && !previewContent.isBase64) {
+            navigator.clipboard.writeText(previewContent.content);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         }
@@ -123,7 +125,6 @@ const ExportPreviewCard: React.FC<{
 
     const renderTable = (csv: string) => {
         if (!csv) return null;
-        // Show all lines, rely on scrolling
         const lines = csv.split('\n'); 
         return (
             <div className="overflow-auto custom-scrollbar h-full">
@@ -148,7 +149,28 @@ const ExportPreviewCard: React.FC<{
         );
     };
 
+    // Preview Logic Helpers
     const isGoogle = format.id === ExportFormat.GOOGLE_FORMS;
+    const isPDF = format.id === ExportFormat.PDF_PRINT;
+    
+    const tablePreview = useMemo(() => {
+        if (!previewContent) return null;
+        const mime = previewContent.mimeType || "";
+        const isXLSX = previewContent.isBase64 && mime.includes('spreadsheetml');
+        const isCSV = format.id && (format.id.includes('CSV') || format.id === ExportFormat.BLOOKET || format.id === ExportFormat.QUIZALIZE);
+        
+        if (isXLSX) {
+            try {
+                const wb = XLSX.read(previewContent.content, { type: 'base64' });
+                if (wb.SheetNames.length > 0) {
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    return XLSX.utils.sheet_to_csv(ws);
+                }
+            } catch (e) { return null; }
+        }
+        if (isCSV) return previewContent.content;
+        return null;
+    }, [previewContent, format.id]);
 
     return (
         <CyberCard className="border-cyan-900/50 overflow-hidden flex flex-col h-full">
@@ -160,7 +182,9 @@ const ExportPreviewCard: React.FC<{
                     </div>
                     <div>
                         <h4 className="text-cyan-400 font-cyber font-bold text-sm">{format.name}</h4>
-                        <span className="text-[10px] text-gray-500 font-mono uppercase">{isGoogle ? "API INTEGRATION" : (exportData.isBase64 ? "BINARY FILE" : "TEXT FILE")}</span>
+                        <span className="text-[10px] text-gray-500 font-mono uppercase">
+                            {isGoogle ? "API INTEGRATION" : (isPDF ? "DOCUMENT GENERATOR" : (previewContent?.isBase64 ? "BINARY FILE" : "TEXT FILE"))}
+                        </span>
                     </div>
                 </div>
                 <button onClick={onClose} className="text-gray-600 hover:text-red-500 transition-colors">
@@ -170,7 +194,11 @@ const ExportPreviewCard: React.FC<{
 
             {/* PREVIEW CONTENT */}
             <div className="flex-1 bg-black/40 rounded border border-gray-800 mb-4 overflow-hidden relative min-h-[150px]">
-                {googleFormLink ? (
+                {loadingPreview ? (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+                    </div>
+                ) : googleFormLink ? (
                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-gray-900">
                          <Check className="w-8 h-8 text-green-500 mb-2" />
                          <p className="text-xs text-gray-300 mb-4">{t.google_success_title}</p>
@@ -183,38 +211,71 @@ const ExportPreviewCard: React.FC<{
                         <img src={format.logo} className="w-12 h-12 opacity-20 grayscale" />
                         <p className="text-[10px] font-mono">{t.google_preview_unavailable}</p>
                     </div>
+                ) : isPDF ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 gap-4 p-4 text-center">
+                        <div className="flex gap-4 opacity-30">
+                            <FileText className="w-12 h-12" />
+                            <ImageIcon className="w-12 h-12" />
+                        </div>
+                        <p className="text-[10px] font-mono text-gray-400">PDF Generator Ready.<br/>Select option below.</p>
+                    </div>
                 ) : tablePreview ? (
                     renderTable(tablePreview)
-                ) : !exportData.isBase64 ? (
+                ) : previewContent && !previewContent.isBase64 ? (
                     <pre className="p-3 text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all h-full overflow-y-auto custom-scrollbar">
-                        {exportData.content}
+                        {previewContent.content}
                     </pre>
                 ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 gap-2">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 gap-2 text-center p-4">
                         <FileDown className="w-8 h-8 opacity-50" />
-                        <p className="text-[10px] font-mono">{t.preview_binary_unavailable}</p>
+                        <p className="text-[10px] font-mono text-gray-400">{t.preview_binary_unavailable}</p>
                     </div>
                 )}
             </div>
 
             {/* ACTIONS */}
             <div className="flex flex-col gap-2">
-                <div className="flex gap-2">
-                    {!exportData.isBase64 && !isGoogle && (
-                        <button onClick={handleCopy} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded border border-gray-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors">
-                            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                            {copied ? t.copied : t.copy_clipboard}
-                        </button>
-                    )}
-                    <CyberButton 
-                        onClick={handleDownload} 
-                        isLoading={isExportingGoogle}
-                        disabled={!!googleFormLink && isGoogle}
-                        className={`flex-1 py-2 text-xs h-auto ${isGoogle ? 'bg-purple-700 hover:bg-purple-600' : ''}`}
-                    >
-                        {isGoogle ? t.connect_create : t.download_file}
-                    </CyberButton>
-                </div>
+                
+                {/* STANDARD ACTIONS */}
+                {!isPDF && (
+                    <div className="flex gap-2">
+                        {previewContent && !previewContent.isBase64 && !isGoogle && (
+                            <button onClick={handleCopy} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded border border-gray-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors">
+                                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                {copied ? t.copied : t.copy_clipboard}
+                            </button>
+                        )}
+                        <CyberButton 
+                            onClick={() => handleDownload(false)} 
+                            isLoading={isExporting}
+                            disabled={!!googleFormLink && isGoogle}
+                            className={`flex-1 py-2 text-xs h-auto ${isGoogle ? 'bg-purple-700 hover:bg-purple-600' : ''}`}
+                        >
+                            {isGoogle ? t.connect_create : t.download_file}
+                        </CyberButton>
+                    </div>
+                )}
+
+                {/* PDF SPECIFIC ACTIONS (SPLIT BUTTONS) */}
+                {isPDF && (
+                    <div className="flex gap-2">
+                        <CyberButton 
+                            variant="secondary"
+                            onClick={() => handleDownload(false)}
+                            isLoading={isExporting}
+                            className="flex-1 py-2 text-[10px] flex items-center gap-1"
+                        >
+                            <FileText className="w-3 h-3" /> PDF (SOLO TEXTO)
+                        </CyberButton>
+                        <CyberButton 
+                            onClick={() => handleDownload(true)} 
+                            isLoading={isExporting}
+                            className="flex-1 py-2 text-[10px] flex items-center gap-1"
+                        >
+                            <ImageIcon className="w-3 h-3" /> PDF (CON IMÁGENES)
+                        </CyberButton>
+                    </div>
+                )}
                 
                 {/* Special Plickers Button */}
                 {format.id === ExportFormat.PLICKERS && (
@@ -255,6 +316,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
     // --- TIER 1: THE BIG ONES ---
     { id: ExportFormat.KAHOOT, name: "Kahoot!", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.PDF_PRINT, name: "PDF Printable", desc: t.fmt_pdf_print, logo: "https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg", allowedTypes: ['*'] },
     { id: ExportFormat.BLOOKET, name: "Blooket", desc: t.fmt_blooket, logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit", desc: t.fmt_gimkit_classic, logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
     

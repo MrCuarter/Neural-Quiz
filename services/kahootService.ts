@@ -36,6 +36,7 @@ const resolveImage = (val: any): string | undefined => {
 
 // --- PROXY AGENTS ---
 const PROXIES = [
+    { name: 'NeuralProxy', url: (target: string) => `https://neural-quiz.vercel.app/api/proxy?url=${encodeURIComponent(target)}` },
     { name: 'CorsProxy', url: (target: string) => `https://corsproxy.io/?${encodeURIComponent(target)}` },
     { name: 'AllOrigins', url: (target: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}` }
 ];

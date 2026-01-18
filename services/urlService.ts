@@ -30,6 +30,13 @@ const getCorsProxyKey = () => getEnvVar('VITE_CORSPROXY_API_KEY');
 // Solves CORS and SPA Rendering by delegating fetching to specialized external agents.
 
 const AGENTS = [
+    // Agent Zero: Vercel Serverless Proxy (Own Infrastructure - Best for WAF evasion)
+    // Updated to Absolute URL for Hostinger compatibility
+    {
+        name: "Neural Proxy (Vercel)",
+        getUrl: (target: string) => `https://neural-quiz.vercel.app/api/proxy?url=${encodeURIComponent(target)}`,
+        headers: {}
+    },
     // Agent Alpha: AllOrigins (Stable Free Proxy)
     {
         name: "Agent Origins (Backup)",

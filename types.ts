@@ -108,6 +108,7 @@ export interface KahootCardResponse {
 export enum ExportFormat {
   UNIVERSAL_CSV = 'UNIVERSAL_CSV', // The Master Format
   GOOGLE_FORMS = 'GOOGLE_FORMS', // Google Forms API
+  PDF_PRINT = 'PDF_PRINT', // New: Printable PDF
   BLOOKET = 'BLOOKET', // Blooket CSV
   WAYGROUND = 'WAYGROUND', // Wayground XLSX
   KAHOOT = 'KAHOOT', // Kahoot XLSX
@@ -157,6 +158,10 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     'UNIVERSAL': { 
         name: 'Universal / Generic', 
         types: Object.values(QUESTION_TYPES) 
+    },
+    [ExportFormat.PDF_PRINT]: {
+        name: 'Printable PDF',
+        types: Object.values(QUESTION_TYPES) // Supports almost everything visually
     },
     [ExportFormat.GOOGLE_FORMS]: {
         name: 'Google Forms',

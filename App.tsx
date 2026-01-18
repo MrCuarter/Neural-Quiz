@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, UniversalDiscoveryReport } from './types';
+import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS } from './types';
 import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -11,14 +11,15 @@ import { TermsView } from './components/TermsView';
 import { MyQuizzes } from './components/MyQuizzes'; 
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Terminal, Bot, FileText, Globe, Upload, Sun, Moon, ChevronRight, AlertTriangle, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, Info, FileType, Save } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
 import { fetchUrlContent, analyzeUrl } from './services/urlService';
 import { getRandomMessage, getDetectionMessage } from './services/messageService';
-import { auth, onAuthStateChanged, saveQuizToFirestore } from './services/firebaseService'; // FIREBASE IMPORTS
+import { auth, onAuthStateChanged, saveQuizToFirestore } from './services/firebaseService';
 import * as XLSX from 'xlsx';
+import { ToastProvider, useToast } from './components/ui/Toast'; // IMPORT TOAST
 
 // Types
 type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes';
@@ -29,7 +30,6 @@ const initialQuiz: Quiz = {
   questions: []
 };
 
-// Platforms that natively support feedback/explanation fields
 const PLATFORMS_WITH_FEEDBACK = [
     ExportFormat.KAHOOT,
     ExportFormat.GOOGLE_FORMS,
@@ -41,18 +41,19 @@ const PLATFORMS_WITH_FEEDBACK = [
     ExportFormat.UNIVERSAL_CSV
 ];
 
-const App: React.FC = () => {
+// --- MAIN APP COMPONENT (Inner) ---
+// We wrap this inner component with ToastProvider in the default export
+const NeuralApp: React.FC = () => {
   const [view, setView] = useState<ViewState>('home');
   const [quiz, setQuiz] = useState<Quiz>(initialQuiz);
   const [isClassroomMode, setIsClassroomMode] = useState(false);
   const [language, setLanguage] = useState<Language>('es');
   
-  // USER STATE
   const [user, setUser] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Translation Helper with Fallback
   const t = translations[language] || translations['en'] || translations['es'];
+  const toast = useToast(); // USE TOAST HOOK
 
   // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
@@ -86,19 +87,14 @@ const App: React.FC = () => {
   const exportSectionRef = useRef<HTMLDivElement>(null);
   const progressIntervalRef = useRef<number | null>(null);
 
-  // MISSING ANSWERS STATE
   const [showMissingAnswersModal, setShowMissingAnswersModal] = useState(false);
   const [tempQuestions, setTempQuestions] = useState<Question[]>([]);
   const [tempQuizInfo, setTempQuizInfo] = useState<{ title: string; desc: string }>({ title: '', desc: '' });
   const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
 
-  // Helper for ID generation
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
-  // --- Effects: Persistence & Theme & Auth ---
-
   useEffect(() => {
-    // Auth Listener
     const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
         setUser(currentUser);
     });
@@ -128,7 +124,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('neuralQuizBackup', JSON.stringify(quiz));
-    
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
         if (quiz.questions.length > 0) {
             e.preventDefault();
@@ -145,8 +140,6 @@ const App: React.FC = () => {
     localStorage.setItem('neuralQuizTheme', newMode ? 'classroom' : 'cyber');
   };
 
-  // --- Handlers ---
-
   const scrollToExport = () => {
     exportSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -154,10 +147,7 @@ const App: React.FC = () => {
   const handlePlatformChange = (platformKey: string) => {
       setTargetPlatform(platformKey);
       const validTypes = PLATFORM_SPECS[platformKey].types;
-      setGenParams(prev => ({
-          ...prev,
-          types: validTypes
-      }));
+      setGenParams(prev => ({ ...prev, types: validTypes }));
   };
 
   const toggleQuestionType = (type: string) => {
@@ -171,15 +161,13 @@ const App: React.FC = () => {
       });
   };
 
-  // --- SAVE / LOAD HANDLERS ---
-
   const handleSaveQuiz = async (asCopy: boolean = false) => {
       if (!user) {
-          alert("Debes iniciar sesión para guardar en la nube.");
+          toast.error("Debes iniciar sesión para guardar en la nube.");
           return;
       }
       if (!quiz.title.trim()) {
-          alert("El quiz necesita un título para ser guardado.");
+          toast.warning("El quiz necesita un título para ser guardado.");
           return;
       }
 
@@ -189,9 +177,9 @@ const App: React.FC = () => {
           if (!quiz.id || asCopy) {
               setQuiz(prev => ({ ...prev, id: docId }));
           }
-          alert(asCopy ? "Copia guardada con éxito." : "Quiz guardado con éxito.");
+          toast.success(asCopy ? "Copia guardada con éxito." : "Quiz guardado con éxito.");
       } catch (e) {
-          alert("Error al guardar el quiz. Revisa la consola.");
+          toast.error("Error al guardar en Firestore. Intenta de nuevo.");
       } finally {
           setIsSaving(false);
       }
@@ -200,6 +188,7 @@ const App: React.FC = () => {
   const handleLoadQuiz = (loadedQuiz: Quiz) => {
       setQuiz(loadedQuiz);
       setView('create_manual');
+      toast.info("Quiz cargado.");
   };
 
   const handleSafeExit = (targetView: ViewState) => {
@@ -209,17 +198,6 @@ const App: React.FC = () => {
           }
       }
       setView(targetView);
-  };
-
-  // --- Context File Handling (Drag & Drop) ---
-  const handleDrag = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.type === 'dragenter' || e.type === 'dragover') {
-          setDragActive(true);
-      } else if (e.type === 'dragleave') {
-          setDragActive(false);
-      }
   };
 
   const processContextFiles = async (files: FileList | null) => {
@@ -241,11 +219,11 @@ const App: React.FC = () => {
                 combinedText += `\n\n--- DOCUMENT START: ${file.name} ---\n${text}\n--- DOCUMENT END ---\n`;
                 count++;
              } else {
-                 alert(`Skipped ${file.name}: Binary files (Docx, Images) need manual copy-paste.`);
+                 toast.warning(`Skipped ${file.name}: Binary files need manual OCR or copy-paste.`);
              }
           } catch (e: any) {
              console.error("Error reading file", file.name, e);
-             alert(`${t.alert_read_error} ${file.name}: ${e.message}`);
+             toast.error(`${t.alert_read_error} ${file.name}: ${e.message}`);
           }
       }
 
@@ -254,27 +232,17 @@ const App: React.FC = () => {
               ...prev,
               context: (prev.context + combinedText).trim()
           }));
-          alert(`${count} document(s) added to context!`);
+          toast.success(`${count} document(s) added to context!`);
       }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragActive(false);
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-          processContextFiles(e.dataTransfer.files);
-      }
-  };
+  const handleDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true); else if (e.type === 'dragleave') setDragActive(false); };
+  const handleDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) processContextFiles(e.dataTransfer.files); };
+  const handleContextFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { processContextFiles(e.target.files); };
 
-  const handleContextFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-      processContextFiles(e.target.files);
-  };
-
-  // ... (rest of AI and Conversion logic remains same) ...
   const handleCreateAI = async () => {
     if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) {
-      alert(t.alert_topic);
+      toast.warning(t.alert_topic);
       return;
     }
     setIsGenerating(true);
@@ -284,35 +252,31 @@ const App: React.FC = () => {
     }, 4000);
 
     try {
-      const langMap: Record<string, string> = {
-          'es': 'Spanish', 'en': 'English'
-      };
+      const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
       const selectedLang = langMap[language] || 'Spanish';
       const urlList = genParams.urls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
-      const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Timeout: AI took too long.")), 45000)
-      );
       const includeFeedback = PLATFORMS_WITH_FEEDBACK.includes(targetPlatform as ExportFormat);
-      const apiPromise = generateQuizQuestions({
+      
+      const generatedQs = await generateQuizQuestions({
         topic: genParams.topic, count: Number(genParams.count) || 5, types: genParams.types, age: genParams.age, context: genParams.context, urls: urlList, language: selectedLang, includeFeedback
       });
-      const generatedQs = await Promise.race([apiPromise, timeoutPromise]) as any[];
-      const newQuestions: Question[] = generatedQs.map(gq => {
-        const qId = uuid();
-        const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
-        const indices = gq.correctIndices || [gq.correctIndex || 0];
-        const correctIds = indices.map(i => options[i]?.id).filter(id => !!id);
-        return {
-          id: qId, text: gq.text, options: options, correctOptionId: correctIds[0] || "", correctOptionIds: correctIds, timeLimit: 30, feedback: gq.feedback, questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE
-        };
-      });
+      
+      // Because we use Zod validation in generateQuizQuestions, 'generatedQs' is guaranteed to be valid Question[] (or error thrown)
+      const newQuestions = generatedQs.map(gq => ({
+          ...gq,
+          // Re-map internal properties to be safe
+          id: uuid(),
+          correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []),
+      }));
+
       setQuiz({
         title: genParams.topic || 'AI Generated Quiz', description: `Generated for ${genParams.age} - ${targetPlatform}`, questions: newQuestions, tags: ['AI Generated', targetPlatform] 
       });
+      toast.success("Quiz Generated Successfully!");
       setView('create_manual'); 
     } catch (e: any) {
       console.error(e);
-      alert(`${t.alert_fail} (${e.message})`);
+      toast.error(`${t.alert_fail} (${e.message})`);
     } finally {
       setIsGenerating(false);
       clearInterval(genInterval);
@@ -336,30 +300,22 @@ const App: React.FC = () => {
     const startTime = Date.now();
     let currentVirtualProgress = 0;
     clearAnalysisInterval();
+    
     const processingPromise = (async () => {
         try {
             if (isAlreadyStructured && preParsedQuestions.length > 0) {
                  return preParsedQuestions;
             } else {
-                const langMap: Record<string, string> = {
-                    'es': 'Spanish', 'en': 'English'
-                };
+                const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
                 const selectedLang = langMap[language] || 'Spanish';
                 const generatedQs = await parseRawTextToQuiz(content, selectedLang, imageInput);
-                return generatedQs.map(gq => {
-                  const qId = uuid();
-                  const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
-                  const indices = gq.correctIndices || [gq.correctIndex || 0];
-                  const correctIds = indices.map((i: number) => options[i]?.id).filter((id: string) => !!id);
-                  return {
-                    id: qId, text: gq.text, options: options, correctOptionId: correctIds[0] || "", correctOptionIds: correctIds, timeLimit: 30, feedback: gq.feedback, questionType: gq.questionType
-                  };
-                });
+                return generatedQs;
             }
         } catch (e) {
             throw e;
         }
     })();
+
     progressIntervalRef.current = window.setInterval(() => {
        const elapsed = Date.now() - startTime;
        let targetP = 0;
@@ -368,21 +324,27 @@ const App: React.FC = () => {
        setAnalysisProgress(currentVirtualProgress);
        if (elapsed > 1000 && elapsed < 1200) { setAnalysisStatus(getDetectionMessage(sourceName, content)); } else if (elapsed > 4000 && elapsed < 4200) { setAnalysisStatus(getRandomMessage('detect_generic')); } else if (elapsed > 6000 && elapsed < 6200) { setAnalysisStatus(getRandomMessage('progress')); }
     }, 100);
+
     try {
         const questions = await processingPromise;
-        if (questions.length === 0) { throw new Error(t.alert_no_questions); }
+        if (questions.length === 0) throw new Error(t.alert_no_questions);
+        
         const elapsedNow = Date.now() - startTime;
         if (elapsedNow < MIN_DURATION) { await new Promise(r => setTimeout(r, MIN_DURATION - elapsedNow)); }
+        
         clearAnalysisInterval();
         setAnalysisProgress(100);
         setAnalysisStatus(getRandomMessage('success'));
+        
         const missingAnswers = questions.some(q => (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.filter(o => o.text.trim() !== "").length < 2);
+        
         if (missingAnswers) {
              setTempQuestions(questions);
              setTempQuizInfo({ title: sourceName, desc: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI' });
              setTimeout(() => setShowMissingAnswersModal(true), 1000);
         } else {
              setQuiz({ title: sourceName, description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI', questions: questions, tags: ['Imported', isAlreadyStructured ? 'Template' : 'AI'] });
+             toast.success("Analysis Complete!");
              setTimeout(() => { setView('create_manual'); }, 1500); 
         }
     } catch (error: any) {
@@ -390,6 +352,7 @@ const App: React.FC = () => {
         setAnalysisProgress(0);
         setAnalysisStatus(getRandomMessage('error'));
         console.error(error);
+        toast.error(`Analysis Failed: ${error.message}`);
         setTimeout(() => { setView('convert_upload'); }, 4000);
     }
   };
@@ -398,21 +361,13 @@ const App: React.FC = () => {
       setIsGeneratingAnswers(true);
       try {
           const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
-          const enhancedQuestionsRaw = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish');
-          const finalQuestions = enhancedQuestionsRaw.map(gq => {
-            const qId = gq.id || uuid(); 
-            const options: Option[] = gq.rawOptions.map((optText: string) => ({ id: uuid(), text: optText }));
-            const indices = gq.correctIndices || [gq.correctIndex || 0];
-            const correctIds = indices.map((i: number) => options[i]?.id).filter((id: string) => !!id);
-            return {
-              id: qId, text: gq.text, options: options, correctOptionId: correctIds[0] || "", correctOptionIds: correctIds, timeLimit: 30, feedback: gq.feedback, questionType: gq.questionType
-            };
-          });
-          setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: finalQuestions, tags: ['AI Repair'] });
+          const enhancedQuestions = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish');
+          setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: enhancedQuestions, tags: ['AI Repair'] });
           setShowMissingAnswersModal(false);
           setView('create_manual');
+          toast.success("Answers generated successfully!");
       } catch (e) {
-          alert("Error generating answers.");
+          toast.error("Error generating answers. Please check quota.");
       } finally {
           setIsGeneratingAnswers(false);
       }
@@ -460,7 +415,7 @@ const App: React.FC = () => {
          await performAnalysis(content, file.name.split('.')[0]);
       }
     } catch (e: any) {
-      alert(`${t.alert_read_error}: ${e.message}`);
+      toast.error(`${t.alert_read_error}: ${e.message}`);
       clearAnalysisInterval();
     } finally {
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -476,13 +431,13 @@ const App: React.FC = () => {
   const handleConvertDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); const file = e.dataTransfer.files?.[0]; if (file) processFileForConversion(file); };
 
   const handlePasteAnalysis = async () => {
-      if (!textToConvert.trim()) { alert(t.alert_paste_first); return; }
+      if (!textToConvert.trim()) { toast.warning(t.alert_paste_first); return; }
       const cleaned = textToConvert.replace(/Page \d+ of \d+/g, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, " "); 
       await performAnalysis(cleaned, "Pasted Content");
   };
 
   const handleUrlAnalysis = async () => {
-    if (!urlToConvert.trim()) { alert(t.alert_valid_url); return; }
+    if (!urlToConvert.trim()) { toast.warning(t.alert_valid_url); return; }
     setView('convert_analysis');
     setAnalysisStatus("Iniciando escaneo de red neural...");
     setAnalysisProgress(5);
@@ -491,7 +446,10 @@ const App: React.FC = () => {
         if (structuredResult) {
             const { quiz: quizData, report } = structuredResult;
             setAnalysisProgress(80);
-            if (report.blockedByBot) { setAnalysisStatus("ERROR: Bloqueo Anti-Bot detectado."); }
+            if (report.blockedByBot) { 
+                setAnalysisStatus("ERROR: Bloqueo Anti-Bot detectado.");
+                toast.error("WAF Block: The website blocked the scanner."); 
+            }
             const missingAnswers = quizData.questions.some(q => q.needsEnhanceAI);
             if (missingAnswers) {
                 setTempQuestions(quizData.questions);
@@ -512,10 +470,12 @@ const App: React.FC = () => {
     } catch (e: any) {
         console.error(e);
         setAnalysisStatus(getRandomMessage('error'));
+        toast.error("URL Analysis Failed. Is the link public?");
         setTimeout(() => { setView('convert_upload'); }, 4000);
     }
   };
 
+  // Stepper logic remains same...
   const Stepper = () => {
     let step = 1;
     if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms', 'my_quizzes'].includes(view)) step = 1;
@@ -541,6 +501,7 @@ const App: React.FC = () => {
     );
   };
 
+  // Rendering blocks...
   const renderMissingAnswersModal = () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <CyberCard className="max-w-md w-full border-yellow-500/50 shadow-[0_0_50px_rgba(234,179,8,0.2)]">
@@ -558,57 +519,14 @@ const App: React.FC = () => {
 
   const renderHome = () => (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-12 animate-in zoom-in-95 duration-500 py-12">
-       
-       {/* HERO SECTION: TEXT ONLY - NEW DESIGN */}
        <div className="text-center space-y-6 max-w-4xl px-4 flex flex-col items-center">
-         {/* H1: App Name */}
-         <h1 className="text-6xl md:text-8xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 tracking-tight drop-shadow-[0_0_25px_rgba(6,182,212,0.3)] leading-tight mb-2">
-           {t.home_title_main}
-         </h1>
-         
-         {/* H3: Tagline (Smaller) */}
-         <h3 className="text-xl md:text-2xl font-cyber text-cyan-400 tracking-wider">
-           {t.home_subtitle_main}
-         </h3>
-
-         {/* P: Description (Normal Text) */}
-         <p className="text-base md:text-lg font-mono text-gray-400 font-light max-w-2xl">
-           {t.home_description}
-         </p>
+         <h1 className="text-6xl md:text-8xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 tracking-tight drop-shadow-[0_0_25px_rgba(6,182,212,0.3)] leading-tight mb-2"> {t.home_title_main} </h1>
+         <h3 className="text-xl md:text-2xl font-cyber text-cyan-400 tracking-wider"> {t.home_subtitle_main} </h3>
+         <p className="text-base md:text-lg font-mono text-gray-400 font-light max-w-2xl"> {t.home_description} </p>
        </div>
-
-       {/* ACTION CARDS */}
        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-5xl px-6">
-         
-         {/* Create Column */}
-         <button 
-            onClick={() => setView('create_menu')}
-            className="group relative bg-black/40 border border-cyan-900/50 p-10 hover:bg-cyan-950/20 transition-all hover:scale-[1.02] hover:border-cyan-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6"
-         >
-            <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-            <div className="p-5 rounded-full bg-cyan-950/30 border border-cyan-500/30 group-hover:border-cyan-400 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all">
-                <BrainCircuit className="w-12 h-12 text-cyan-400" />
-            </div>
-            <div>
-                <h2 className="text-2xl font-cyber text-white mb-2 group-hover:text-cyan-300 tracking-wide">{t.create_quiz}</h2>
-                <p className="font-mono text-gray-500 text-sm">{t.create_quiz_desc}</p>
-            </div>
-         </button>
-
-         {/* Convert Column */}
-         <button 
-            onClick={() => setView('convert_upload')}
-            className="group relative bg-black/40 border border-pink-900/50 p-10 hover:bg-pink-950/20 transition-all hover:scale-[1.02] hover:border-pink-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6"
-         >
-            <div className="absolute inset-0 bg-pink-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-            <div className="p-5 rounded-full bg-pink-950/30 border border-pink-500/30 group-hover:border-pink-400 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all">
-                <FileUp className="w-12 h-12 text-pink-400" />
-            </div>
-            <div>
-                <h2 className="text-2xl font-cyber text-white mb-2 group-hover:text-pink-300 tracking-wide">{t.convert_quiz}</h2>
-                <p className="font-mono text-gray-500 text-sm">{t.convert_quiz_desc}</p>
-            </div>
-         </button>
+         <button onClick={() => setView('create_menu')} className="group relative bg-black/40 border border-cyan-900/50 p-10 hover:bg-cyan-950/20 transition-all hover:scale-[1.02] hover:border-cyan-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6"> <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> <div className="p-5 rounded-full bg-cyan-950/30 border border-cyan-500/30 group-hover:border-cyan-400 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all"> <BrainCircuit className="w-12 h-12 text-cyan-400" /> </div> <div> <h2 className="text-2xl font-cyber text-white mb-2 group-hover:text-cyan-300 tracking-wide">{t.create_quiz}</h2> <p className="font-mono text-gray-500 text-sm">{t.create_quiz_desc}</p> </div> </button>
+         <button onClick={() => setView('convert_upload')} className="group relative bg-black/40 border border-pink-900/50 p-10 hover:bg-pink-950/20 transition-all hover:scale-[1.02] hover:border-pink-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6"> <div className="absolute inset-0 bg-pink-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> <div className="p-5 rounded-full bg-pink-950/30 border border-pink-500/30 group-hover:border-pink-400 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all"> <FileUp className="w-12 h-12 text-pink-400" /> </div> <div> <h2 className="text-2xl font-cyber text-white mb-2 group-hover:text-pink-300 tracking-wide">{t.convert_quiz}</h2> <p className="font-mono text-gray-500 text-sm">{t.convert_quiz_desc}</p> </div> </button>
        </div>
     </div>
   );
@@ -618,14 +536,8 @@ const App: React.FC = () => {
       <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2 mb-4"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
       <h2 className="text-3xl font-cyber text-cyan-400 border-b border-gray-800 pb-4">{t.select_protocol}</h2>
       <div className="grid gap-4">
-        <button onClick={() => { setQuiz(initialQuiz); setView('create_ai'); }} className="flex items-center gap-6 p-6 bg-black/40 border border-gray-700 hover:border-purple-500 hover:bg-purple-950/10 transition-all group text-left rounded">
-          <Sparkles className="w-10 h-10 text-purple-400 group-hover:scale-110 transition-transform" />
-          <div><h3 className="text-xl font-bold font-cyber text-white">{t.ai_gen}</h3><p className="text-sm font-mono text-gray-400">{t.ai_gen_desc}</p></div>
-        </button>
-        <button onClick={() => { setQuiz(initialQuiz); setView('create_manual'); }} className="flex items-center gap-6 p-6 bg-black/40 border border-gray-700 hover:border-cyan-500 hover:bg-cyan-950/10 transition-all group text-left rounded">
-          <PenTool className="w-10 h-10 text-cyan-400 group-hover:scale-110 transition-transform" />
-          <div><h3 className="text-xl font-bold font-cyber text-white">{t.manual_editor}</h3><p className="text-sm font-mono text-gray-400">{t.manual_editor_desc}</p></div>
-        </button>
+        <button onClick={() => { setQuiz(initialQuiz); setView('create_ai'); }} className="flex items-center gap-6 p-6 bg-black/40 border border-gray-700 hover:border-purple-500 hover:bg-purple-950/10 transition-all group text-left rounded"> <Sparkles className="w-10 h-10 text-purple-400 group-hover:scale-110 transition-transform" /> <div><h3 className="text-xl font-bold font-cyber text-white">{t.ai_gen}</h3><p className="text-sm font-mono text-gray-400">{t.ai_gen_desc}</p></div> </button>
+        <button onClick={() => { setQuiz(initialQuiz); setView('create_manual'); }} className="flex items-center gap-6 p-6 bg-black/40 border border-gray-700 hover:border-cyan-500 hover:bg-cyan-950/10 transition-all group text-left rounded"> <PenTool className="w-10 h-10 text-cyan-400 group-hover:scale-110 transition-transform" /> <div><h3 className="text-xl font-bold font-cyber text-white">{t.manual_editor}</h3><p className="text-sm font-mono text-gray-400">{t.manual_editor_desc}</p></div> </button>
       </div>
     </div>
   );
@@ -636,71 +548,31 @@ const App: React.FC = () => {
         <CyberCard title={t.universal_import}>
             <div className="space-y-6">
                 <div className="flex bg-black/40 rounded border border-gray-800 p-1">
-                    <button onClick={() => setConvertTab('upload')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'upload' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                        <UploadCloud className="w-4 h-4" /> {t.tab_upload}
-                    </button>
-                    <button onClick={() => setConvertTab('paste')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'paste' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                        <ClipboardPaste className="w-4 h-4" /> {t.tab_paste}
-                    </button>
-                    <button onClick={() => setConvertTab('url')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'url' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                        <LinkIcon className="w-4 h-4" /> {t.tab_url}
-                    </button>
+                    <button onClick={() => setConvertTab('upload')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'upload' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}> <UploadCloud className="w-4 h-4" /> {t.tab_upload} </button>
+                    <button onClick={() => setConvertTab('paste')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'paste' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}> <ClipboardPaste className="w-4 h-4" /> {t.tab_paste} </button>
+                    <button onClick={() => setConvertTab('url')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'url' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}> <LinkIcon className="w-4 h-4" /> {t.tab_url} </button>
                 </div>
-
                 <div className="min-h-[300px]">
                     {convertTab === 'upload' && (
-                        <div className={`border-2 border-dashed rounded-lg h-64 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer ${dragActive ? 'border-pink-500 bg-pink-950/20' : 'border-gray-700 bg-black/20 hover:border-pink-500/50'}`}
-                             onDragEnter={handleConvertDrag} onDragLeave={handleConvertDrag} onDragOver={handleConvertDrag} onDrop={handleConvertDrop}
-                             onClick={() => fileInputRef.current?.click()}>
+                        <div className={`border-2 border-dashed rounded-lg h-64 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer ${dragActive ? 'border-pink-500 bg-pink-950/20' : 'border-gray-700 bg-black/20 hover:border-pink-500/50'}`} onDragEnter={handleConvertDrag} onDragLeave={handleConvertDrag} onDragOver={handleConvertDrag} onDrop={handleConvertDrop} onClick={() => fileInputRef.current?.click()}>
                             <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx,.xls,.csv,.pdf,.txt,.md,.json,image/*" />
-                            <div className="p-4 rounded-full bg-pink-950/30 border border-pink-500/30">
-                                <FilePlus className="w-8 h-8 text-pink-400" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-sm text-gray-300 font-bold mb-1">{t.drop_file}</p>
-                                <p className="text-xs text-gray-500 font-mono">{t.supports_fmt}</p>
-                                <p className="text-[10px] text-gray-600 mt-2 font-mono">{t.autodetect_fmt}</p>
-                            </div>
+                            <div className="p-4 rounded-full bg-pink-950/30 border border-pink-500/30"> <FilePlus className="w-8 h-8 text-pink-400" /> </div>
+                            <div className="text-center"> <p className="text-sm text-gray-300 font-bold mb-1">{t.drop_file}</p> <p className="text-xs text-gray-500 font-mono">{t.supports_fmt}</p> <p className="text-[10px] text-gray-600 mt-2 font-mono">{t.autodetect_fmt}</p> </div>
                         </div>
                     )}
-
                     {convertTab === 'paste' && (
                         <div className="space-y-4">
-                            <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 text-xs text-blue-200 font-mono">
-                                <p>{t.paste_instr}</p>
-                            </div>
-                            <CyberTextArea 
-                                placeholder={t.paste_placeholder}
-                                value={textToConvert}
-                                onChange={(e) => setTextToConvert(e.target.value)}
-                                className="h-48 font-mono text-xs"
-                            />
-                            <CyberButton variant="neural" onClick={handlePasteAnalysis} disabled={!textToConvert.trim()} className="w-full">
-                                {t.analyze_btn}
-                            </CyberButton>
+                            <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 text-xs text-blue-200 font-mono"> <p>{t.paste_instr}</p> </div>
+                            <CyberTextArea placeholder={t.paste_placeholder} value={textToConvert} onChange={(e) => setTextToConvert(e.target.value)} className="h-48 font-mono text-xs" />
+                            <CyberButton variant="neural" onClick={handlePasteAnalysis} disabled={!textToConvert.trim()} className="w-full"> {t.analyze_btn} </CyberButton>
                         </div>
                     )}
-
                     {convertTab === 'url' && (
                         <div className="space-y-6">
-                            <div className="bg-purple-900/20 border-l-4 border-purple-500 p-4 text-xs text-purple-200 font-mono space-y-2">
-                                <p>{t.url_instr}</p>
-                                <p className="opacity-70 italic">{t.url_hint}</p>
-                            </div>
-                            <CyberInput 
-                                placeholder={t.url_placeholder}
-                                value={urlToConvert}
-                                onChange={(e) => setUrlToConvert(e.target.value)}
-                            />
-                            <CyberButton variant="neural" onClick={handleUrlAnalysis} disabled={!urlToConvert.trim()} className="w-full">
-                                {t.scan_btn}
-                            </CyberButton>
-                            
-                            <div className="grid grid-cols-3 gap-2 mt-4 opacity-50">
-                                <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Kahoot</div></div>
-                                <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Blooket</div></div>
-                                <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Quizizz</div></div>
-                            </div>
+                            <div className="bg-purple-900/20 border-l-4 border-purple-500 p-4 text-xs text-purple-200 font-mono space-y-2"> <p>{t.url_instr}</p> <p className="opacity-70 italic">{t.url_hint}</p> </div>
+                            <CyberInput placeholder={t.url_placeholder} value={urlToConvert} onChange={(e) => setUrlToConvert(e.target.value)} />
+                            <CyberButton variant="neural" onClick={handleUrlAnalysis} disabled={!urlToConvert.trim()} className="w-full"> {t.scan_btn} </CyberButton>
+                            <div className="grid grid-cols-3 gap-2 mt-4 opacity-50"> <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Kahoot</div></div> <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Blooket</div></div> <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Quizizz</div></div> </div>
                         </div>
                     )}
                 </div>
@@ -711,43 +583,24 @@ const App: React.FC = () => {
 
   const renderAnalysis = () => (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-8 animate-in zoom-in-95">
-          <div className="relative">
-              <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full animate-pulse"></div>
-              <BrainCircuit className="w-24 h-24 text-cyan-400 relative z-10 animate-bounce-slow" />
-          </div>
-          <div className="w-full max-w-md space-y-2 text-center">
-              <h3 className="text-2xl font-cyber text-white tracking-widest">{t.ai_generator_core}</h3>
-              <p className="text-sm font-mono text-cyan-500 h-6">{analysisStatus}</p>
-              <div className="pt-4">
-                  <CyberProgressBar progress={analysisProgress} />
-              </div>
-          </div>
+          <div className="relative"> <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full animate-pulse"></div> <BrainCircuit className="w-24 h-24 text-cyan-400 relative z-10 animate-bounce-slow" /> </div>
+          <div className="w-full max-w-md space-y-2 text-center"> <h3 className="text-2xl font-cyber text-white tracking-widest">{t.ai_generator_core}</h3> <p className="text-sm font-mono text-cyan-500 h-6">{analysisStatus}</p> <div className="pt-4"> <CyberProgressBar progress={analysisProgress} /> </div> </div>
       </div>
   );
 
   const renderConvertResult = () => (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-6 animate-in zoom-in-95">
-          <div className="p-6 rounded-full bg-green-900/20 border border-green-500/50">
-              <Sparkles className="w-16 h-16 text-green-400" />
-          </div>
+          <div className="p-6 rounded-full bg-green-900/20 border border-green-500/50"> <Sparkles className="w-16 h-16 text-green-400" /> </div>
           <h3 className="text-3xl font-cyber text-white">{t.completed}</h3>
           <p className="text-gray-400 font-mono">Questions extracted successfully.</p>
-          <CyberButton onClick={() => setView('create_manual')} className="w-48">
-              {t.proceed_editor}
-          </CyberButton>
+          <CyberButton onClick={() => setView('create_manual')} className="w-48"> {t.proceed_editor} </CyberButton>
       </div>
   );
 
-  // Main Return
   return (
     <div className="min-h-screen relative text-gray-200 selection:bg-cyan-500/30 transition-colors duration-300 flex flex-col overflow-x-hidden">
       
-      <Header 
-          language={language} 
-          setLanguage={setLanguage} 
-          onHelp={() => setView('help')} 
-          onMyQuizzes={() => setView('my_quizzes')}
-      />
+      <Header language={language} setLanguage={setLanguage} onHelp={() => setView('help')} onMyQuizzes={() => setView('my_quizzes')} />
 
       {showMissingAnswersModal && renderMissingAnswersModal()}
 
@@ -768,17 +621,15 @@ const App: React.FC = () => {
         {view === 'home' && renderHome()}
         {view === 'create_menu' && renderCreateMenu()}
         
-        {/* REUSE EXISTING RENDER FUNCTIONS FROM PREVIOUS STEPS FOR THESE VIEWS */}
-        {/* They were correct in previous context, ensuring they exist in the closure */}
         {view === 'create_ai' && (
             <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 w-full">
                 <CyberButton variant="ghost" onClick={() => setView('create_menu')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back}</CyberButton>
                 <CyberCard title={t.neural_config}>
                     <div className="space-y-6">
-                    <div className="border-b border-gray-800 pb-6"><div className="flex flex-col gap-2 mb-4"><label className="text-sm font-mono-cyber text-cyan-400/80 uppercase tracking-widest flex items-center gap-2"><Globe className="w-4 h-4" /> {t.select_platform}</label><p className="text-xs text-gray-500 font-mono">{t.select_platform_desc}</p></div><CyberSelect options={Object.keys(PLATFORM_SPECS).map(key => ({ value: key, label: PLATFORM_SPECS[key].name }))} value={targetPlatform} onChange={(e) => handlePlatformChange(e.target.value)}/></div>
+                    <div className="border-b border-gray-800 pb-6"><div className="flex flex-col gap-2 mb-4"><label className="text-sm font-mono-cyber text-cyan-400/80 uppercase tracking-widest flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> {t.select_platform}</label><p className="text-xs text-gray-500 font-mono">{t.select_platform_desc}</p></div><CyberSelect options={Object.keys(PLATFORM_SPECS).map(key => ({ value: key, label: PLATFORM_SPECS[key].name }))} value={targetPlatform} onChange={(e) => handlePlatformChange(e.target.value)}/></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><CyberInput label={t.topic_label} placeholder={t.gen_placeholder} value={genParams.topic} onChange={e => setGenParams({...genParams, topic: e.target.value})}/><CyberInput label={`${t.count_label} (Max 100)`} type="number" min={1} max={100} value={genParams.count} onChange={e => { const val = e.target.value; if (val === '') { setGenParams({...genParams, count: ''}); } else { let num = parseInt(val); if (num > 100) num = 100; setGenParams({...genParams, count: num}); } }}/> <CyberInput label={t.age_label} placeholder="e.g. 10 years, University" value={genParams.age} onChange={e => setGenParams({...genParams, age: e.target.value})}/></div>
                     <div className="space-y-3 bg-black/30 p-4 rounded border border-gray-800"><label className="text-sm font-mono-cyber text-cyan-400/80 uppercase tracking-widest block mb-2">{t.select_types}</label><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{Object.values(QUESTION_TYPES).map((type) => { const isCompatible = PLATFORM_SPECS[targetPlatform].types.includes(type); const isSelected = genParams.types.includes(type); const showWarning = isSelected && !isCompatible; return ( <CyberCheckbox key={type} label={type} checked={isSelected} onChange={() => toggleQuestionType(type)} warning={showWarning} /> ); })}</div>{genParams.types.some(t => !PLATFORM_SPECS[targetPlatform].types.includes(t)) && ( <div className="flex items-center gap-2 text-yellow-500 text-xs font-mono mt-2 animate-pulse"><AlertTriangle className="w-4 h-4" /><span>{t.incompatible_desc}</span></div> )}</div>
-                    <div className="space-y-4"><div className="flex items-center gap-2 border-b border-gray-800 pb-2"><FileText className="w-4 h-4 text-pink-400" /><span className="text-sm font-mono-cyber text-pink-400">{t.context_label}</span></div><div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${dragActive ? 'border-pink-400 bg-pink-950/20' : 'border-gray-700 bg-black/20 hover:border-pink-500/50'}`} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop} onClick={() => contextFileInputRef.current?.click()}> <input type="file" multiple ref={contextFileInputRef} onChange={handleContextFileInput} className="hidden" /> <UploadCloud className={`w-10 h-10 ${dragActive ? 'text-pink-400' : 'text-gray-500'}`} /> <div><p className="text-sm text-gray-300 font-bold">{t.drop_file}</p><p className="text-xs text-gray-500 font-mono">(.txt, .md, .csv, .json, .pdf)</p></div></div><CyberTextArea placeholder={t.paste_placeholder} value={genParams.context} onChange={e => setGenParams({...genParams, context: e.target.value})} className="h-32"/></div>
+                    <div className="space-y-4"><div className="flex items-center gap-2 border-b border-gray-800 pb-2"><ArrowLeft className="w-4 h-4 text-pink-400" /><span className="text-sm font-mono-cyber text-pink-400">{t.context_label}</span></div><div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer flex flex-col items-center gap-2 ${dragActive ? 'border-pink-400 bg-pink-950/20' : 'border-gray-700 bg-black/20 hover:border-pink-500/50'}`} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop} onClick={() => contextFileInputRef.current?.click()}> <input type="file" multiple ref={contextFileInputRef} onChange={handleContextFileInput} className="hidden" /> <UploadCloud className={`w-10 h-10 ${dragActive ? 'text-pink-400' : 'text-gray-500'}`} /> <div><p className="text-sm text-gray-300 font-bold">{t.drop_file}</p><p className="text-xs text-gray-500 font-mono">(.txt, .md, .csv, .json, .pdf)</p></div></div><CyberTextArea placeholder={t.paste_placeholder} value={genParams.context} onChange={e => setGenParams({...genParams, context: e.target.value})} className="h-32"/></div>
                     <div className="space-y-2"><div className="flex items-center gap-2 mb-2"><LinkIcon className="w-4 h-4 text-cyan-400" /><span className="text-sm font-mono-cyber text-cyan-400 uppercase tracking-widest">REFERENCE URLS</span></div><CyberTextArea placeholder="Paste URLs here (one per line or comma separated). The AI will use these as references." value={genParams.urls} onChange={e => setGenParams({...genParams, urls: e.target.value})} className="h-24"/></div>
                     <CyberButton variant="neural" onClick={handleCreateAI} isLoading={isGenerating} className="w-full h-16 text-lg">{t.initiate_gen}</CyberButton>
                     {isGenerating && ( <div className="text-center font-mono text-xs text-purple-400 animate-pulse mt-2">{generationStatus}</div> )}
@@ -809,6 +660,15 @@ const App: React.FC = () => {
 
     </div>
   );
+};
+
+// --- DEFAULT EXPORT WRAPPER ---
+const App: React.FC = () => {
+    return (
+        <ToastProvider>
+            <NeuralApp />
+        </ToastProvider>
+    );
 };
 
 export default App;

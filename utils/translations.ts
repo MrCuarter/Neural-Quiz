@@ -131,6 +131,7 @@ export const translations = {
     
     // Format Descriptions (SHORTENED)
     fmt_universal: "Formato Maestro. Incluye media y feedback. Ideal copias de seguridad.",
+    fmt_pdf_print: "Genera un examen listo para imprimir + Hoja de Respuestas.",
     fmt_google_forms: "Crea automáticamente el Formulario en tu Drive. Requiere login.",
     fmt_kahoot: "Plantilla Excel oficial. Lista para subir directamente a Kahoot.",
     fmt_wooclap: "Excel especial (Moodle XML) para importar eventos en Wooclap.",
@@ -320,6 +321,7 @@ export const translations = {
     
     // Format Descriptions (SHORTENED)
     fmt_universal: "Master Format with media & feedback. Best for backups.",
+    fmt_pdf_print: "Generates a clean Exam PDF + Answer Key page.",
     fmt_google_forms: "Auto-creates Form in Drive. Requires login.",
     fmt_kahoot: "Official Excel Template. Ready for direct upload.",
     fmt_wooclap: "Special Excel format (Moodle XML) for Wooclap.",

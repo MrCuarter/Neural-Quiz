@@ -16,10 +16,15 @@ if (typeof window !== 'undefined') {
 const uuid = () => Math.random().toString(36).substring(2, 9);
 
 // --- SIMPLE FETCH LADDER ---
-// 1. AllOrigins RAW: Best for avoiding CORS and getting raw HTML without JSON wrappers.
-// 2. CorsProxy: Standard backup.
-// 3. Jina: Last resort for rendering.
+// 1. NeuralProxy (Vercel): Best for WAF
+// 2. AllOrigins RAW: Backup
+// 3. CorsProxy: Standard backup.
+// 4. Jina: Last resort for rendering.
 const AGENTS = [
+    { 
+        name: 'NeuralProxy (Vercel)', 
+        url: (target: string) => `https://neural-quiz.vercel.app/api/proxy?url=${encodeURIComponent(target)}`
+    },
     { 
         name: 'AllOrigins Raw', 
         url: (target: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`
