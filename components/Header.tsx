@@ -1,30 +1,25 @@
 
 import React, { useEffect, useState } from 'react';
-import { Globe, FlaskConical, Sprout, Map, HelpCircle, LogIn, LogOut, User } from 'lucide-react';
+import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
-// IMPORTANTE: Importamos todo desde nuestro servicio local, no desde 'firebase/auth'
 import { auth, signInWithGoogle, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
 
 interface HeaderProps {
   language: Language;
   setLanguage: (lang: Language) => void;
   onHelp: () => void;
+  onMyQuizzes: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp }) => {
+export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes }) => {
   const [user, setUser] = useState<any>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  // Escuchar cambios en la autenticación (Login/Logout)
   useEffect(() => {
-    // PROTECCIÓN CONTRA PANTALLA NEGRA
-    // Si Firebase falló al cargar, auth o onAuthStateChanged serán undefined.
     if (!auth || !onAuthStateChanged) {
-        console.warn("Firebase Auth not initialized correctly. Auth features disabled.");
         setIsLoadingAuth(false);
         return;
     }
-
     try {
         const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
           setUser(currentUser);
@@ -32,17 +27,12 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp })
         });
         return () => unsubscribe();
     } catch (e) {
-        console.error("Error setting up auth listener:", e);
         setIsLoadingAuth(false);
     }
   }, []);
 
   const handleLogin = async () => {
-      try {
-          await signInWithGoogle();
-      } catch (e) {
-          alert("Error al iniciar sesión. Verifica tu conexión.");
-      }
+      try { await signInWithGoogle(); } catch (e) { alert("Error al iniciar sesión."); }
   };
 
   const handleLogout = async () => {
@@ -60,31 +50,21 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp })
   const t = translations[language];
 
   return (
-    <header className="sticky top-0 z-40 bg-[#020617]/95 backdrop-blur-md border-b border-gray-800 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center h-auto sm:h-16 py-2 sm:py-0 gap-3 sm:gap-0">
+    <header className="sticky top-0 z-40 bg-[#020617]/90 backdrop-blur-md border-b border-gray-800 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center h-auto sm:h-16 py-3 sm:py-0 gap-3 sm:gap-0">
         
-        {/* SECCIÓN IZQUIERDA: LOGO + NAVEGACIÓN GLOBAL */}
+        {/* SECCIÓN IZQUIERDA: LOGO GRÁFICO + TEXTO */}
         <div className="flex items-center gap-6">
-            
-            {/* 1. LOGO DE LA APP */}
-            <a href="https://neuralquiz.mistercuarter.es" className="flex items-center gap-3 cursor-pointer group decoration-0">
+            <a href="/" onClick={(e) => { e.preventDefault(); window.location.reload(); }} className="flex items-center gap-3 cursor-pointer group decoration-0">
                  <img 
                     src="https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png" 
                     alt="Neural Quiz Logo" 
-                    className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" 
+                    className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(6,182,212,0.5)] transition-transform group-hover:scale-110" 
                  />
-                 <h1 className="text-lg font-bold text-white font-mono tracking-tighter hidden sm:block">
+                 <h1 className="text-xl font-bold text-white font-cyber tracking-tight">
                     NEURAL<span className="text-cyan-400">_QUIZ</span>
                  </h1>
             </a>
-            
-            {/* 2. NAVEGACIÓN DEL ECOSISTEMA (Fija) */}
-            <nav className="flex gap-2 items-center sm:border-l sm:border-gray-800 sm:pl-6">
-                 <a href="https://mistercuarter.es" target="_blank" rel="noopener noreferrer" className="hidden md:flex group relative items-center gap-2 px-3 py-1.5 rounded-sm bg-gray-900 border border-gray-800 transition-all overflow-hidden border-cyan-900/30 hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(34,211,238,0.2)]">
-                    <Globe className="w-3 h-3 text-cyan-500" />
-                    <span className="text-[10px] font-bold font-mono tracking-wider text-gray-400 group-hover:text-cyan-400 transition-colors uppercase">WEB</span>
-                 </a>
-            </nav>
         </div>
         
         {/* SECCIÓN DERECHA: ACCIONES */}
@@ -93,18 +73,25 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp })
              {/* LOGIN/USER BUTTON */}
              {!isLoadingAuth && (
                  user ? (
-                    <div className="flex items-center gap-2 px-2 py-1 bg-gray-900 border border-cyan-900/50 rounded hover:border-cyan-500/50 transition-all group">
-                        {user.photoURL ? (
-                            <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-gray-700" />
-                        ) : (
-                            <User className="w-4 h-4 text-cyan-400" />
-                        )}
-                        <span className="text-[10px] font-mono font-bold text-cyan-200 hidden md:inline truncate max-w-[80px]">
-                            {user.displayName?.split(' ')[0] || 'User'}
-                        </span>
-                        <button onClick={handleLogout} className="ml-1 p-1 text-gray-500 hover:text-red-400 transition-colors" title="Logout">
-                            <LogOut className="w-3 h-3" />
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={onMyQuizzes}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/30 rounded hover:bg-cyan-900/50 text-cyan-300 transition-all group"
+                        >
+                            <LayoutGrid className="w-4 h-4" />
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">MIS QUIZES</span>
                         </button>
+
+                        <div className="flex items-center gap-2 px-2 py-1 bg-gray-900 border border-gray-800 rounded">
+                            {user.photoURL ? (
+                                <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-gray-700" />
+                            ) : (
+                                <User className="w-4 h-4 text-cyan-400" />
+                            )}
+                            <button onClick={handleLogout} className="ml-1 p-1 text-gray-500 hover:text-red-400 transition-colors" title="Logout">
+                                <LogOut className="w-3 h-3" />
+                            </button>
+                        </div>
                     </div>
                  ) : (
                     <button 
@@ -117,13 +104,16 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp })
                  )
              )}
 
+             {/* Separator */}
+             <div className="h-4 w-px bg-gray-800 mx-1 hidden sm:block"></div>
+
              {/* Help Button */}
              <button 
                 onClick={onHelp}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded hover:bg-gray-800 text-gray-300 hover:text-white transition-all group"
+                className="p-2 text-gray-400 hover:text-pink-400 transition-colors"
+                title={t.help_btn_short}
              >
-                <HelpCircle className="w-4 h-4 text-pink-500 group-hover:animate-pulse" />
-                <span className="text-xs font-mono font-bold uppercase">{t.help_btn_short}</span>
+                <HelpCircle className="w-5 h-5" />
              </button>
 
              {/* Language Selector */}
@@ -132,15 +122,13 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp })
                     <button
                         key={lang.code}
                         onClick={() => setLanguage(lang.code)}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-mono font-bold transition-all ${
+                        className={`px-2 py-1 rounded-sm text-[10px] font-mono font-bold transition-all ${
                             language === lang.code 
                             ? 'bg-gray-800 text-white shadow-sm' 
                             : 'text-gray-500 hover:text-gray-300'
                         }`}
-                        title={lang.label}
                     >
-                        <span>{lang.flag}</span>
-                        <span className="hidden lg:inline">{lang.label}</span>
+                        {lang.label}
                     </button>
                 ))}
              </div>
