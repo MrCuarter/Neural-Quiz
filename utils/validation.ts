@@ -14,14 +14,31 @@ const uuid = () => Math.random().toString(36).substring(2, 9);
 export const OptionSchema = z.object({
   id: z.string().default(() => uuid()),
   text: z.string().transform(val => String(val || "").trim()), // Force string and trim
-  imageUrl: z.string().optional()
+  imageUrl: z.string().optional(),
+  // Allow optional boolean for ingestion convenience (stripped later)
+  isCorrect: z.boolean().optional()
 });
 
 // Question Schema
 export const QuestionSchema = z.object({
   id: z.string().default(() => uuid()),
   text: z.string().transform(val => String(val || "Untitled Question").trim()),
-  options: z.array(OptionSchema).default([]),
+  
+  // FLEXIBLE OPTIONS HANDLER (Preprocessor)
+  // Converts ["A", "B"] -> [{text: "A", isCorrect: true}, {text: "B"}]
+  options: z.preprocess((val) => {
+      if (Array.isArray(val)) {
+          return val.map((item, index) => {
+              if (typeof item === 'string' || typeof item === 'number') {
+                  // Fallback: If simply strings provided, assume first is correct 
+                  // This is overridden if 'correctAnswerIndex' is provided separately.
+                  return { text: String(item), isCorrect: index === 0 };
+              }
+              return item;
+          });
+      }
+      return val;
+  }, z.array(OptionSchema)).default([]),
   
   // Handling Correct Answers (Flexible Input -> Strict Output)
   correctOptionId: z.string().optional().default(""), 
@@ -52,7 +69,7 @@ export const QuestionSchema = z.object({
     let cIds = data.correctOptionIds || [];
     let cId = data.correctOptionId;
 
-    // If indices provided (from AI), map to IDs
+    // 1. Priority: Explicit Indices (from AI)
     if (data.correctAnswerIndices && data.options.length > 0) {
         cIds = data.correctAnswerIndices
             .filter(idx => idx >= 0 && idx < data.options.length)
@@ -64,12 +81,27 @@ export const QuestionSchema = z.object({
         }
     }
 
+    // 2. Fallback: Embedded isCorrect flag (from preprocessor or source)
+    if (cIds.length === 0 && data.options.length > 0) {
+        const embeddedCorrect = data.options.filter(o => o.isCorrect).map(o => o.id);
+        if (embeddedCorrect.length > 0) {
+            cIds = embeddedCorrect;
+        }
+    }
+
     // Sync singular/plural
     if (cIds.length > 0 && !cId) cId = cIds[0];
     if (cId && cIds.length === 0) cIds = [cId];
 
+    // Clean options: Remove 'isCorrect' property to match strict internal Interface
+    const cleanOptions = data.options.map(o => {
+        const { isCorrect, ...rest } = o;
+        return rest;
+    });
+
     return {
         ...data,
+        options: cleanOptions,
         questionType: qType,
         correctOptionId: cId,
         correctOptionIds: cIds,
@@ -102,6 +134,11 @@ export const validateQuizQuestions = (data: any) => {
         return QuizArraySchema.parse(arrayData);
     } catch (error) {
         console.error("Zod Validation Failed:", error);
+        // Return clearer error for debugging
+        if (error instanceof z.ZodError) {
+             const issues = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(' | ');
+             throw new Error(`Data validation failed: ${issues}`);
+        }
         throw new Error("Data structure invalid. Please check the source format.");
     }
 };
