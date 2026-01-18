@@ -71,35 +71,74 @@ export const logoutFirebase = async () => {
 export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: boolean = false): Promise<string> => {
     if (!db) throw new Error("Firestore not initialized");
 
-    // NOMBRE DE COLECCIÓN CORREGIDO: 'quizes' (minúsculas, una z)
+    // 1. VERIFICACIÓN DE USUARIO ESTRICTA
+    // Usamos auth.currentUser como fuente de verdad si está disponible, o el userId pasado como fallback.
+    const currentUser = auth.currentUser;
+    const effectiveUid = currentUser?.uid || userId;
+
+    if (!effectiveUid) {
+        console.error("CRITICAL SAVE ERROR: No User ID available.");
+        alert("Error crítico: No se puede guardar sin un usuario autenticado.");
+        throw new Error("User ID is undefined or null");
+    }
+
     const collectionRef = collection(db, "quizes");
     
-    const quizData = {
-        userId,
+    // Construimos el objeto base.
+    // NOTA: No incluimos serverTimestamp aquí todavía para que no se pierda en el stringify.
+    const rawData = {
+        userId: effectiveUid,
         title: quiz.title || "Untitled Quiz",
         description: quiz.description || "",
-        questions: quiz.questions,
-        tags: quiz.tags || [],
-        updatedAt: serverTimestamp()
+        questions: quiz.questions || [],
+        tags: quiz.tags || []
     };
+
+    // 2. LIMPIEZA DE DATOS (JSON TRICK)
+    // Esto elimina recursivamente cualquier propiedad con valor 'undefined',
+    // que es lo que causa el error "Unsupported field value: undefined" en Firestore.
+    let cleanData: any;
+    try {
+        cleanData = JSON.parse(JSON.stringify(rawData));
+    } catch (e) {
+        console.error("Error al limpiar datos JSON:", e);
+        throw new Error("Failed to sanitize quiz data");
+    }
 
     try {
         if (quiz.id && !asCopy) {
-            // UPDATE
+            // --- UPDATE FLOW ---
+            // Añadimos el timestamp DESPUÉS de la limpieza JSON
+            const payload = {
+                ...cleanData,
+                updatedAt: serverTimestamp()
+            };
+
             const docRef = doc(db, "quizes", quiz.id);
-            await updateDoc(docRef, quizData);
+            await updateDoc(docRef, payload);
             return quiz.id;
+
         } else {
-            // CREATE
+            // --- CREATE FLOW ---
             if (asCopy) {
-                quizData.title = `${quizData.title} (Copy)`;
+                cleanData.title = `${cleanData.title} (Copy)`;
             }
-            const newDocData = { ...quizData, createdAt: serverTimestamp() };
-            const docRef = await addDoc(collectionRef, newDocData);
+            
+            // Añadimos timestamps DESPUÉS de la limpieza JSON
+            const payload = { 
+                ...cleanData, 
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp() 
+            };
+
+            const docRef = await addDoc(collectionRef, payload);
             return docRef.id;
         }
-    } catch (e) {
-        console.error("Error saving quiz:", e);
+    } catch (e: any) {
+        // 3. CONSOLA DETALLADA
+        console.error("🔥 Error al guardar en Firestore.");
+        console.error(">> Datos limpiados enviados:", cleanData); // Vemos qué intentamos mandar
+        console.error(">> Error original:", e);
         throw e;
     }
 };
