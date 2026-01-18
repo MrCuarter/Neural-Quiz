@@ -18,9 +18,14 @@ export const exportToGoogleSlides = async (
     questions: Question[], 
     token: string
 ): Promise<string> => {
+    // --- 1. VALIDACIONES DE SEGURIDAD ---
     if (!token) throw new Error("Authentication token is missing.");
+    if (!title) title = "Neural Quiz Export";
+    if (!questions || questions.length === 0) {
+        throw new Error("El quiz no tiene preguntas. Añade contenido antes de exportar.");
+    }
 
-    // 1. CREATE EMPTY PRESENTATION
+    // --- 2. CREAR PRESENTACIÓN VACÍA ---
     const createRes = await fetch(CREATE_PRESENTATION_URL, {
         method: 'POST',
         headers: {
@@ -28,7 +33,7 @@ export const exportToGoogleSlides = async (
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            title: title || "Neural Quiz Export"
+            title: title
         })
     });
 
@@ -40,201 +45,208 @@ export const exportToGoogleSlides = async (
     const presData: SlidesResponse = await createRes.json();
     const presentationId = presData.presentationId;
 
-    // 2. BUILD REQUESTS FOR SLIDES
+    // --- 3. CONSTRUIR BATCH REQUEST (ROBUSTO) ---
+    // Usaremos Layout BLANK y crearemos TEXT_BOX explícitamente para evitar errores de IDs.
     const requests: any[] = [];
 
-    // --- 2A. INTRO SLIDE (PORTADA) ---
-    const introId = "slide_intro";
-    const introTitleId = "intro_title";
-    const introSubtitleId = "intro_subtitle";
+    // >>>> SLIDE PORTADA <<<<
+    const introSlideId = "slide_intro_01";
+    const titleBoxId = "textbox_title_01";
+    const subBoxId = "textbox_sub_01";
 
     requests.push({
         createSlide: {
-            objectId: introId,
-            slideLayoutReference: { predefinedLayout: 'TITLE_AND_SUBTITLE' },
-            placeholderIdMappings: [
-                { layoutPlaceholder: { type: 'TITLE' }, objectId: introTitleId },
-                { layoutPlaceholder: { type: 'SUBTITLE' }, objectId: introSubtitleId }
-            ]
+            objectId: introSlideId,
+            slideLayoutReference: { predefinedLayout: 'BLANK' } // Control total
         }
     });
 
+    // Caja Título
     requests.push({
-        insertText: {
-            objectId: introTitleId,
-            text: title.toUpperCase()
+        createShape: {
+            objectId: titleBoxId,
+            shapeType: 'TEXT_BOX',
+            elementProperties: {
+                pageObjectId: introSlideId,
+                size: { height: { magnitude: 100, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
+                transform: { scaleX: 1, scaleY: 1, translateX: 50, translateY: 150, unit: 'PT' }
+            }
         }
     });
+    requests.push({ insertText: { objectId: titleBoxId, text: title.toUpperCase() } });
+    requests.push({ 
+        updateTextStyle: { 
+            objectId: titleBoxId, 
+            style: { fontSize: { magnitude: 32, unit: 'PT' }, bold: true, foregroundColor: { opaqueColor: { rgbColor: { red: 0, green: 0.6, blue: 0.8 } } } }, 
+            fields: "fontSize,bold,foregroundColor" 
+        } 
+    });
 
+    // Caja Subtítulo
     requests.push({
-        insertText: {
-            objectId: introSubtitleId,
-            text: "Creado con Neural Quiz, una APP de Norberto Cuartero"
+        createShape: {
+            objectId: subBoxId,
+            shapeType: 'TEXT_BOX',
+            elementProperties: {
+                pageObjectId: introSlideId,
+                size: { height: { magnitude: 50, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
+                transform: { scaleX: 1, scaleY: 1, translateX: 50, translateY: 260, unit: 'PT' }
+            }
         }
     });
+    requests.push({ insertText: { objectId: subBoxId, text: "Generado con Neural Quiz" } });
 
-    // Style the credit text
-    requests.push({
-        updateTextStyle: {
-            objectId: introSubtitleId,
-            style: {
-                foregroundColor: { opaqueColor: { rgbColor: { red: 0.02, green: 0.64, blue: 0.9 } } }, // Cyan-ish
-                bold: true,
-                fontFamily: "Roboto Mono"
-            },
-            fields: "foregroundColor,bold,fontFamily"
-        }
-    });
 
-    // --- 2B. QUESTIONS LOOP (QUESTION -> ANSWER PAIRS) ---
+    // >>>> BUCLE DE PREGUNTAS <<<<
     questions.forEach((q, index) => {
-        // --- IDS ---
+        // IDs únicos para este índice
         const qSlideId = `slide_q_${index}`;
-        const qTitleId = `title_q_${index}`;
-        const qBodyId = `body_q_${index}`;
-        
-        const aSlideId = `slide_a_${index}`;
-        const aTitleId = `title_a_${index}`;
-        const aBodyId = `body_a_${index}`;
+        const qTextBoxId = `text_q_${index}`;
+        const optTextBoxId = `text_opt_${index}`;
+        const imgObjectId = `img_q_${index}`; // Solo si hay imagen
 
-        // ==========================================
-        // SLIDE 1: THE CHALLENGE (Question + Options + Image)
-        // ==========================================
+        const aSlideId = `slide_a_${index}`;
+        const aTextBoxId = `text_ans_${index}`;
+        const aResultBoxId = `text_res_${index}`;
+
+        // ---------------------------------------------------------
+        // DIAPOSITIVA 1: DESAFÍO (Pregunta + Opciones + Imagen)
+        // ---------------------------------------------------------
         requests.push({
             createSlide: {
                 objectId: qSlideId,
-                slideLayoutReference: { predefinedLayout: 'TITLE_AND_BODY' },
-                placeholderIdMappings: [
-                    { layoutPlaceholder: { type: 'TITLE' }, objectId: qTitleId },
-                    { layoutPlaceholder: { type: 'BODY' }, objectId: qBodyId }
-                ]
+                slideLayoutReference: { predefinedLayout: 'BLANK' }
             }
         });
 
-        // 1. Insert Question Text
+        // 1. Caja de Pregunta (Arriba)
         requests.push({
-            insertText: { objectId: qTitleId, text: `${index + 1}. ${q.text}` }
+            createShape: {
+                objectId: qTextBoxId,
+                shapeType: 'TEXT_BOX',
+                elementProperties: {
+                    pageObjectId: qSlideId,
+                    size: { height: { magnitude: 80, unit: 'PT' }, width: { magnitude: 650, unit: 'PT' } },
+                    transform: { scaleX: 1, scaleY: 1, translateX: 30, translateY: 30, unit: 'PT' }
+                }
+            }
         });
+        requests.push({ insertText: { objectId: qTextBoxId, text: `${index + 1}. ${q.text}` } });
+        requests.push({ updateTextStyle: { objectId: qTextBoxId, style: { fontSize: { magnitude: 18, unit: 'PT' }, bold: true }, fields: "fontSize,bold" } });
 
-        // 2. Insert Options Text
-        let optionsText = "";
-        q.options.forEach((opt, optIdx) => {
-            const letter = String.fromCharCode(65 + optIdx);
-            optionsText += `${letter}) ${opt.text}\n`;
-        });
-
-        if (optionsText) {
-            requests.push({
-                insertText: { objectId: qBodyId, text: optionsText }
-            });
-        }
-
-        // 3. Insert Image (If valid URL)
-        // Google Slides requires public HTTPS URLs.
+        // 2. Imagen (Si existe y es válida)
+        // Nota: Google Slides requiere HTTPS público.
+        let hasImage = false;
         if (q.imageUrl && q.imageUrl.startsWith('http')) {
+            hasImage = true;
             requests.push({
                 createImage: {
+                    objectId: imgObjectId,
                     url: q.imageUrl,
                     elementProperties: {
                         pageObjectId: qSlideId,
-                        size: {
-                            height: { magnitude: 250, unit: 'PT' }, // Max height
-                            width: { magnitude: 250, unit: 'PT' }   // Max width
-                        },
-                        transform: {
-                            scaleX: 1, scaleY: 1,
-                            translateX: 450, // Position on the right side
-                            translateY: 100,
-                            unit: 'PT'
-                        }
+                        size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 250, unit: 'PT' } },
+                        transform: { scaleX: 1, scaleY: 1, translateX: 420, translateY: 120, unit: 'PT' }
                     }
                 }
             });
-            
-            // Adjust text box width so it doesn't overlap image
-            requests.push({
-                updatePageElementTransform: {
-                    objectId: qBodyId,
-                    transform: {
-                        scaleX: 1, scaleY: 1,
-                        translateX: 50, translateY: 100, // Standard left pos
-                        unit: 'PT'
-                    },
-                    applyMode: 'ABSOLUTE'
-                }
-            });
-            // We can't easily resize the width via API 'size' for text boxes directly in all cases
-            // without complex calculations, but placing the image to the far right is usually safe.
         }
 
-        // ==========================================
-        // SLIDE 2: THE REVEAL (Answer)
-        // ==========================================
+        // 3. Caja de Opciones (Izquierda o Ancho completo según imagen)
+        const optWidth = hasImage ? 350 : 600;
+        
         requests.push({
-            createSlide: {
-                objectId: aSlideId,
-                slideLayoutReference: { predefinedLayout: 'TITLE_AND_BODY' },
-                placeholderIdMappings: [
-                    { layoutPlaceholder: { type: 'TITLE' }, objectId: aTitleId },
-                    { layoutPlaceholder: { type: 'BODY' }, objectId: aBodyId }
-                ]
+            createShape: {
+                objectId: optTextBoxId,
+                shapeType: 'TEXT_BOX',
+                elementProperties: {
+                    pageObjectId: qSlideId,
+                    size: { height: { magnitude: 250, unit: 'PT' }, width: { magnitude: optWidth, unit: 'PT' } },
+                    transform: { scaleX: 1, scaleY: 1, translateX: 30, translateY: 120, unit: 'PT' }
+                }
             }
         });
 
-        // 1. Repeat Question for context
+        let optionsText = "";
+        q.options.forEach((opt, i) => {
+            const letter = String.fromCharCode(65 + i);
+            optionsText += `${letter}) ${opt.text}\n\n`;
+        });
+        
+        if (optionsText) {
+            requests.push({ insertText: { objectId: optTextBoxId, text: optionsText } });
+        }
+
+        // ---------------------------------------------------------
+        // DIAPOSITIVA 2: REVELACIÓN (Respuesta Correcta)
+        // ---------------------------------------------------------
         requests.push({
-            insertText: { objectId: aTitleId, text: `${index + 1}. ${q.text}` }
+            createSlide: {
+                objectId: aSlideId,
+                slideLayoutReference: { predefinedLayout: 'BLANK' }
+            }
         });
 
-        // 2. Insert Correct Answer(s)
+        // Repetir Pregunta (Contexto)
+        requests.push({
+            createShape: {
+                objectId: aTextBoxId,
+                shapeType: 'TEXT_BOX',
+                elementProperties: {
+                    pageObjectId: aSlideId,
+                    size: { height: { magnitude: 60, unit: 'PT' }, width: { magnitude: 650, unit: 'PT' } },
+                    transform: { scaleX: 1, scaleY: 1, translateX: 30, translateY: 30, unit: 'PT' }
+                }
+            }
+        });
+        requests.push({ insertText: { objectId: aTextBoxId, text: `${index + 1}. ${q.text}` } });
+
+        // Caja Grande Verde para Respuesta
+        requests.push({
+            createShape: {
+                objectId: aResultBoxId,
+                shapeType: 'TEXT_BOX',
+                elementProperties: {
+                    pageObjectId: aSlideId,
+                    size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
+                    transform: { scaleX: 1, scaleY: 1, translateX: 60, translateY: 120, unit: 'PT' }
+                }
+            }
+        });
+
+        // Calcular respuesta
         const correctOptions = q.options.filter(o => 
             (q.correctOptionIds && q.correctOptionIds.includes(o.id)) || 
             o.id === q.correctOptionId
         );
-        
         const answerText = correctOptions.length > 0 
             ? correctOptions.map(o => `✔ ${o.text}`).join('\n')
             : "No correct answer marked.";
 
-        requests.push({
-            insertText: { objectId: aBodyId, text: answerText }
-        });
-
-        // 3. Style the Answer (Big, Green, Centered)
+        requests.push({ insertText: { objectId: aResultBoxId, text: answerText } });
+        
+        // Estilo Verde y Centrado
         requests.push({
             updateTextStyle: {
-                objectId: aBodyId,
+                objectId: aResultBoxId,
                 style: {
-                    foregroundColor: { opaqueColor: { rgbColor: { red: 0, green: 0.6, blue: 0.2 } } }, // Green
-                    fontSize: { magnitude: 32, unit: 'PT' },
+                    foregroundColor: { opaqueColor: { rgbColor: { red: 0, green: 0.6, blue: 0.2 } } },
+                    fontSize: { magnitude: 28, unit: 'PT' },
                     bold: true
                 },
                 fields: "foregroundColor,fontSize,bold"
             }
         });
-        
         requests.push({
             updateParagraphStyle: {
-                objectId: aBodyId,
+                objectId: aResultBoxId,
                 style: { alignment: 'CENTER' },
                 fields: "alignment"
             }
         });
-        
-        // Add vertical centering for dramatic effect
-        requests.push({
-             updateShapeProperties: {
-                 objectId: aBodyId,
-                 shapeProperties: {
-                     contentAlignment: 'MIDDLE'
-                 },
-                 fields: "contentAlignment"
-             }
-        });
-
     });
 
-    // 4. EXECUTE BATCH UPDATE
+    // --- 4. ENVIAR BATCH UPDATE ---
     const updateRes = await fetch(BATCH_UPDATE_URL(presentationId), {
         method: 'POST',
         headers: {
@@ -245,8 +257,9 @@ export const exportToGoogleSlides = async (
     });
 
     if (!updateRes.ok) {
-        const err = await updateRes.text();
-        throw new Error(`Failed to populate slides: ${err}`);
+        const errText = await updateRes.text();
+        console.error("Slides Batch Error:", errText);
+        throw new Error(`Error populando diapositivas (API 400/500): ${errText}`);
     }
 
     return `https://docs.google.com/presentation/d/${presentationId}/edit`;
