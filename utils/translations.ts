@@ -1,13 +1,12 @@
 
-export type Language = 'es' | 'en' | 'fr' | 'it' | 'de';
+export type Language = 'es' | 'en';
 
 export const translations = {
   es: {
-    // ... existing ...
     app_subtitle: "SISTEMA DE CONVERSIÓN UNIVERSAL",
-    home_title_main: "Tus ideas, convertidas en quizes al instante.",
-    home_subtitle_main: "Genera, edita y gestiona tus exámenes con el poder de la IA.",
-    home_description: "Crea, genera, edita, importa y exporta quizzes a tus plataformas favoritas.",
+    home_title_main: "NEURAL QUIZ",
+    home_subtitle_main: "Tus ideas, convertidas en quizzes al instante.",
+    home_description: "Genera, importa, edita, exporta y gestiona tus quizzes de forma sencilla.",
     create_quiz: "CREAR QUIZ",
     create_quiz_desc: "GENERACIÓN IA // EDITOR MANUAL",
     create_quiz_help: "No tengo las preguntas, necesito empezar de cero.",
@@ -59,6 +58,7 @@ export const translations = {
     mark_correct: "Marcar como correcta",
     help_btn: "AYUDA / MANUAL",
     help_btn_short: "AYUDA?",
+    main_web_btn: "WEB PRINCIPAL",
     guide_title: "EL MANIFIESTO DE MR. CUARTER",
     guide_index: "ÍNDICE DE CONTENIDOS",
     guide_sec_intro: "1. LA MISIÓN",
@@ -192,11 +192,10 @@ export const translations = {
     ai_modal_close: "CANCELAR"
   },
   en: {
-    // ... existing ...
     app_subtitle: "UNIVERSAL CONVERTER SYSTEM",
-    home_title_main: "Your ideas, turned into quizzes instantly.",
-    home_subtitle_main: "Generate, edit, and manage your exams with the power of AI.",
-    home_description: "Create, generate, edit, import, and export quizzes to your favorite platforms.",
+    home_title_main: "NEURAL QUIZ",
+    home_subtitle_main: "Your ideas, turned into quizzes instantly.",
+    home_description: "Generate, import, edit, export and manage your quizzes easily.",
     create_quiz: "CREATE QUIZ",
     create_quiz_desc: "AI GENERATION // MANUAL EDITOR",
     create_quiz_help: "I don't have questions, I need to start from scratch.",
@@ -248,6 +247,7 @@ export const translations = {
     mark_correct: "Mark as correct",
     help_btn: "HELP / GUIDE",
     help_btn_short: "HELP?",
+    main_web_btn: "MAIN WEB",
     guide_title: "THE MR. CUARTER MANIFESTO",
     guide_index: "TABLE OF CONTENTS",
     guide_sec_intro: "1. THE MISSION",
@@ -379,18 +379,5 @@ export const translations = {
     ai_modal_title: "GENERATIVE ASSISTANT",
     ai_modal_add: "ADD TO QUIZ",
     ai_modal_close: "CANCEL"
-  },
-  fr: {
-    // ... existing fr translations ...
-    home_description: "Créez, générez, éditez, importez et exportez des quiz vers vos plateformes préférées.",
-    supports_fmt: "Supporte : .CSV, .XLSX, .TXT, .PDF, .PNG, .JPG",
-    autodetect_fmt: "Détection auto et OCR pour images.",
-    q_type_label: "TYPE DE QUESTION",
-    type_mc: "Choix Unique",
-    type_ms: "Choix Multiple",
-    type_order: "Ordonner",
-    q_order_desc: "Entrez les éléments dans l'ORDRE CORRECT. La plateforme les mélangera.",
-    q_fill_gap_desc: "Utilisez '__' pour les trous. Listez ensuite les réponses dans l'ordre.",
-    // ...
   }
 } as any;

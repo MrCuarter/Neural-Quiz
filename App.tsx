@@ -51,8 +51,8 @@ const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Translation Helper
-  const t = translations[language];
+  // Translation Helper with Fallback
+  const t = translations[language] || translations['en'] || translations['es'];
 
   // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
@@ -285,7 +285,7 @@ const App: React.FC = () => {
 
     try {
       const langMap: Record<string, string> = {
-          'es': 'Spanish', 'en': 'English', 'fr': 'French', 'it': 'Italian', 'de': 'German'
+          'es': 'Spanish', 'en': 'English'
       };
       const selectedLang = langMap[language] || 'Spanish';
       const urlList = genParams.urls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
@@ -299,9 +299,9 @@ const App: React.FC = () => {
       const generatedQs = await Promise.race([apiPromise, timeoutPromise]) as any[];
       const newQuestions: Question[] = generatedQs.map(gq => {
         const qId = uuid();
-        const options: Option[] = gq.rawOptions.map((optText: string) => ({ id: uuid(), text: optText }));
+        const options: Option[] = gq.rawOptions.map(optText => ({ id: uuid(), text: optText }));
         const indices = gq.correctIndices || [gq.correctIndex || 0];
-        const correctIds = indices.map((i: number) => options[i]?.id).filter((id: string) => !!id);
+        const correctIds = indices.map(i => options[i]?.id).filter(id => !!id);
         return {
           id: qId, text: gq.text, options: options, correctOptionId: correctIds[0] || "", correctOptionIds: correctIds, timeLimit: 30, feedback: gq.feedback, questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE
         };
@@ -342,7 +342,7 @@ const App: React.FC = () => {
                  return preParsedQuestions;
             } else {
                 const langMap: Record<string, string> = {
-                    'es': 'Spanish', 'en': 'English', 'fr': 'French', 'it': 'Italian', 'de': 'German'
+                    'es': 'Spanish', 'en': 'English'
                 };
                 const selectedLang = langMap[language] || 'Spanish';
                 const generatedQs = await parseRawTextToQuiz(content, selectedLang, imageInput);
@@ -397,7 +397,7 @@ const App: React.FC = () => {
   const handleGenerateMissingAnswers = async () => {
       setIsGeneratingAnswers(true);
       try {
-          const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English', 'fr': 'French' };
+          const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
           const enhancedQuestionsRaw = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish');
           const finalQuestions = enhancedQuestionsRaw.map(gq => {
             const qId = gq.id || uuid(); 
@@ -559,18 +559,21 @@ const App: React.FC = () => {
   const renderHome = () => (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-12 animate-in zoom-in-95 duration-500 py-12">
        
-       {/* HERO SECTION: LOGO RESTAURADO + TEXTO */}
+       {/* HERO SECTION: TEXT ONLY - NEW DESIGN */}
        <div className="text-center space-y-6 max-w-4xl px-4 flex flex-col items-center">
-         <img 
-            src="https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png" 
-            alt="Neural Quiz Main"
-            className="w-24 h-24 mb-6 drop-shadow-[0_0_15px_rgba(6,182,212,0.5)] animate-pulse-glow"
-         />
-         <h1 className="text-5xl md:text-7xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 tracking-tight drop-shadow-[0_0_25px_rgba(6,182,212,0.3)] leading-tight">
+         {/* H1: App Name */}
+         <h1 className="text-6xl md:text-8xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 tracking-tight drop-shadow-[0_0_25px_rgba(6,182,212,0.3)] leading-tight mb-2">
            {t.home_title_main}
          </h1>
-         <p className="text-lg md:text-2xl font-mono-cyber text-gray-400 font-light">
+         
+         {/* H3: Tagline (Smaller) */}
+         <h3 className="text-xl md:text-2xl font-cyber text-cyan-400 tracking-wider">
            {t.home_subtitle_main}
+         </h3>
+
+         {/* P: Description (Normal Text) */}
+         <p className="text-base md:text-lg font-mono text-gray-400 font-light max-w-2xl">
+           {t.home_description}
          </p>
        </div>
 

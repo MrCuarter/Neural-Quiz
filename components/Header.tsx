@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid } from 'lucide-react';
+import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid, Home } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
 import { auth, signInWithGoogle, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
 
@@ -42,12 +42,10 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
   const languages: { code: Language; flag: string; label: string }[] = [
     { code: 'es', flag: '🇪🇸', label: 'ES' },
     { code: 'en', flag: '🇬🇧', label: 'EN' },
-    { code: 'fr', flag: '🇫🇷', label: 'FR' },
-    { code: 'it', flag: '🇮🇹', label: 'IT' },
-    { code: 'de', flag: '🇩🇪', label: 'DE' },
   ];
 
-  const t = translations[language];
+  // Translation Helper with Fallback
+  const t = translations[language] || translations['en'] || translations['es'] || {};
 
   return (
     <header className="sticky top-0 z-40 bg-[#020617]/90 backdrop-blur-md border-b border-gray-800 transition-colors duration-300">
@@ -70,6 +68,17 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
         {/* SECCIÓN DERECHA: ACCIONES */}
         <div className="flex items-center gap-3">
              
+             {/* WEB PRINCIPAL LINK */}
+             <a 
+                href="https://mistercuarter.es" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-900/50 border border-gray-700/50 rounded hover:bg-gray-800 hover:border-gray-600 text-gray-400 hover:text-white transition-all group mr-2"
+             >
+                <Home className="w-3 h-3" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">{t.main_web_btn || "WEB PRINCIPAL"}</span>
+             </a>
+
              {/* LOGIN/USER BUTTON */}
              {!isLoadingAuth && (
                  user ? (
@@ -124,7 +133,7 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                         onClick={() => setLanguage(lang.code)}
                         className={`px-2 py-1 rounded-sm text-[10px] font-mono font-bold transition-all ${
                             language === lang.code 
-                            ? 'bg-gray-800 text-white shadow-sm' 
+                            ? 'bg-cyan-600 text-white shadow-sm' 
                             : 'text-gray-500 hover:text-gray-300'
                         }`}
                     >

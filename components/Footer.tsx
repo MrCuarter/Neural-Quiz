@@ -1,11 +1,18 @@
 
 import React from 'react';
-import { Twitter, Linkedin, Instagram, Mail } from 'lucide-react';
+import { Linkedin, Instagram, Mail, Youtube } from 'lucide-react';
 
 interface FooterProps {
   onPrivacy?: () => void;
   onTerms?: () => void;
 }
+
+// X (formerly Twitter) Logo Component
+const XLogo = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" className={className}>
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+);
 
 export const Footer: React.FC<FooterProps> = ({ onPrivacy, onTerms }) => {
   return (
@@ -32,16 +39,19 @@ export const Footer: React.FC<FooterProps> = ({ onPrivacy, onTerms }) => {
               
               <span className="text-[10px] font-mono text-gray-600 uppercase tracking-widest hidden md:block">SÍGUEME EN</span>
               
-              <a href="#" className="text-gray-500 hover:text-cyan-400 transition-colors" title="Twitter / X">
-                 <Twitter className="w-4 h-4" />
+              <a href="https://x.com/MrCuarter" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors" title="X (Twitter)">
+                 <XLogo className="w-4 h-4" />
               </a>
-              <a href="#" className="text-gray-500 hover:text-cyan-400 transition-colors" title="LinkedIn">
+              <a href="https://es.linkedin.com/in/norberto-cuartero-toledo-9279a813b" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-cyan-400 transition-colors" title="LinkedIn">
                  <Linkedin className="w-4 h-4" />
               </a>
-              <a href="#" className="text-gray-500 hover:text-pink-400 transition-colors" title="Instagram">
+              <a href="https://www.instagram.com/mrcuarter/?hl=es" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-pink-400 transition-colors" title="Instagram">
                  <Instagram className="w-4 h-4" />
               </a>
-              <a href="mailto:contact@mistercuarter.es" className="text-gray-500 hover:text-white transition-colors" title="Email">
+              <a href="https://www.youtube.com/@mr.cuarter2770" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-red-500 transition-colors" title="YouTube">
+                 <Youtube className="w-4 h-4" />
+              </a>
+              <a href="mailto:hola@mistercuarter.es" className="text-gray-500 hover:text-white transition-colors" title="Email">
                  <Mail className="w-4 h-4" />
               </a>
           </div>

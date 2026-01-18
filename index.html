@@ -145,10 +145,13 @@
         animation: pulse-glow 3s infinite;
       }
 
-      /* --- CLASSROOM MODE (High Contrast / Accessible) --- */
+      /* ========================================= */
+      /* --- CLASSROOM MODE (Light / Professional) --- */
+      /* ========================================= */
+      
       body.classroom-mode {
-        background-color: #ffffff !important;
-        color: #111827 !important;
+        background-color: #f0f2f5 !important; /* Soft Gray-Blue, easy on eyes */
+        color: #1e293b !important; /* Slate-800 for text */
       }
       
       /* Hide decorative cyber effects */
@@ -158,141 +161,225 @@
         display: none !important;
       }
 
-      /* Override dark containers to be white with sharp borders */
+      /* === CONTAINERS & CARDS === */
+      /* Cards become white "paper" sheets with soft shadows */
       body.classroom-mode .cyber-card,
       body.classroom-mode [class*="bg-black"], 
       body.classroom-mode [class*="bg-gray-9"] {
         background-color: #ffffff !important;
-        border-color: #cbd5e1 !important; /* Slate-300 */
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
-        color: #0f172a !important; /* Slate-900 */
+        border: 1px solid #e2e8f0 !important; /* Slate-200 */
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        color: #334155 !important; /* Slate-700 */
+        backdrop-filter: none !important;
       }
       
-      /* Specific handling for Header and Footer to ensure separation */
+      /* Header & Footer: Clean white strips */
       body.classroom-mode header {
-        background-color: #f8fafc !important; /* Slate-50 */
+        background-color: #ffffff !important;
         border-bottom: 1px solid #e2e8f0 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
       }
       body.classroom-mode footer {
-        background-color: #f8fafc !important;
+        background-color: #ffffff !important;
         border-top: 1px solid #e2e8f0 !important;
+        margin-top: 2rem;
       }
 
-      /* Text Colors: Force dark text for readability */
+      /* === TEXT COLORS & LEGIBILITY === */
+      /* Force high contrast for lighter text utility classes */
       body.classroom-mode .text-gray-300,
       body.classroom-mode .text-gray-400,
-      body.classroom-mode .text-gray-500, 
-      body.classroom-mode .text-cyan-100,
-      body.classroom-mode .text-cyan-200,
-      body.classroom-mode .text-pink-100,
-      body.classroom-mode .text-pink-200,
-      body.classroom-mode .text-purple-200,
-      body.classroom-mode .text-white {
-        color: #334155 !important; /* Slate-700 */
+      body.classroom-mode .text-gray-500 {
+        color: #64748b !important; /* Slate-500 */
       }
       
-      body.classroom-mode .text-xs,
-      body.classroom-mode .text-sm {
-        color: #475569 !important; /* Slate-600 */
+      body.classroom-mode .text-white {
+        color: #0f172a !important; /* Slate-900 */
       }
 
-      /* Headings and Accents: Darker versions of brand colors */
+      /* Accents: Shift from Neon to Professional Deep Colors */
       body.classroom-mode .text-cyan-400, 
       body.classroom-mode .text-cyan-500 {
-        color: #0369a1 !important; /* Sky-700 */
+        color: #0284c7 !important; /* Sky-600 */
       }
       body.classroom-mode .text-pink-400,
       body.classroom-mode .text-pink-500 {
-        color: #be123c !important; /* Rose-700 */
+        color: #db2777 !important; /* Pink-600 */
       }
       body.classroom-mode .text-purple-400 {
-        color: #7e22ce !important; /* Purple-700 */
+        color: #7c3aed !important; /* Violet-600 */
+      }
+      
+      /* FIX: LOGIN BUTTON & BLUE ACCENTS */
+      body.classroom-mode .text-blue-200 {
+        color: #1e40af !important; /* Blue-800 - High Contrast */
+      }
+      body.classroom-mode .bg-blue-900\/20 {
+        background-color: #eff6ff !important; /* Blue-50 */
+        border-color: #93c5fd !important; /* Blue-300 */
+      }
+      body.classroom-mode .hover\:bg-blue-900\/40:hover {
+        background-color: #dbeafe !important; /* Blue-100 */
       }
 
-      /* Form Inputs */
+      /* FIX: LANGUAGE SELECTOR ACTIVE STATE */
+      /* Maps bg-gray-800 (Active) to a visible light gray/slate */
+      body.classroom-mode .bg-gray-800 {
+        background-color: #e2e8f0 !important; /* Slate-200 */
+        color: #0f172a !important; /* Slate-900 */
+      }
+      
+      /* Headings in Gradient Text */
+      body.classroom-mode .bg-clip-text {
+         /* Keep gradient but make it darker */
+         background-image: linear-gradient(to right, #0284c7, #7c3aed) !important;
+      }
+
+      /* === FORMS & INPUTS === */
       body.classroom-mode input,
       body.classroom-mode textarea,
       body.classroom-mode select {
-        background-color: #ffffff !important;
-        border: 1px solid #94a3b8 !important; /* Slate-400 */
+        background-color: #f8fafc !important; /* Slate-50 */
+        border: 1px solid #cbd5e1 !important; /* Slate-300 */
         color: #0f172a !important;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05) !important;
+      }
+      body.classroom-mode input:focus,
+      body.classroom-mode textarea:focus,
+      body.classroom-mode select:focus {
+        background-color: #ffffff !important;
+        border-color: #0ea5e9 !important; /* Sky-500 */
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2) !important;
       }
       body.classroom-mode input::placeholder,
       body.classroom-mode textarea::placeholder {
-        color: #94a3b8 !important;
+        color: #94a3b8 !important; /* Slate-400 */
       }
       
-      /* Buttons */
+      /* === BUTTONS (CRITICAL UPDATE) === */
       body.classroom-mode button {
          text-shadow: none !important;
-         box-shadow: none !important;
       }
       
-      /* Solid Action Buttons */
-      body.classroom-mode .bg-cyan-600,
-      body.classroom-mode .bg-gradient-to-r {
-         background: #2563eb !important; /* Blue-600 */
+      /* 1. Primary Action (Cyan) -> Deep Blue Gradient */
+      body.classroom-mode .bg-cyan-600 {
+         background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%) !important;
          color: #ffffff !important;
+         border: none !important;
+         box-shadow: 0 4px 6px rgba(2, 132, 199, 0.3) !important;
       }
-      body.classroom-mode .bg-cyan-600:hover,
-      body.classroom-mode .bg-gradient-to-r:hover {
-         background: #1d4ed8 !important; /* Blue-700 */
+      body.classroom-mode .bg-cyan-600:hover {
+         background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
+         transform: translateY(-1px);
       }
       
-      /* Ghost / Outline Buttons */
+      /* 2. Neural Action (Purple) -> Deep Violet Gradient */
+      body.classroom-mode .bg-gradient-to-r {
+         background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%) !important;
+         color: #ffffff !important;
+         box-shadow: 0 4px 6px rgba(124, 58, 237, 0.3) !important;
+      }
+      
+      /* 3. Ghost / Secondary Buttons */
       body.classroom-mode button.bg-transparent {
-         border-color: #cbd5e1 !important;
+         background-color: #ffffff !important;
+         border: 1px solid #cbd5e1 !important;
          color: #475569 !important;
+         box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
       }
       body.classroom-mode button.bg-transparent:hover {
          background-color: #f1f5f9 !important;
-         color: #0f172a !important;
          border-color: #94a3b8 !important;
-      }
-
-      /* Home Menu Cards override */
-      body.classroom-mode .group.relative {
-         overflow: hidden; /* Fix layout */
-      }
-      body.classroom-mode .group:hover {
-         border-color: #2563eb !important;
-         background-color: #f8fafc !important;
-      }
-
-      /* Icons */
-      body.classroom-mode svg {
-         /* Generally inherit text color, but force high contrast if needed */
+         color: #0f172a !important;
       }
       
-      /* Scrollbar */
+      /* 4. Danger Buttons */
+      body.classroom-mode button.border-red-500 {
+         background-color: #fef2f2 !important;
+         border-color: #fca5a5 !important;
+         color: #dc2626 !important;
+      }
+      body.classroom-mode button.border-red-500:hover {
+         background-color: #fee2e2 !important;
+         border-color: #ef4444 !important;
+      }
+
+      /* === HOME MENU CARDS === */
+      body.classroom-mode .group.relative {
+         background: #ffffff !important;
+         border: 1px solid #e2e8f0 !important;
+         overflow: hidden; /* Fix overlap */
+      }
+      body.classroom-mode .group.relative:hover {
+         border-color: #0ea5e9 !important;
+         transform: translateY(-2px);
+         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+      }
+      body.classroom-mode .group.relative .bg-cyan-950\/30 {
+         background-color: #f0f9ff !important; /* Light blue circle */
+         border-color: #bae6fd !important;
+      }
+      body.classroom-mode .group.relative .bg-pink-950\/30 {
+         background-color: #fdf2f8 !important; /* Light pink circle */
+         border-color: #fbcfe8 !important;
+      }
+
+      /* === MISC ELEMENTS === */
+      
+      /* Checkboxes */
+      body.classroom-mode .w-5.h-5.border {
+         background-color: #ffffff !important;
+         border-color: #cbd5e1 !important;
+      }
+      body.classroom-mode .w-5.h-5.border:hover {
+         border-color: #0ea5e9 !important;
+      }
+      /* Checked state */
+      body.classroom-mode .bg-cyan-900\/50 {
+         background-color: #0ea5e9 !important;
+         border-color: #0284c7 !important;
+      }
+      body.classroom-mode .text-cyan-400.w-3.h-3 {
+         color: #ffffff !important;
+      }
+
+      /* Links */
+      body.classroom-mode a {
+         color: #0369a1 !important;
+         text-decoration: underline;
+         text-decoration-color: #bae6fd;
+      }
+      body.classroom-mode a:hover {
+         color: #0284c7 !important;
+         text-decoration-color: #0284c7;
+      }
+      
+      /* Scrollbar Light */
       body.classroom-mode ::-webkit-scrollbar-track {
         background: #f1f5f9 !important;
       }
       body.classroom-mode ::-webkit-scrollbar-thumb {
+        background: #cbd5e1 !important;
+      }
+      body.classroom-mode ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8 !important;
       }
-
-      /* Specific fix for "Export Panel" grid items which have complex classes */
+      
+      /* Export Grid Items */
       body.classroom-mode button.text-left {
         background-color: #ffffff !important;
       }
       body.classroom-mode button.text-left:hover {
-        background-color: #f0f9ff !important; /* Light blue tint */
+        background-color: #f8fafc !important;
         border-color: #0ea5e9 !important;
-      }
-      body.classroom-mode .bg-white\/5 {
-         background-color: #f1f5f9 !important;
-         border-left: 1px solid #e2e8f0 !important;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1) !important;
       }
       
-      /* Ensure links in footer/privacy are visible */
-      body.classroom-mode a {
-         color: #2563eb !important;
-         text-decoration: underline;
-      }
-      body.classroom-mode a:hover {
-         color: #1e40af !important;
-      }
+      /* Icons specific overrides */
+      body.classroom-mode svg.text-cyan-400 { color: #0284c7 !important; }
+      body.classroom-mode svg.text-pink-400 { color: #db2777 !important; }
+      body.classroom-mode svg.text-purple-400 { color: #7c3aed !important; }
+      
     </style>
   <script type="importmap">
 {

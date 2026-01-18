@@ -31,12 +31,12 @@ const ExportPreviewCard: React.FC<{
     const exportData = useMemo(() => {
         try {
             if (format.id === ExportFormat.GOOGLE_FORMS) {
-                return { content: "", isBase64: true, mimeType: "application/json" };
+                return { content: "", isBase64: true, mimeType: "application/json", filename: "google_forms_placeholder.json" };
             }
             return exportQuiz(quiz, format.id, exportOptions);
         } catch(e) {
             console.error("Export Error:", e);
-            return { content: "Error generating preview.", isBase64: false, mimeType: "text/plain" };
+            return { content: "Error generating preview.", isBase64: false, mimeType: "text/plain", filename: "error.txt" };
         }
     }, [quiz, format.id, exportOptions]);
 
