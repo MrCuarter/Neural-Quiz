@@ -110,7 +110,6 @@ export enum ExportFormat {
   GOOGLE_FORMS = 'GOOGLE_FORMS', // Google Forms API
   GOOGLE_SLIDES_API = 'GOOGLE_SLIDES_API', // Google Slides API (Direct)
   PDF_PRINT = 'PDF_PRINT', // New: Printable PDF
-  GOOGLE_SLIDES_PPTX = 'GOOGLE_SLIDES_PPTX', // New: Slides/PowerPoint (Client-side)
   BLOOKET = 'BLOOKET', // Blooket CSV
   WAYGROUND = 'WAYGROUND', // Wayground XLSX
   KAHOOT = 'KAHOOT', // Kahoot XLSX
@@ -164,10 +163,6 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     [ExportFormat.PDF_PRINT]: {
         name: 'Printable PDF',
         types: Object.values(QUESTION_TYPES) // Supports almost everything visually
-    },
-    [ExportFormat.GOOGLE_SLIDES_PPTX]: {
-        name: 'Google Slides / PPTX (File)',
-        types: Object.values(QUESTION_TYPES) // Supports visualization of all types
     },
     [ExportFormat.GOOGLE_SLIDES_API]: {
         name: 'Google Slides (Cloud API)',

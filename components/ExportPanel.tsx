@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { ExportFormat, Quiz, Question } from '../types';
 import { exportQuiz } from '../services/exportService';
 import { exportToGoogleForms } from '../services/googleFormsService';
-import { exportToGoogleSlides } from '../services/googleSlidesService'; // NEW IMPORT
+import { exportToGoogleSlides } from '../services/googleSlidesService'; // API IMPORT
 import { signInWithGoogle } from '../services/firebaseService'; // AUTH IMPORT
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
@@ -36,8 +36,7 @@ const ExportPreviewCard: React.FC<{
         // Skip preview generation for APIs and heavy binaries
         if (format.id === ExportFormat.GOOGLE_FORMS || 
             format.id === ExportFormat.GOOGLE_SLIDES_API ||
-            format.id === ExportFormat.PDF_PRINT || 
-            format.id === ExportFormat.GOOGLE_SLIDES_PPTX) {
+            format.id === ExportFormat.PDF_PRINT) {
             return;
         }
         
@@ -81,7 +80,7 @@ const ExportPreviewCard: React.FC<{
                 return;
             }
 
-            // Standard, PDF & PPTX Export (Client-side)
+            // Standard & PDF Export (Client-side)
             const exportData = await exportQuiz(quiz, format.id, { ...exportOptions, includeImages: withImages });
 
             // Browser Download Trigger
@@ -172,7 +171,6 @@ const ExportPreviewCard: React.FC<{
     const isGoogle = format.id === ExportFormat.GOOGLE_FORMS;
     const isGoogleSlides = format.id === ExportFormat.GOOGLE_SLIDES_API;
     const isPDF = format.id === ExportFormat.PDF_PRINT;
-    const isPPTX = format.id === ExportFormat.GOOGLE_SLIDES_PPTX;
     
     const tablePreview = useMemo(() => {
         if (!previewContent) return null;
@@ -206,7 +204,7 @@ const ExportPreviewCard: React.FC<{
                     <div>
                         <h4 className="text-cyan-400 font-cyber font-bold text-sm">{format.name}</h4>
                         <span className="text-[10px] text-gray-500 font-mono uppercase">
-                            {isCloudExport ? "API INTEGRATION" : (isPDF || isPPTX ? "DOCUMENT GENERATOR" : (previewContent?.isBase64 ? "BINARY FILE" : "TEXT FILE"))}
+                            {isCloudExport ? "API INTEGRATION" : (isPDF ? "DOCUMENT GENERATOR" : (previewContent?.isBase64 ? "BINARY FILE" : "TEXT FILE"))}
                         </span>
                     </div>
                 </div>
@@ -241,11 +239,6 @@ const ExportPreviewCard: React.FC<{
                             <ImageIcon className="w-12 h-12" />
                         </div>
                         <p className="text-[10px] font-mono text-gray-400">PDF Generator Ready.<br/>Select option below.</p>
-                    </div>
-                ) : isPPTX ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 gap-4 p-4 text-center">
-                        <Presentation className="w-16 h-16 opacity-30" />
-                        <p className="text-[10px] font-mono text-gray-400">Presentation Generator Ready.<br/>Exports as .pptx (Compatible with Google Slides)</p>
                     </div>
                 ) : tablePreview ? (
                     renderTable(tablePreview)
@@ -338,9 +331,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
     // --- TIER 1: THE BIG ONES ---
     { id: ExportFormat.KAHOOT, name: "Kahoot!", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
-    { id: ExportFormat.GOOGLE_SLIDES_API, name: "Google Slides (API)", desc: t.fmt_google_slides_api, logo: "https://upload.wikimedia.org/wikipedia/commons/1/1e/Google_Slides_2020_Logo.svg", allowedTypes: ['Multiple Choice', 'True/False'] },
+    { id: ExportFormat.GOOGLE_SLIDES_API, name: "Google Slides", desc: t.fmt_google_slides_api, logo: "https://i.postimg.cc/9MTyB3f3/slides.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.PDF_PRINT, name: "PDF Printable", desc: t.fmt_pdf_print, logo: "https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg", allowedTypes: ['*'] },
-    { id: ExportFormat.GOOGLE_SLIDES_PPTX, name: "Google Slides (File)", desc: t.fmt_google_slides, logo: "https://upload.wikimedia.org/wikipedia/commons/1/1e/Google_Slides_2020_Logo.svg", allowedTypes: ['*'] },
     { id: ExportFormat.BLOOKET, name: "Blooket", desc: t.fmt_blooket, logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit", desc: t.fmt_gimkit_classic, logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
     

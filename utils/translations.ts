@@ -134,7 +134,6 @@ export const translations = {
     // Format Descriptions (SHORTENED)
     fmt_universal: "Formato Maestro. Incluye media y feedback. Ideal copias de seguridad.",
     fmt_pdf_print: "Genera un examen listo para imprimir + Hoja de Respuestas.",
-    fmt_google_slides: "Genera archivo .pptx para descargar. Compatible Google Slides.",
     fmt_google_slides_api: "Crea la presentación DIRECTAMENTE en tu Google Drive.",
     fmt_google_forms: "Crea automáticamente el Formulario en tu Drive. Requiere login.",
     fmt_kahoot: "Plantilla Excel oficial. Lista para subir directamente a Kahoot.",
@@ -151,8 +150,8 @@ export const translations = {
     fmt_flippity: "Genera el Excel para Flippity Quiz Show.",
     fmt_sandbox: "Texto simple para Quiz Sandbox.",
     fmt_quizlet: "Formato ficha (Término + Definición). Para sets de estudio.",
-    fmt_decktoys: "Formato Study Set para actividades Deck.Toys.",
-    fmt_wayground: "Excel compatible con Wayground, incluye explicaciones.",
+    fmt_decktoys: "Study Set format for Deck.Toys activities.",
+    fmt_wayground: "Wayground Excel with explanations.",
     fmt_aiken: "Estándar LMS (Moodle, Blackboard, Canvas). Texto plano.",
     fmt_gift: "Formato avanzado Moodle (Símbolos para emparejar).",
     fmt_json: "Datos crudos para desarrolladores.",
@@ -328,7 +327,6 @@ export const translations = {
     // Format Descriptions (SHORTENED)
     fmt_universal: "Master Format with media & feedback. Best for backups.",
     fmt_pdf_print: "Generates a clean Exam PDF + Answer Key page.",
-    fmt_google_slides: "Generates .pptx file. Upload to Google Drive manually.",
     fmt_google_slides_api: "Creates Presentation DIRECTLY in your Drive.",
     fmt_google_forms: "Auto-creates Form in Drive. Requires login.",
     fmt_kahoot: "Official Excel Template. Ready for direct upload.",
@@ -347,7 +345,7 @@ export const translations = {
     fmt_quizlet: "Flashcard format (Term + Def). For study sets.",
     fmt_decktoys: "Study Set format for Deck.Toys activities.",
     fmt_wayground: "Wayground Excel with explanations.",
-    fmt_aiken: "Standard LMS (Moodle, Canvas). Plain text.",
+    fmt_aiken: "Standard LMS (Moodle, Blackboard, Canvas). Plain text.",
     fmt_gift: "Advanced Moodle format (Matching symbols).",
     fmt_json: "Raw data backup for developers.",
     
