@@ -48,6 +48,27 @@ export interface Quiz {
   updatedAt?: any; // Timestamp
 }
 
+// --- GAME TYPES ---
+export type PowerUpType = 'DOUBLE' | 'STEAL' | 'BOMB' | 'SWAP' | 'SHIELD';
+
+export interface PowerUp {
+    id: string;
+    type: PowerUpType;
+    name: string;
+    icon: string;
+    desc: string;
+}
+
+export interface GameTeam {
+    id: string;
+    name: string;
+    score: number;
+    inventory: PowerUp[];
+    shielded: boolean;
+    multiplier: number; // For x2 potion
+    avatarColor: string;
+}
+
 export interface DiscoveryAttempt {
     method: 'api_proxy' | 'jina_reader' | 'html_embedded' | 'direct_fetch';
     finalUrl: string;

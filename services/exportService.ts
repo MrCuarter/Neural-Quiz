@@ -2,11 +2,16 @@
 import { ExportFormat, GeneratedFile, Quiz, Question, QUESTION_TYPES } from "../types";
 import * as XLSX from 'xlsx';
 import { jsPDF } from "jspdf";
+import { getSafeImageUrl } from "./imageProxyService";
 
 // Helper to fetch image and convert to Base64 for PDF embedding
 const fetchImageAsBase64 = async (url: string): Promise<string | null> => {
     try {
-        const response = await fetch(url);
+        // Use proxy to avoid CORS when fetching for PDF
+        const safeUrl = getSafeImageUrl(url); 
+        if (!safeUrl) return null;
+        
+        const response = await fetch(safeUrl);
         const blob = await response.blob();
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -325,7 +330,7 @@ const generateUniversalCSV = (quiz: Quiz, title: string) => {
       escapeCSV(o[0]?.text), 
       escapeCSV(o[1]?.text), 
       escapeCSV(o[2]?.text), 
-      escapeCSV(q.imageUrl), 
+      escapeCSV(getSafeImageUrl(q.imageUrl)), // PROXIED IMAGE
       escapeCSV(o[3]?.text), 
       escapeCSV(q.questionType), 
       String(q.timeLimit || 20), 
@@ -354,7 +359,17 @@ const generateBlooketCSV = (quiz: Quiz, title: string) => {
         const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 ? q.correctOptionIds : (q.correctOptionId ? [q.correctOptionId] : []);
         let correctIndices = opts.map((o, i) => correctIds.includes(o.id) ? i + 1 : null).filter(i => i !== null);
         if (correctIndices.length === 0 && opts.length > 0) correctIndices = [1];
-        return [String(index + 1), escapeCSV(q.text), escapeCSV(opts[0]?.text || ""), escapeCSV(opts[1]?.text || ""), escapeCSV(opts[2]?.text || ""), escapeCSV(opts[3]?.text || ""), String(q.timeLimit || 20), escapeCSV(correctIndices.join(",")), escapeCSV(q.imageUrl || "")].join(",");
+        return [
+            String(index + 1), 
+            escapeCSV(q.text), 
+            escapeCSV(opts[0]?.text || ""), 
+            escapeCSV(opts[1]?.text || ""), 
+            escapeCSV(opts[2]?.text || ""), 
+            escapeCSV(opts[3]?.text || ""), 
+            String(q.timeLimit || 20), 
+            escapeCSV(correctIndices.join(",")), 
+            escapeCSV(getSafeImageUrl(q.imageUrl) || "") // PROXIED IMAGE FOR BLOOKET
+        ].join(",");
     }).join("\n");
     return { filename: `${title}_blooket.csv`, content: `${row1}\n${headers}\n${rows}`, mimeType: 'text/csv' };
 };
@@ -521,12 +536,97 @@ const generateGeniallyXLSX = (quiz: Quiz, title: string): GeneratedFile => {
     };
 };
 
+// --- FLIPPITY EXPORT (DYNAMIC 60Qs) ---
+const generateFlippityXLSX = (quiz: Quiz, title: string, options?: any): GeneratedFile => {
+    const mode = options?.flippityMode || 'fill';
+    let categories = options?.categories || [];
+    
+    // Fill categories defaults if missing (Up to 12)
+    for (let i = 0; i < 12; i++) {
+        if (!categories[i]) categories[i] = `Category ${i+1}`;
+    }
+
+    const formatText = (text: string, img?: string) => {
+        let t = text;
+        const safeImg = getSafeImageUrl(img);
+        if (safeImg) {
+            t += ` [[Image:${safeImg}]]`;
+        }
+        return t;
+    };
+
+    const getAnswer = (q: Question) => {
+        const correctIds = q.correctOptionIds || (q.correctOptionId ? [q.correctOptionId] : []);
+        const correctOption = q.options.find(o => correctIds.includes(o.id));
+        return correctOption ? correctOption.text : (q.options[0]?.text || "Answer");
+    };
+
+    let grid: string[][];
+
+    if (mode === 'repeat') {
+        // MODE 1: Repeat (Drill) - Default 6 columns
+        const cols = 6;
+        grid = Array(11).fill(null).map(() => Array(cols).fill(""));
+        
+        for (let c = 0; c < cols; c++) {
+            grid[0][c] = categories[c];
+            if (quiz.questions.length === 0) break;
+            
+            const q = quiz.questions[c % quiz.questions.length];
+            const qText = formatText(q.text, q.imageUrl);
+            const aText = getAnswer(q);
+
+            for (let r = 0; r < 5; r++) {
+                grid[1 + (r * 2)][c] = qText;
+                grid[2 + (r * 2)][c] = aText;
+            }
+        }
+    } else {
+        // MODE 2: Fill (Game) - Dynamic up to 12 columns (60 Qs)
+        const possibleCols = Math.floor(quiz.questions.length / 5);
+        let targetCols = Math.min(12, possibleCols);
+        if (targetCols < 1) targetCols = 1;
+
+        grid = Array(11).fill(null).map(() => Array(targetCols).fill(""));
+
+        for (let c = 0; c < targetCols; c++) {
+            grid[0][c] = categories[c];
+        }
+
+        let qIndex = 0;
+        for (let c = 0; c < targetCols; c++) {
+            // Check boundary
+            if (qIndex + 5 > quiz.questions.length) break;
+
+            for (let r = 0; r < 5; r++) {
+                const q = quiz.questions[qIndex++];
+                const qText = formatText(q.text, q.imageUrl);
+                const aText = getAnswer(q);
+
+                grid[1 + (r * 2)][c] = qText;
+                grid[2 + (r * 2)][c] = aText;
+            }
+        }
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(grid);
+    XLSX.utils.book_append_sheet(wb, ws, "Flippity");
+
+    return {
+        filename: `${title}_flippity.xlsx`,
+        content: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }),
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        isBase64: true
+    };
+};
+
 const generateWordwall = (q:Quiz, t:string) => ({ filename: `${t}_wordwall.txt`, content: q.questions.map(q => q.text).join("\n"), mimeType: 'text/plain' });
 const generateAiken = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "Aiken", mimeType: 'text/plain' });
 const generateGIFT = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "GIFT", mimeType: 'text/plain' });
 const generateWaygroundXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
 const generateIdoceoXLSX_LEGACY = (q:Quiz, t:string) => generateKahootXLSX(q,t); 
-const generateFlippityXLSX = (q:Quiz, t:string, o:any) => generateKahootXLSX(q,t);
+const generateFlippityXLSX_LEGACY = (q:Quiz, t:string, o:any) => generateKahootXLSX(q,t);
 const generateSandbox = (q:Quiz, t:string) => generateWordwall(q,t);
 const generateWooclapXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
 const generateQuizletQA = (q:Quiz, t:string) => generateWordwall(q,t);

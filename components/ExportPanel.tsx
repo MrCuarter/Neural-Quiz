@@ -7,7 +7,7 @@ import { exportToGoogleSlides } from '../services/googleSlidesService'; // API I
 import { signInWithGoogle } from '../services/firebaseService'; // AUTH IMPORT
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
-import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X, Image as ImageIcon, FileText, Presentation } from 'lucide-react';
+import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X, Image as ImageIcon, FileText, Presentation, Repeat, LayoutGrid } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface ExportPanelProps {
@@ -322,9 +322,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
 
   const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>(getDefaultSelection);
   const [isFixing, setIsFixing] = useState(false);
-  const [flippityMode, setFlippityMode] = useState<'30' | '6'>('30');
-  const [flippitySelection, setFlippitySelection] = useState<string[]>([]);
-  const [flippityCategories, setFlippityCategories] = useState<string[]>(["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"]);
+  const [flippityMode, setFlippityMode] = useState<'repeat' | 'fill'>('fill');
+  // Initial state for 12 potential columns
+  const [flippityCategories, setFlippityCategories] = useState<string[]>(Array.from({length: 12}, (_, i) => `Category ${i + 1}`));
   const [isGeneratingCats, setIsGeneratingCats] = useState(false);
 
   const formats = [
@@ -387,6 +387,14 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
      return Array.from(badQs);
   }, [quiz, selectedFormats]);
 
+  // Determine active columns for Flippity UI
+  const activeFlippityCols = useMemo(() => {
+      if (flippityMode === 'repeat') return 6;
+      // Fill mode: 5 questions per column, max 12 columns (60 q)
+      const cols = Math.floor(quiz.questions.length / 5);
+      return Math.max(1, Math.min(12, cols));
+  }, [quiz.questions.length, flippityMode]);
+
   const handleAutoFix = async () => {
       if (!setQuiz || incompatibleQuestions.length === 0) return;
       setIsFixing(true);
@@ -406,25 +414,24 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
   };
 
   const getPreparedQuiz = (): Quiz => {
-    if (!isFlippitySelected) return quiz;
-    if (flippityMode === '6' && flippitySelection.length > 0) {
-       const orderedQuestions: Question[] = [];
-       flippitySelection.forEach(id => {
-         const q = quiz.questions.find(q => q.id === id);
-         if (q) orderedQuestions.push(q);
-       });
-       return { ...quiz, questions: orderedQuestions };
-    }
+    // We handle custom logic inside the export service now for Flippity
     return quiz;
   };
 
-  const preparedQuiz = useMemo(() => getPreparedQuiz(), [quiz, flippityMode, flippitySelection, isFlippitySelected]);
+  const preparedQuiz = useMemo(() => getPreparedQuiz(), [quiz, flippityMode, isFlippitySelected]);
 
   const handleGenerateCategories = async () => {
       setIsGeneratingCats(true);
       const questionTexts = quiz.questions.slice(0, 30).map(q => q.text);
-      const cats = await generateQuizCategories(questionTexts);
-      setFlippityCategories(cats);
+      const count = activeFlippityCols;
+      const cats = await generateQuizCategories(questionTexts, count);
+      
+      // Update categories preserving indices
+      setFlippityCategories(prev => {
+          const next = [...prev];
+          cats.forEach((c, i) => { if(i < next.length) next[i] = c; });
+          return next;
+      });
       setIsGeneratingCats(false);
   };
 
@@ -497,16 +504,21 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
 
           {isFlippitySelected && (
             <div className="flex flex-col gap-4 p-4 bg-black/40 border border-orange-500/50 rounded-lg animate-in fade-in">
-               {/* ... Flippity contents ... */}
                <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
                     <p className="text-orange-400 font-mono-cyber text-sm mb-2 uppercase">{t.flippity_config}</p>
                     <div className="flex gap-4">
-                      <button onClick={() => setFlippityMode('6')} className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${flippityMode === '6' ? 'bg-orange-900/50 border-orange-400 text-orange-200' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                        <Grid3X3 className="w-5 h-5" /><span className="text-xs font-bold font-mono">6 QUESTIONS</span>
+                      {/* MODE 1: REPEAT 5 (DRILL) */}
+                      <button onClick={() => setFlippityMode('repeat')} className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${flippityMode === 'repeat' ? 'bg-orange-900/50 border-orange-400 text-orange-200' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                        <Repeat className="w-5 h-5" />
+                        <span className="text-xs font-bold font-mono text-center">{t.flippity_mode_repeat}</span>
+                        <span className="text-[9px] opacity-60 hidden sm:inline">6 Cats / 5 repeats</span>
                       </button>
-                      <button onClick={() => setFlippityMode('30')} className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${flippityMode === '30' ? 'bg-orange-900/50 border-orange-400 text-orange-200' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                        <List className="w-5 h-5" /><span className="text-xs font-bold font-mono">30 QUESTIONS</span>
+                      {/* MODE 2: FILL ALL (GAME) */}
+                      <button onClick={() => setFlippityMode('fill')} className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${flippityMode === 'fill' ? 'bg-orange-900/50 border-orange-400 text-orange-200' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                        <LayoutGrid className="w-5 h-5" />
+                        <span className="text-xs font-bold font-mono text-center">{t.flippity_mode_fill}</span>
+                        <span className="text-[9px] opacity-60 hidden sm:inline">Max 60 Qs (Chunks of 5)</span>
                       </button>
                     </div>
                   </div>
@@ -519,10 +531,13 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                        </CyberButton>
                    </div>
                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {flippityCategories.map((cat, idx) => (
+                      {flippityCategories.slice(0, activeFlippityCols).map((cat, idx) => (
                           <input key={idx} value={cat} onChange={(e) => { const n = [...flippityCategories]; n[idx] = e.target.value; setFlippityCategories(n); }} className="bg-black/50 border border-gray-700 text-orange-100 text-[10px] p-2 rounded focus:border-orange-500 outline-none" placeholder={`Category ${idx+1}`} />
                       ))}
                    </div>
+                   {activeFlippityCols >= 12 && (
+                       <p className="text-[9px] text-gray-500 mt-2 text-right">Max categories reached (12)</p>
+                   )}
                </div>
             </div>
           )}
@@ -561,7 +576,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                                   format={fmt} 
                                   quiz={preparedQuiz} 
                                   t={t} 
-                                  exportOptions={fmtId === ExportFormat.FLIPPITY ? { categories: flippityCategories } : undefined}
+                                  exportOptions={fmtId === ExportFormat.FLIPPITY ? { categories: flippityCategories, flippityMode } : undefined}
                                   onClose={() => toggleFormat(fmtId)}
                               />
                           </div>

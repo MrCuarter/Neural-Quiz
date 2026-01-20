@@ -367,12 +367,12 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
     });
 };
 
-export const generateQuizCategories = async (questions: string[]): Promise<string[]> => {
+export const generateQuizCategories = async (questions: string[], count: number = 6): Promise<string[]> => {
     return withRetry(async () => {
         const ai = getAI();
         const response = await ai.models.generateContent({
           model: "gemini-3-flash-preview",
-          contents: `Generate 6 jeopardy categories. Questions: ${questions.slice(0,5).join('|')}`,
+          contents: `Generate ${count} short jeopardy categories based on these questions. Questions: ${questions.slice(0,10).join('|')}`,
           config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } } },
         });
         try { return JSON.parse(response.text || "[]"); } catch { return []; }

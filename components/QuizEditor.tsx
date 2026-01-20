@@ -5,6 +5,7 @@ import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea } from '
 import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
+import { getSafeImageUrl } from '../services/imageProxyService'; // IMPORTED
 import * as XLSX from 'xlsx';
 
 interface QuizEditorProps {
@@ -596,6 +597,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                     placeholder="https://..." 
                                                     value={q.imageUrl || ''} 
                                                     onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })} 
+                                                    onBlur={(e) => {
+                                                        // AUTO CONVERT WEBP TO PNG ON BLUR
+                                                        const val = e.target.value;
+                                                        const safeUrl = getSafeImageUrl(val);
+                                                        if (safeUrl && safeUrl !== val) {
+                                                            updateQuestion(q.id, { imageUrl: safeUrl });
+                                                        }
+                                                    }}
                                                     className="bg-black/40 border border-gray-700 p-2 rounded w-full text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500" 
                                                 />
                                             </div>

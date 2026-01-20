@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS } from './types';
+import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam } from './types';
 import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -9,9 +9,11 @@ import { HelpView } from './components/HelpView';
 import { PrivacyView } from './components/PrivacyView'; 
 import { TermsView } from './components/TermsView'; 
 import { MyQuizzes } from './components/MyQuizzes'; 
+import { GameLobby } from './components/game/GameLobby'; // NEW
+import { JeopardyBoard } from './components/game/JeopardyBoard'; // NEW
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2 } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
@@ -19,10 +21,10 @@ import { fetchUrlContent, analyzeUrl } from './services/urlService';
 import { getRandomMessage, getDetectionMessage } from './services/messageService';
 import { auth, onAuthStateChanged, saveQuizToFirestore } from './services/firebaseService';
 import * as XLSX from 'xlsx';
-import { ToastProvider, useToast } from './components/ui/Toast'; // IMPORT TOAST
+import { ToastProvider, useToast } from './components/ui/Toast';
 
 // Types
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes';
+type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -42,7 +44,6 @@ const PLATFORMS_WITH_FEEDBACK = [
 ];
 
 // --- MAIN APP COMPONENT (Inner) ---
-// We wrap this inner component with ToastProvider in the default export
 const NeuralApp: React.FC = () => {
   const [view, setView] = useState<ViewState>('home');
   const [quiz, setQuiz] = useState<Quiz>(initialQuiz);
@@ -53,7 +54,7 @@ const NeuralApp: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   const t = translations[language] || translations['en'] || translations['es'];
-  const toast = useToast(); // USE TOAST HOOK
+  const toast = useToast();
 
   // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
@@ -91,6 +92,10 @@ const NeuralApp: React.FC = () => {
   const [tempQuestions, setTempQuestions] = useState<Question[]>([]);
   const [tempQuizInfo, setTempQuizInfo] = useState<{ title: string; desc: string }>({ title: '', desc: '' });
   const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
+
+  // GAME STATE
+  const [gameQuiz, setGameQuiz] = useState<Quiz | null>(null);
+  const [gameTeams, setGameTeams] = useState<GameTeam[]>([]);
 
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
@@ -261,10 +266,8 @@ const NeuralApp: React.FC = () => {
         topic: genParams.topic, count: Number(genParams.count) || 5, types: genParams.types, age: genParams.age, context: genParams.context, urls: urlList, language: selectedLang, includeFeedback
       });
       
-      // Because we use Zod validation in generateQuizQuestions, 'generatedQs' is guaranteed to be valid Question[] (or error thrown)
       const newQuestions = generatedQs.map(gq => ({
           ...gq,
-          // Re-map internal properties to be safe
           id: uuid(),
           correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []),
       }));
@@ -475,15 +478,22 @@ const NeuralApp: React.FC = () => {
     }
   };
 
-  // Stepper logic remains same...
+  // Stepper
   const Stepper = () => {
     let step = 1;
-    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms', 'my_quizzes'].includes(view)) step = 1;
+    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms', 'my_quizzes', 'game_lobby', 'game_board'].includes(view)) step = 1;
     if (view === 'create_ai' || view === 'convert_analysis') step = 2;
     if (view === 'create_manual') step = 3;
     if (view === 'convert_result') step = 4;
-    const steps = [ { num: 1, label: 'SETUP' }, { num: 2, label: 'GENERATE' }, { num: 3, label: 'EDIT' }, { num: 4, label: 'EXPORT' } ];
-    if (['home', 'help', 'privacy', 'terms'].includes(view)) return null;
+    
+    // Hide stepper during game or aux views
+    if (['home', 'help', 'privacy', 'terms', 'game_board'].includes(view)) return null;
+    
+    // Custom label if in game flow
+    const isGameFlow = view === 'game_lobby';
+    
+    const steps = [ { num: 1, label: isGameFlow ? 'LOBBY' : 'SETUP' }, { num: 2, label: isGameFlow ? 'PLAY' : 'GENERATE' }, { num: 3, label: 'EDIT' }, { num: 4, label: 'EXPORT' } ];
+    
     return (
         <div className="flex justify-center mb-8 font-mono text-xs tracking-wider">
             <div className="flex items-center gap-2">
@@ -501,7 +511,6 @@ const NeuralApp: React.FC = () => {
     );
   };
 
-  // Rendering blocks...
   const renderMissingAnswersModal = () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <CyberCard className="max-w-md w-full border-yellow-500/50 shadow-[0_0_50px_rgba(234,179,8,0.2)]">
@@ -524,9 +533,27 @@ const NeuralApp: React.FC = () => {
          <h3 className="text-xl md:text-2xl font-cyber text-cyan-400 tracking-wider"> {t.home_subtitle_main} </h3>
          <p className="text-base md:text-lg font-mono text-gray-400 font-light max-w-2xl"> {t.home_description} </p>
        </div>
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-5xl px-6">
-         <button onClick={() => setView('create_menu')} className="group relative bg-black/40 border border-cyan-900/50 p-10 hover:bg-cyan-950/20 transition-all hover:scale-[1.02] hover:border-cyan-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6"> <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> <div className="p-5 rounded-full bg-cyan-950/30 border border-cyan-500/30 group-hover:border-cyan-400 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all"> <BrainCircuit className="w-12 h-12 text-cyan-400" /> </div> <div> <h2 className="text-2xl font-cyber text-white mb-2 group-hover:text-cyan-300 tracking-wide">{t.create_quiz}</h2> <p className="font-mono text-gray-500 text-sm">{t.create_quiz_desc}</p> </div> </button>
-         <button onClick={() => setView('convert_upload')} className="group relative bg-black/40 border border-pink-900/50 p-10 hover:bg-pink-950/20 transition-all hover:scale-[1.02] hover:border-pink-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6"> <div className="absolute inset-0 bg-pink-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> <div className="p-5 rounded-full bg-pink-950/30 border border-pink-500/30 group-hover:border-pink-400 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all"> <FileUp className="w-12 h-12 text-pink-400" /> </div> <div> <h2 className="text-2xl font-cyber text-white mb-2 group-hover:text-pink-300 tracking-wide">{t.convert_quiz}</h2> <p className="font-mono text-gray-500 text-sm">{t.convert_quiz_desc}</p> </div> </button>
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl px-6">
+         
+         <button onClick={() => setView('create_menu')} className="group relative bg-black/40 border border-cyan-900/50 p-8 hover:bg-cyan-950/20 transition-all hover:scale-[1.02] hover:border-cyan-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6 h-full"> 
+            <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> 
+            <div className="p-5 rounded-full bg-cyan-950/30 border border-cyan-500/30 group-hover:border-cyan-400 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all"> <BrainCircuit className="w-10 h-10 text-cyan-400" /> </div> 
+            <div> <h2 className="text-xl font-cyber text-white mb-2 group-hover:text-cyan-300 tracking-wide">{t.create_quiz}</h2> <p className="font-mono text-gray-500 text-xs">{t.create_quiz_desc}</p> </div> 
+         </button>
+         
+         <button onClick={() => setView('convert_upload')} className="group relative bg-black/40 border border-pink-900/50 p-8 hover:bg-pink-950/20 transition-all hover:scale-[1.02] hover:border-pink-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6 h-full"> 
+            <div className="absolute inset-0 bg-pink-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> 
+            <div className="p-5 rounded-full bg-pink-950/30 border border-pink-500/30 group-hover:border-pink-400 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all"> <FileUp className="w-10 h-10 text-pink-400" /> </div> 
+            <div> <h2 className="text-xl font-cyber text-white mb-2 group-hover:text-pink-300 tracking-wide">{t.convert_quiz}</h2> <p className="font-mono text-gray-500 text-xs">{t.convert_quiz_desc}</p> </div> 
+         </button>
+
+         {/* GAME BUTTON */}
+         <button onClick={() => { if(!user) { toast.warning("Debes iniciar sesión para jugar."); return; } setView('game_lobby'); }} className="group relative bg-black/40 border border-yellow-900/50 p-8 hover:bg-yellow-950/20 transition-all hover:scale-[1.02] hover:border-yellow-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6 h-full"> 
+            <div className="absolute inset-0 bg-yellow-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> 
+            <div className="p-5 rounded-full bg-yellow-950/30 border border-yellow-500/30 group-hover:border-yellow-400 group-hover:shadow-[0_0_30px_rgba(234,179,8,0.4)] transition-all"> <Gamepad2 className="w-10 h-10 text-yellow-400" /> </div> 
+            <div> <h2 className="text-xl font-cyber text-white mb-2 group-hover:text-yellow-300 tracking-wide">JUGAR</h2> <p className="font-mono text-gray-500 text-xs">MODO AULA // JEOPARDY</p> </div> 
+         </button>
+
        </div>
     </div>
   );
@@ -617,6 +644,34 @@ const NeuralApp: React.FC = () => {
         {view === 'privacy' && <PrivacyView onBack={() => handleSafeExit('home')} />}
         {view === 'terms' && <TermsView onBack={() => handleSafeExit('home')} />}
         {view === 'my_quizzes' && user && <MyQuizzes user={user} onBack={() => handleSafeExit('home')} onEdit={handleLoadQuiz} />}
+
+        {/* GAME MODULE ROUTES */}
+        {view === 'game_lobby' && user && (
+            <GameLobby 
+                user={user} 
+                onBack={() => setView('home')} 
+                onStartGame={(q, teams) => {
+                    setGameQuiz(q);
+                    setGameTeams(teams);
+                    setView('game_board');
+                }}
+                t={t}
+            />
+        )}
+        
+        {view === 'game_board' && gameQuiz && (
+            <JeopardyBoard 
+                quiz={gameQuiz} 
+                initialTeams={gameTeams} 
+                onExit={() => {
+                    if (confirm("¿Seguro que quieres salir de la partida?")) {
+                        setView('home');
+                        setGameQuiz(null);
+                        setGameTeams([]);
+                    }
+                }}
+            />
+        )}
 
         {view === 'home' && renderHome()}
         {view === 'create_menu' && renderCreateMenu()}
