@@ -49,14 +49,14 @@ export const auth = getAuth(app);
 // --- 3. CONFIGURACIÓN CRÍTICA DEL PROVEEDOR (SCOPES) ---
 export const googleProvider = new GoogleAuthProvider();
 
-// Scopes necesarios para la exportación a Google Slides
-googleProvider.addScope('https://www.googleapis.com/auth/presentations');
+// Scopes reducidos para verificación de Google. 
+// 'drive.file' permite a la app ver y editar solo los archivos que ella misma ha creado.
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 
 // Exportamos onAuthStateChanged para uso en componentes
 export { onAuthStateChanged };
 
-console.log("🔥 Firebase (NPM) 'una-para-todas' inicializado correctamente con Scopes de Slides/Drive.");
+console.log("🔥 Firebase (NPM) 'una-para-todas' inicializado. Scope: drive.file");
 
 // --- 4. FUNCIONES DE AUTENTICACIÓN ---
 
