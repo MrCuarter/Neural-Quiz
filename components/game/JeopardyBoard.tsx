@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { Quiz, Question, GameTeam, PowerUp, PowerUpType } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { ArrowLeft, X, Trophy, AlertTriangle, Shield, Zap, RefreshCw, Skull, Gem } from 'lucide-react';
+import { ArrowLeft, X, Trophy, AlertTriangle, Shield, Zap, RefreshCw, Skull, Gem, HelpCircle } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+import { GameInstructionsModal } from './GameInstructionsModal';
+import { translations } from '../../utils/translations';
 
 interface JeopardyBoardProps {
     quiz: Quiz;
@@ -22,8 +24,9 @@ const ITEMS: Record<PowerUpType, Omit<PowerUp, 'id'>> = {
 
 export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz, initialTeams, onExit }) => {
     const toast = useToast();
+    const t = translations['es']; // Default or passed via prop
     const [teams, setTeams] = useState<GameTeam[]>(initialTeams);
-    const [activeTeamIndex, setActiveTeamIndex] = useState(0); // Optional: if we want turn-based, currently free-for-all
+    const [showInstructions, setShowInstructions] = useState(false);
     
     // Board State
     const [categories, setCategories] = useState<{ name: string, questions: { q: Question, points: number, answered: boolean }[] }[]>([]);
@@ -183,6 +186,9 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz, initialTeams
 
     return (
         <div className="min-h-screen bg-[#020617] text-white flex flex-col relative overflow-hidden">
+            {/* INSTRUCTIONS MODAL */}
+            <GameInstructionsModal isOpen={showInstructions} onClose={() => setShowInstructions(false)} gameMode="JEOPARDY" t={t} />
+
             {/* BACKGROUND EFFECTS */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-black to-black -z-10 pointer-events-none"></div>
             
@@ -194,7 +200,9 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz, initialTeams
                 <h1 className="font-cyber text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 tracking-widest">
                     NEURAL // JEOPARDY
                 </h1>
-                <div className="w-20"></div> {/* Spacer */}
+                <button onClick={() => setShowInstructions(true)} className="p-2 text-cyan-400 hover:text-white transition-colors" title="How to play">
+                    <HelpCircle className="w-6 h-6" />
+                </button>
             </div>
 
             {/* MAIN LAYOUT */}
@@ -239,7 +247,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz, initialTeams
                     {/* Event Log */}
                     {lastEvent && (
                         <div className="mt-4 p-3 bg-black/80 border border-cyan-500/30 text-cyan-300 text-xs font-mono rounded animate-in fade-in slide-in-from-bottom-2">
-                            > SYSTEM_LOG: {lastEvent}
+                            &gt; SYSTEM_LOG: {lastEvent}
                         </div>
                     )}
                 </div>

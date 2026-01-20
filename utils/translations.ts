@@ -59,6 +59,26 @@ export const translations = {
     help_btn: "AYUDA / MANUAL",
     help_btn_short: "AYUDA?",
     main_web_btn: "WEB PRINCIPAL",
+    
+    // GAME MODULE
+    game_jeopardy_title: "Jeopardy Neural",
+    game_jeopardy_desc: "Competición por turnos o libre. Elige categoría, arriesga y gana. ¡Cuidado con los items sorpresa!",
+    game_hex_title: "Hex Conquest",
+    game_hex_desc: "Estrategia y Conquista. Todos responden, ganan oro y expanden su territorio en el mapa.",
+    game_select_mode: "SELECCIONA MODO DE JUEGO",
+    game_select_quiz: "SELECCIONA UN QUIZ",
+    game_setup_teams: "CONFIGURACIÓN DE EQUIPOS",
+    
+    // INSTRUCTIONS
+    instr_title: "INSTRUCCIONES DE JUEGO",
+    instr_jeopardy_1: "Elige una categoría y un valor de puntos.",
+    instr_jeopardy_2: "El equipo más rápido responde. Si acierta, gana puntos. Si falla, los pierde.",
+    instr_jeopardy_3: "¡Chaos Mode! Al acertar, puedes obtener Items Sorpresa (Bombas, Robos, Escudos).",
+    instr_hex_1: "Todos los equipos responden simultáneamente a la misma pregunta.",
+    instr_hex_2: "Cada acierto otorga 100 de ORO a los equipos correctos.",
+    instr_hex_3: "Usa tu ORO para comprar celdas: Conquista (50), Invade (150), Defiende (100) o Bloquea (75).",
+    
+    // OLD TRANSLATIONS
     guide_title: "EL MANIFIESTO DE MR. CUARTER",
     guide_index: "ÍNDICE DE CONTENIDOS",
     guide_sec_intro: "1. LA MISIÓN",
@@ -254,6 +274,25 @@ export const translations = {
     help_btn: "HELP / GUIDE",
     help_btn_short: "HELP?",
     main_web_btn: "MAIN WEB",
+    
+    // GAME MODULE
+    game_jeopardy_title: "Neural Jeopardy",
+    game_jeopardy_desc: "Turn-based competition. Pick a category, risk it all. Beware of Chaos Items!",
+    game_hex_title: "Hex Conquest",
+    game_hex_desc: "Strategy & Territory. Everyone answers, earns Gold, and expands their empire.",
+    game_select_mode: "SELECT GAME MODE",
+    game_select_quiz: "SELECT A QUIZ",
+    game_setup_teams: "TEAM SETUP",
+
+    // INSTRUCTIONS
+    instr_title: "GAME INSTRUCTIONS",
+    instr_jeopardy_1: "Choose a category and point value.",
+    instr_jeopardy_2: "Fastest team answers. Correct = Points. Wrong = Penalty.",
+    instr_jeopardy_3: "Chaos Mode! Correct answers may drop loot (Bombs, Steals, Shields).",
+    instr_hex_1: "All teams answer simultaneously on their boards.",
+    instr_hex_2: "Every correct answer awards 100 GOLD to the team.",
+    instr_hex_3: "Use GOLD to buy cells: Conquer (50), Invade (150), Defend (100) or Block (75).",
+
     guide_title: "THE MR. CUARTER MANIFESTO",
     guide_index: "TABLE OF CONTENTS",
     guide_sec_intro: "1. THE MISSION",

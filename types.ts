@@ -49,6 +49,8 @@ export interface Quiz {
 }
 
 // --- GAME TYPES ---
+export type GameMode = 'JEOPARDY' | 'HEX_CONQUEST';
+
 export type PowerUpType = 'DOUBLE' | 'STEAL' | 'BOMB' | 'SWAP' | 'SHIELD';
 
 export interface PowerUp {
@@ -62,11 +64,21 @@ export interface PowerUp {
 export interface GameTeam {
     id: string;
     name: string;
-    score: number;
+    score: number; // Points in Jeopardy, Gold in Hex
     inventory: PowerUp[];
     shielded: boolean;
     multiplier: number; // For x2 potion
     avatarColor: string;
+}
+
+// HEX CONQUEST SPECIFIC
+export interface HexCell {
+    id: number;
+    ownerId: string | null; // Team ID or null (Neutral)
+    isLocked: boolean; // Rock
+    isShielded: boolean; // Shield
+    row: number;
+    col: number;
 }
 
 export interface DiscoveryAttempt {

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam } from './types';
+import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode } from './types';
 import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -9,8 +9,9 @@ import { HelpView } from './components/HelpView';
 import { PrivacyView } from './components/PrivacyView'; 
 import { TermsView } from './components/TermsView'; 
 import { MyQuizzes } from './components/MyQuizzes'; 
-import { GameLobby } from './components/game/GameLobby'; // NEW
-import { JeopardyBoard } from './components/game/JeopardyBoard'; // NEW
+import { GameLobby } from './components/game/GameLobby'; 
+import { JeopardyBoard } from './components/game/JeopardyBoard'; 
+import { HexConquestGame } from './components/game/HexConquestGame'; // NEW IMPORT
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
 import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2 } from 'lucide-react';
@@ -24,7 +25,7 @@ import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
 // Types
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board';
+type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -481,13 +482,13 @@ const NeuralApp: React.FC = () => {
   // Stepper
   const Stepper = () => {
     let step = 1;
-    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms', 'my_quizzes', 'game_lobby', 'game_board'].includes(view)) step = 1;
+    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms', 'my_quizzes', 'game_lobby', 'game_board', 'game_hex'].includes(view)) step = 1;
     if (view === 'create_ai' || view === 'convert_analysis') step = 2;
     if (view === 'create_manual') step = 3;
     if (view === 'convert_result') step = 4;
     
     // Hide stepper during game or aux views
-    if (['home', 'help', 'privacy', 'terms', 'game_board'].includes(view)) return null;
+    if (['home', 'help', 'privacy', 'terms', 'game_board', 'game_hex'].includes(view)) return null;
     
     // Custom label if in game flow
     const isGameFlow = view === 'game_lobby';
@@ -547,8 +548,8 @@ const NeuralApp: React.FC = () => {
             <div> <h2 className="text-xl font-cyber text-white mb-2 group-hover:text-pink-300 tracking-wide">{t.convert_quiz}</h2> <p className="font-mono text-gray-500 text-xs">{t.convert_quiz_desc}</p> </div> 
          </button>
 
-         {/* GAME BUTTON */}
-         <button onClick={() => { if(!user) { toast.warning("Debes iniciar sesión para jugar."); return; } setView('game_lobby'); }} className="group relative bg-black/40 border border-yellow-900/50 p-8 hover:bg-yellow-950/20 transition-all hover:scale-[1.02] hover:border-yellow-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6 h-full"> 
+         {/* GAME BUTTON - UNLOCKED FOR ALL */}
+         <button onClick={() => setView('game_lobby')} className="group relative bg-black/40 border border-yellow-900/50 p-8 hover:bg-yellow-950/20 transition-all hover:scale-[1.02] hover:border-yellow-400 overflow-hidden rounded-lg flex flex-col items-center text-center gap-6 h-full"> 
             <div className="absolute inset-0 bg-yellow-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" /> 
             <div className="p-5 rounded-full bg-yellow-950/30 border border-yellow-500/30 group-hover:border-yellow-400 group-hover:shadow-[0_0_30px_rgba(234,179,8,0.4)] transition-all"> <Gamepad2 className="w-10 h-10 text-yellow-400" /> </div> 
             <div> <h2 className="text-xl font-cyber text-white mb-2 group-hover:text-yellow-300 tracking-wide">JUGAR</h2> <p className="font-mono text-gray-500 text-xs">MODO AULA // JEOPARDY</p> </div> 
@@ -646,14 +647,16 @@ const NeuralApp: React.FC = () => {
         {view === 'my_quizzes' && user && <MyQuizzes user={user} onBack={() => handleSafeExit('home')} onEdit={handleLoadQuiz} />}
 
         {/* GAME MODULE ROUTES */}
-        {view === 'game_lobby' && user && (
+        {view === 'game_lobby' && (
             <GameLobby 
                 user={user} 
                 onBack={() => setView('home')} 
-                onStartGame={(q, teams) => {
+                onStartGame={(q, teams, mode) => {
                     setGameQuiz(q);
                     setGameTeams(teams);
-                    setView('game_board');
+                    // Route based on mode
+                    if (mode === 'HEX_CONQUEST') setView('game_hex');
+                    else setView('game_board');
                 }}
                 t={t}
             />
@@ -665,6 +668,20 @@ const NeuralApp: React.FC = () => {
                 initialTeams={gameTeams} 
                 onExit={() => {
                     if (confirm("¿Seguro que quieres salir de la partida?")) {
+                        setView('home');
+                        setGameQuiz(null);
+                        setGameTeams([]);
+                    }
+                }}
+            />
+        )}
+
+        {view === 'game_hex' && gameQuiz && (
+            <HexConquestGame 
+                quiz={gameQuiz}
+                initialTeams={gameTeams}
+                onExit={() => {
+                    if (confirm("¿Seguro que quieres salir de Hex Conquest?")) {
                         setView('home');
                         setGameQuiz(null);
                         setGameTeams([]);
