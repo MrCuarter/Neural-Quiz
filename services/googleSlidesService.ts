@@ -134,15 +134,39 @@ export const exportToGoogleSlides = async (
         requests.push({ insertText: { objectId: qTextBoxId, text: `${index + 1}. ${q.text}` } });
         requests.push({ updateTextStyle: { objectId: qTextBoxId, style: { fontSize: { magnitude: 18, unit: 'PT' }, bold: true }, fields: "fontSize,bold" } });
 
-        // 2. Imagen (Si existe y es válida)
-        // Nota: Google Slides requiere HTTPS público.
-        let hasImage = false;
-        if (q.imageUrl && q.imageUrl.startsWith('http')) {
-            hasImage = true;
+        // 2. VALIDACIÓN DE IMAGEN (Lógica Robusta Google API)
+        let validImageUrl: string | null = null;
+        if (q.imageUrl) {
+            let urlToCheck = q.imageUrl.trim();
+            
+            // A. Convertir rutas relativas a absolutas con el dominio de la app
+            if (urlToCheck.startsWith('/')) {
+                urlToCheck = `https://neuralquiz.mistercuarter.es${urlToCheck}`;
+            }
+
+            // B. Filtrar formatos soportados
+            // Google Slides NO soporta Data URIs (Base64) ni Blob URLs ni Localhost
+            const isSupported = (
+                (urlToCheck.startsWith('http://') || urlToCheck.startsWith('https://')) &&
+                !urlToCheck.includes('localhost') && 
+                !urlToCheck.startsWith('data:') && 
+                !urlToCheck.startsWith('blob:')
+            );
+
+            if (isSupported) {
+                validImageUrl = urlToCheck;
+            } else {
+                console.warn(`[Slides Export] Imagen omitida por formato no soportado: ${urlToCheck.substring(0, 50)}...`);
+            }
+        }
+
+        const hasImage = !!validImageUrl;
+
+        if (hasImage && validImageUrl) {
             requests.push({
                 createImage: {
                     objectId: imgObjectId,
-                    url: q.imageUrl,
+                    url: validImageUrl,
                     elementProperties: {
                         pageObjectId: qSlideId,
                         size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 250, unit: 'PT' } },
