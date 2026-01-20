@@ -1,4 +1,3 @@
-
 import { Question } from "../types";
 
 const CREATE_PRESENTATION_URL = "https://slides.googleapis.com/v1/presentations";
@@ -12,6 +11,12 @@ interface SlidesResponse {
 /**
  * Creates a Google Slides presentation from a Quiz.
  * Requires an OAuth 2.0 Access Token.
+ * 
+ * ROBUST IMPLEMENTATION:
+ * 1. Creates Presentation.
+ * 2. Uploads Structure (Slides, Text) in one batch.
+ * 3. Uploads Images in separate batches (one per image) to prevent 400 INVALID_ARGUMENT
+ *    from stopping the whole process if one URL is bad.
  */
 export const exportToGoogleSlides = async (
     title: string, 
@@ -45,16 +50,16 @@ export const exportToGoogleSlides = async (
     const presData: SlidesResponse = await createRes.json();
     const presentationId = presData.presentationId;
 
-    // --- 3. CONSTRUIR BATCH REQUEST (ROBUSTO) ---
-    // Usaremos Layout BLANK y crearemos TEXT_BOX explícitamente para evitar errores de IDs.
-    const requests: any[] = [];
+    // --- 3. CONSTRUIR REQUESTS (Separando Estructura e Imágenes) ---
+    const structureRequests: any[] = [];
+    const imagePayloads: any[] = [];
 
     // >>>> SLIDE PORTADA <<<<
     const introSlideId = "slide_intro_01";
     const titleBoxId = "textbox_title_01";
     const subBoxId = "textbox_sub_01";
 
-    requests.push({
+    structureRequests.push({
         createSlide: {
             objectId: introSlideId,
             slideLayoutReference: { predefinedLayout: 'BLANK' } // Control total
@@ -62,7 +67,7 @@ export const exportToGoogleSlides = async (
     });
 
     // Caja Título
-    requests.push({
+    structureRequests.push({
         createShape: {
             objectId: titleBoxId,
             shapeType: 'TEXT_BOX',
@@ -73,8 +78,8 @@ export const exportToGoogleSlides = async (
             }
         }
     });
-    requests.push({ insertText: { objectId: titleBoxId, text: title.toUpperCase() } });
-    requests.push({ 
+    structureRequests.push({ insertText: { objectId: titleBoxId, text: title.toUpperCase() } });
+    structureRequests.push({ 
         updateTextStyle: { 
             objectId: titleBoxId, 
             style: { fontSize: { magnitude: 32, unit: 'PT' }, bold: true, foregroundColor: { opaqueColor: { rgbColor: { red: 0, green: 0.6, blue: 0.8 } } } }, 
@@ -83,7 +88,7 @@ export const exportToGoogleSlides = async (
     });
 
     // Caja Subtítulo
-    requests.push({
+    structureRequests.push({
         createShape: {
             objectId: subBoxId,
             shapeType: 'TEXT_BOX',
@@ -94,7 +99,7 @@ export const exportToGoogleSlides = async (
             }
         }
     });
-    requests.push({ insertText: { objectId: subBoxId, text: "Generado con Neural Quiz" } });
+    structureRequests.push({ insertText: { objectId: subBoxId, text: "Generado con Neural Quiz" } });
 
 
     // >>>> BUCLE DE PREGUNTAS <<<<
@@ -110,31 +115,8 @@ export const exportToGoogleSlides = async (
         const aResultBoxId = `text_res_${index}`;
 
         // ---------------------------------------------------------
-        // DIAPOSITIVA 1: DESAFÍO (Pregunta + Opciones + Imagen)
+        // VALIDACIÓN DE IMAGEN
         // ---------------------------------------------------------
-        requests.push({
-            createSlide: {
-                objectId: qSlideId,
-                slideLayoutReference: { predefinedLayout: 'BLANK' }
-            }
-        });
-
-        // 1. Caja de Pregunta (Arriba)
-        requests.push({
-            createShape: {
-                objectId: qTextBoxId,
-                shapeType: 'TEXT_BOX',
-                elementProperties: {
-                    pageObjectId: qSlideId,
-                    size: { height: { magnitude: 80, unit: 'PT' }, width: { magnitude: 650, unit: 'PT' } },
-                    transform: { scaleX: 1, scaleY: 1, translateX: 30, translateY: 30, unit: 'PT' }
-                }
-            }
-        });
-        requests.push({ insertText: { objectId: qTextBoxId, text: `${index + 1}. ${q.text}` } });
-        requests.push({ updateTextStyle: { objectId: qTextBoxId, style: { fontSize: { magnitude: 18, unit: 'PT' }, bold: true }, fields: "fontSize,bold" } });
-
-        // 2. VALIDACIÓN DE IMAGEN (Lógica Robusta Google API)
         let validImageUrl: string | null = null;
         if (q.imageUrl) {
             let urlToCheck = q.imageUrl.trim();
@@ -145,7 +127,6 @@ export const exportToGoogleSlides = async (
             }
 
             // B. Filtrar formatos soportados
-            // Google Slides NO soporta Data URIs (Base64) ni Blob URLs ni Localhost
             const isSupported = (
                 (urlToCheck.startsWith('http://') || urlToCheck.startsWith('https://')) &&
                 !urlToCheck.includes('localhost') && 
@@ -156,30 +137,40 @@ export const exportToGoogleSlides = async (
             if (isSupported) {
                 validImageUrl = urlToCheck;
             } else {
-                console.warn(`[Slides Export] Imagen omitida por formato no soportado: ${urlToCheck.substring(0, 50)}...`);
+                console.warn(`[Slides Export] Imagen omitida por formato no soportado (Base64/Local): ${urlToCheck.substring(0, 50)}...`);
             }
         }
 
         const hasImage = !!validImageUrl;
 
-        if (hasImage && validImageUrl) {
-            requests.push({
-                createImage: {
-                    objectId: imgObjectId,
-                    url: validImageUrl,
-                    elementProperties: {
-                        pageObjectId: qSlideId,
-                        size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 250, unit: 'PT' } },
-                        transform: { scaleX: 1, scaleY: 1, translateX: 420, translateY: 120, unit: 'PT' }
-                    }
-                }
-            });
-        }
+        // ---------------------------------------------------------
+        // DIAPOSITIVA 1: DESAFÍO (Estructura)
+        // ---------------------------------------------------------
+        structureRequests.push({
+            createSlide: {
+                objectId: qSlideId,
+                slideLayoutReference: { predefinedLayout: 'BLANK' }
+            }
+        });
 
-        // 3. Caja de Opciones (Izquierda o Ancho completo según imagen)
+        // 1. Caja de Pregunta (Arriba)
+        structureRequests.push({
+            createShape: {
+                objectId: qTextBoxId,
+                shapeType: 'TEXT_BOX',
+                elementProperties: {
+                    pageObjectId: qSlideId,
+                    size: { height: { magnitude: 80, unit: 'PT' }, width: { magnitude: 650, unit: 'PT' } },
+                    transform: { scaleX: 1, scaleY: 1, translateX: 30, translateY: 30, unit: 'PT' }
+                }
+            }
+        });
+        structureRequests.push({ insertText: { objectId: qTextBoxId, text: `${index + 1}. ${q.text}` } });
+        structureRequests.push({ updateTextStyle: { objectId: qTextBoxId, style: { fontSize: { magnitude: 18, unit: 'PT' }, bold: true }, fields: "fontSize,bold" } });
+
+        // 2. Caja de Opciones
         const optWidth = hasImage ? 350 : 600;
-        
-        requests.push({
+        structureRequests.push({
             createShape: {
                 objectId: optTextBoxId,
                 shapeType: 'TEXT_BOX',
@@ -196,23 +187,36 @@ export const exportToGoogleSlides = async (
             const letter = String.fromCharCode(65 + i);
             optionsText += `${letter}) ${opt.text}\n\n`;
         });
-        
         if (optionsText) {
-            requests.push({ insertText: { objectId: optTextBoxId, text: optionsText } });
+            structureRequests.push({ insertText: { objectId: optTextBoxId, text: optionsText } });
+        }
+
+        // 3. Cola de Imagen (SEPARADA)
+        if (hasImage && validImageUrl) {
+            imagePayloads.push({
+                createImage: {
+                    objectId: imgObjectId,
+                    url: validImageUrl,
+                    elementProperties: {
+                        pageObjectId: qSlideId,
+                        size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 250, unit: 'PT' } },
+                        transform: { scaleX: 1, scaleY: 1, translateX: 420, translateY: 120, unit: 'PT' }
+                    }
+                }
+            });
         }
 
         // ---------------------------------------------------------
-        // DIAPOSITIVA 2: REVELACIÓN (Respuesta Correcta)
+        // DIAPOSITIVA 2: REVELACIÓN
         // ---------------------------------------------------------
-        requests.push({
+        structureRequests.push({
             createSlide: {
                 objectId: aSlideId,
                 slideLayoutReference: { predefinedLayout: 'BLANK' }
             }
         });
 
-        // Repetir Pregunta (Contexto)
-        requests.push({
+        structureRequests.push({
             createShape: {
                 objectId: aTextBoxId,
                 shapeType: 'TEXT_BOX',
@@ -223,10 +227,9 @@ export const exportToGoogleSlides = async (
                 }
             }
         });
-        requests.push({ insertText: { objectId: aTextBoxId, text: `${index + 1}. ${q.text}` } });
+        structureRequests.push({ insertText: { objectId: aTextBoxId, text: `${index + 1}. ${q.text}` } });
 
-        // Caja Grande Verde para Respuesta
-        requests.push({
+        structureRequests.push({
             createShape: {
                 objectId: aResultBoxId,
                 shapeType: 'TEXT_BOX',
@@ -238,7 +241,6 @@ export const exportToGoogleSlides = async (
             }
         });
 
-        // Calcular respuesta
         const correctOptions = q.options.filter(o => 
             (q.correctOptionIds && q.correctOptionIds.includes(o.id)) || 
             o.id === q.correctOptionId
@@ -247,10 +249,9 @@ export const exportToGoogleSlides = async (
             ? correctOptions.map(o => `✔ ${o.text}`).join('\n')
             : "No correct answer marked.";
 
-        requests.push({ insertText: { objectId: aResultBoxId, text: answerText } });
+        structureRequests.push({ insertText: { objectId: aResultBoxId, text: answerText } });
         
-        // Estilo Verde y Centrado
-        requests.push({
+        structureRequests.push({
             updateTextStyle: {
                 objectId: aResultBoxId,
                 style: {
@@ -261,7 +262,7 @@ export const exportToGoogleSlides = async (
                 fields: "foregroundColor,fontSize,bold"
             }
         });
-        requests.push({
+        structureRequests.push({
             updateParagraphStyle: {
                 objectId: aResultBoxId,
                 style: { alignment: 'CENTER' },
@@ -270,21 +271,51 @@ export const exportToGoogleSlides = async (
         });
     });
 
-    // --- 4. ENVIAR BATCH UPDATE ---
-    const updateRes = await fetch(BATCH_UPDATE_URL(presentationId), {
+    // --- 4. ENVIAR BATCH DE ESTRUCTURA (CRÍTICO) ---
+    // Este lote crea las diapositivas y textos. Si falla, todo falla.
+    const structureRes = await fetch(BATCH_UPDATE_URL(presentationId), {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ requests })
+        body: JSON.stringify({ requests: structureRequests })
     });
 
-    if (!updateRes.ok) {
-        const errText = await updateRes.text();
-        console.error("Slides Batch Error:", errText);
-        throw new Error(`Error populando diapositivas (API 400/500): ${errText}`);
+    if (!structureRes.ok) {
+        const errText = await structureRes.text();
+        console.error("Slides Structure Batch Error:", errText);
+        throw new Error(`Error populando diapositivas (Fase Estructura): ${errText}`);
     }
+
+    // --- 5. ENVIAR BATCHES DE IMÁGENES (TOLERANTE A FALLOS) ---
+    // Procesamos cada imagen individualmente para que un error 400 (URL rechazada)
+    // no detenga la exportación del resto de elementos.
+    
+    // Ejecutamos en paralelo pero capturando errores individualmente.
+    const imagePromises = imagePayloads.map(async (req) => {
+        try {
+            const imgRes = await fetch(BATCH_UPDATE_URL(presentationId), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ requests: [req] })
+            });
+
+            if (!imgRes.ok) {
+                const err = await imgRes.text();
+                // Advertencia en consola, pero NO lanzamos excepción para no romper Promise.all
+                console.warn(`[Slides] Imagen rechazada por Google (posiblemente URL no pública o formato inválido): ${req.createImage.url}. Error: ${err}`);
+            }
+        } catch (e) {
+            console.warn(`[Slides] Error de red al subir imagen: ${req.createImage.url}`, e);
+        }
+    });
+
+    // Esperamos a que todas las imágenes se intenten procesar
+    await Promise.all(imagePromises);
 
     return `https://docs.google.com/presentation/d/${presentationId}/edit`;
 };
