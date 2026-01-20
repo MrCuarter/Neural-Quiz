@@ -1,35 +1,30 @@
 
 // services/googleFormsService.ts
 import { Question } from "../types";
+import { getSafeImageUrl } from "./imageProxyService";
 
 // Safe retrieval of Client ID
 const getClientId = () => {
-    // 1. Try Environment Variables (Vite / Process)
     try {
         // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) {
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_CLIENT_ID) {
             // @ts-ignore
-            if (import.meta.env.VITE_GOOGLE_CLIENT_ID) {
-                // @ts-ignore
-                return import.meta.env.VITE_GOOGLE_CLIENT_ID;
-            }
+            return import.meta.env.VITE_GOOGLE_CLIENT_ID;
         }
     } catch(e) {}
 
     try {
-        if (typeof process !== 'undefined' && process.env) {
-            if (process.env.VITE_GOOGLE_CLIENT_ID) return process.env.VITE_GOOGLE_CLIENT_ID;
+        if (typeof process !== 'undefined' && process.env && process.env.VITE_GOOGLE_CLIENT_ID) {
+            return process.env.VITE_GOOGLE_CLIENT_ID;
         }
     } catch(e) {}
 
-    // 2. Fallback Hardcoded ID (Matches the one provided by user)
-    // This ensures functionality works even if .env isn't loaded correctly in some environments.
+    // Fallback
     return "1005385021667-brm86kgaontbtkr1erqdfiomnlh39374.apps.googleusercontent.com";
 }
 
 const SCOPES = 'https://www.googleapis.com/auth/forms.body https://www.googleapis.com/auth/drive.file';
 
-// Interface for Google response
 interface TokenResponse {
   access_token: string;
   error?: string;
@@ -44,7 +39,7 @@ export const exportToGoogleForms = async (title: string, questions: Question[]) 
 
   return new Promise<string>((resolve, reject) => {
     // 1. INICIAR LOGIN (Request Token)
-    // @ts-ignore - google is global from the script tag in index.html
+    // @ts-ignore
     if (typeof google === 'undefined' || !google.accounts) {
         reject(new Error("Google Identity Services script not loaded."));
         return;
@@ -71,7 +66,6 @@ export const exportToGoogleForms = async (title: string, questions: Question[]) 
       },
     });
 
-    // Trigger Popup
     client.requestAccessToken();
   });
 };
@@ -89,7 +83,7 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
     body: JSON.stringify({
       info: {
         title: title || "Neural Quiz Export",
-        documentTitle: title || "Neural Quiz Export" // Filename in Drive
+        documentTitle: title || "Neural Quiz Export"
       }
     })
   });
@@ -101,44 +95,55 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
   
   const formData = await createRes.json();
   const formId = formData.formId;
-  const responderUri = formData.responderUri; // URL to share
+  const responderUri = formData.responderUri;
 
-  // B. PREPARE BATCH REQUEST
-  // CRITICAL: The request to make it a Quiz MUST come before adding questions with grading.
-  const requests: any[] = [];
+  // Helper for batch requests
+  const sendBatch = async (requests: any[]) => {
+      if (requests.length === 0) return;
+      const res = await fetch(`https://forms.googleapis.com/v1/forms/${formId}:batchUpdate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests })
+      });
+      if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt); // Throw to be caught by caller
+      }
+  };
 
-  // 1. Convert Form to Quiz Mode (First priority)
-  requests.push({
-    updateSettings: {
-      settings: {
-        quizSettings: {
-          isQuiz: true
+  // B. ENABLE QUIZ MODE
+  try {
+      await sendBatch([{
+        updateSettings: {
+          settings: { quizSettings: { isQuiz: true } },
+          updateMask: "quizSettings.isQuiz"
         }
-      },
-      updateMask: "quizSettings.isQuiz"
-    }
-  });
+      }]);
+  } catch(e) {
+      console.warn("Could not enable quiz mode:", e);
+  }
 
-  // 2. Add Questions
-  questions.forEach((q, index) => {
+  // C. PROCESS QUESTIONS (SEQUENTIAL & ROBUST)
+  // We iterate one by one to isolate errors (bad images) and prevent the whole batch from failing.
+  
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const index = i;
+
+    // Logic to build options
     const correctOpt = q.options.find(o => o.id === q.correctOptionId);
     
-    // Fallback if no options (e.g. open ended input)
-    // Google Forms API strictly requires options for RADIO type.
-    const hasOptions = q.options.some(o => o.text.trim() !== "");
-    
-    // Map options to Google format values
+    // Fallback if no options
     const formOptions = q.options
         .filter(o => o.text.trim() !== "")
         .map(opt => ({ value: opt.text }));
 
     if (formOptions.length < 1) {
-        // Fallback for empty options
         formOptions.push({ value: "Option 1" });
     }
 
-    // Construct the Question Item
-    const questionItemPayload: any = {
+    // Base Question Payload (Text Only)
+    const baseQuestionItem = {
         question: {
             required: true,
             choiceQuestion: {
@@ -157,47 +162,50 @@ async function createAndPopulateForm(token: string, title: string, questions: Qu
         }
     };
 
-    // Inject Image if URL exists and is valid (HTTP/HTTPS)
-    // Google Forms requires the image to be publicly accessible.
-    if (q.imageUrl && q.imageUrl.startsWith('http')) {
-        questionItemPayload.image = {
-            sourceUri: q.imageUrl,
-            properties: {
-                alignment: 'CENTER'
-            }
+    const createItemRequest = {
+        createItem: {
+            item: {
+                title: q.text,
+                questionItem: baseQuestionItem
+            },
+            location: { index: index }
+        }
+    };
+
+    // --- FAULT-TOLERANT IMAGE HANDLING WITH PROXY ---
+    let imageAddedSuccess = false;
+
+    // getSafeImageUrl converts WebP to PNG via proxy, so we can support previously incompatible formats!
+    const safeImageUrl = getSafeImageUrl(q.imageUrl);
+
+    if (safeImageUrl) {
+        // Attempt with Image
+        const itemWithImage = JSON.parse(JSON.stringify(createItemRequest));
+        itemWithImage.createItem.item.questionItem.image = {
+            sourceUri: safeImageUrl,
+            properties: { alignment: 'CENTER' }
         };
+
+        try {
+            await sendBatch([itemWithImage]);
+            imageAddedSuccess = true;
+        } catch (e: any) {
+            console.warn(`[Forms Export] Image rejected for Q${i+1} (${safeImageUrl}). Retrying text-only. Reason: ${e.message}`);
+            // FALLBACK: imageAddedSuccess stays false, triggering text-only upload below
+        }
     }
 
-    requests.push({
-      createItem: {
-        item: {
-          title: q.text,
-          questionItem: questionItemPayload
-        },
-        location: { index: index }
-      }
-    });
-  });
+    // If image was skipped (invalid or failed API call), upload Text-Only version
+    if (!imageAddedSuccess) {
+        try {
+            await sendBatch([createItemRequest]);
+        } catch (e: any) {
+            console.error(`[Forms Export] CRITICAL: Failed to create question Q${i+1} even without image: ${e.message}`);
+        }
+    }
 
-  // C. SEND BATCH REQUEST (POST /forms/{id}:batchUpdate)
-  const updateRes = await fetch(`https://forms.googleapis.com/v1/forms/${formId}:batchUpdate`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ requests: requests })
-  });
-
-  if (!updateRes.ok) {
-      const err = await updateRes.text();
-      // Try to parse error for better message
-      try {
-          const errJson = JSON.parse(err);
-          throw new Error(`Google API Error: ${errJson.error.message}`);
-      } catch (e) {
-          throw new Error(`Error populating questions: ${err}`);
-      }
+    // Tiny delay to be nice to the API rate limit (Writes per minute quota)
+    await new Promise(r => setTimeout(r, 150));
   }
 
   return responderUri;

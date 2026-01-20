@@ -1,4 +1,5 @@
 import { Question } from "../types";
+import { getSafeImageUrl } from "./imageProxyService";
 
 const CREATE_PRESENTATION_URL = "https://slides.googleapis.com/v1/presentations";
 const BATCH_UPDATE_URL = (id: string) => `https://slides.googleapis.com/v1/presentations/${id}:batchUpdate`;
@@ -11,12 +12,6 @@ interface SlidesResponse {
 /**
  * Creates a Google Slides presentation from a Quiz.
  * Requires an OAuth 2.0 Access Token.
- * 
- * ROBUST IMPLEMENTATION:
- * 1. Creates Presentation.
- * 2. Uploads Structure (Slides, Text) in one batch.
- * 3. Uploads Images in separate batches (one per image) to prevent 400 INVALID_ARGUMENT
- *    from stopping the whole process if one URL is bad.
  */
 export const exportToGoogleSlides = async (
     title: string, 
@@ -115,32 +110,10 @@ export const exportToGoogleSlides = async (
         const aResultBoxId = `text_res_${index}`;
 
         // ---------------------------------------------------------
-        // VALIDACIÓN DE IMAGEN
+        // VALIDACIÓN DE IMAGEN (USANDO PROXY CENTRALIZADO)
         // ---------------------------------------------------------
-        let validImageUrl: string | null = null;
-        if (q.imageUrl) {
-            let urlToCheck = q.imageUrl.trim();
-            
-            // A. Convertir rutas relativas a absolutas con el dominio de la app
-            if (urlToCheck.startsWith('/')) {
-                urlToCheck = `https://neuralquiz.mistercuarter.es${urlToCheck}`;
-            }
-
-            // B. Filtrar formatos soportados
-            const isSupported = (
-                (urlToCheck.startsWith('http://') || urlToCheck.startsWith('https://')) &&
-                !urlToCheck.includes('localhost') && 
-                !urlToCheck.startsWith('data:') && 
-                !urlToCheck.startsWith('blob:')
-            );
-
-            if (isSupported) {
-                validImageUrl = urlToCheck;
-            } else {
-                console.warn(`[Slides Export] Imagen omitida por formato no soportado (Base64/Local): ${urlToCheck.substring(0, 50)}...`);
-            }
-        }
-
+        // getSafeImageUrl convierte WebP a PNG y asegura accesibilidad pública
+        const validImageUrl = getSafeImageUrl(q.imageUrl);
         const hasImage = !!validImageUrl;
 
         // ---------------------------------------------------------
@@ -196,7 +169,7 @@ export const exportToGoogleSlides = async (
             imagePayloads.push({
                 createImage: {
                     objectId: imgObjectId,
-                    url: validImageUrl,
+                    url: validImageUrl, // URL Proxy PNG Segura
                     elementProperties: {
                         pageObjectId: qSlideId,
                         size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 250, unit: 'PT' } },
