@@ -11,21 +11,22 @@ import { TermsView } from './components/TermsView';
 import { MyQuizzes } from './components/MyQuizzes'; 
 import { GameLobby } from './components/game/GameLobby'; 
 import { JeopardyBoard } from './components/game/JeopardyBoard'; 
-import { HexConquestGame } from './components/game/HexConquestGame'; // NEW IMPORT
+import { HexConquestGame } from './components/game/HexConquestGame'; 
+import { PublicQuizLanding } from './components/PublicQuizLanding'; 
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2 } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
 import { fetchUrlContent, analyzeUrl } from './services/urlService';
 import { getRandomMessage, getDetectionMessage } from './services/messageService';
-import { auth, onAuthStateChanged, saveQuizToFirestore } from './services/firebaseService';
+import { auth, onAuthStateChanged, saveQuizToFirestore, signInWithGoogle } from './services/firebaseService';
 import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
 // Types
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex';
+type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -56,6 +57,9 @@ const NeuralApp: React.FC = () => {
 
   const t = translations[language] || translations['en'] || translations['es'];
   const toast = useToast();
+
+  // URL Parsing State
+  const [sharedQuizId, setSharedQuizId] = useState<string | null>(null);
 
   // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
@@ -97,6 +101,8 @@ const NeuralApp: React.FC = () => {
   // GAME STATE
   const [gameQuiz, setGameQuiz] = useState<Quiz | null>(null);
   const [gameTeams, setGameTeams] = useState<GameTeam[]>([]);
+  const [gameTimer, setGameTimer] = useState<number>(20); 
+  const [gameNegPoints, setGameNegPoints] = useState<boolean>(false);
 
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
@@ -105,6 +111,19 @@ const NeuralApp: React.FC = () => {
         setUser(currentUser);
     });
     return () => unsubscribe();
+  }, []);
+
+  // --- URL HANDLER (SHARE LINK) ---
+  useEffect(() => {
+      // Check for shareId in URL query params
+      const params = new URLSearchParams(window.location.search);
+      const shareId = params.get('shareId');
+      if (shareId) {
+          setSharedQuizId(shareId);
+          setView('public_view');
+          // Clean URL without refresh
+          window.history.replaceState({}, '', window.location.pathname);
+      }
   }, []);
 
   useEffect(() => {
@@ -179,7 +198,9 @@ const NeuralApp: React.FC = () => {
 
       setIsSaving(true);
       try {
-          const docId = await saveQuizToFirestore(quiz, user.uid, asCopy);
+          // Augment with author name for metadata
+          const enrichedQuiz = { ...quiz, authorName: user.displayName || "Usuario" };
+          const docId = await saveQuizToFirestore(enrichedQuiz, user.uid, asCopy);
           if (!quiz.id || asCopy) {
               setQuiz(prev => ({ ...prev, id: docId }));
           }
@@ -206,7 +227,26 @@ const NeuralApp: React.FC = () => {
       setView(targetView);
   };
 
+  // --- GAME LAUNCHERS ---
+  const launchPublicGame = (q: Quiz, mode: GameMode) => {
+      // Default setup for public launch (quick play)
+      const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500'];
+      const defaultTeams: GameTeam[] = [
+          { id: 't1', name: 'Equipo Rojo', score: 0, inventory: [], usedInventory: [], shielded: false, multiplier: 1, avatarColor: colors[0] },
+          { id: 't2', name: 'Equipo Azul', score: 0, inventory: [], usedInventory: [], shielded: false, multiplier: 1, avatarColor: colors[1] }
+      ];
+      
+      setGameQuiz(q);
+      setGameTeams(defaultTeams);
+      setGameTimer(20);
+      setGameNegPoints(false); // Safer default
+      
+      if (mode === 'HEX_CONQUEST') setView('game_hex');
+      else setView('game_board');
+  };
+
   const processContextFiles = async (files: FileList | null) => {
+      // ... (Implementation unchanged)
       if (!files || files.length === 0) return;
       
       let combinedText = "";
@@ -247,6 +287,7 @@ const NeuralApp: React.FC = () => {
   const handleContextFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { processContextFiles(e.target.files); };
 
   const handleCreateAI = async () => {
+    // ... (Implementation unchanged)
     if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) {
       toast.warning(t.alert_topic);
       return;
@@ -297,6 +338,7 @@ const NeuralApp: React.FC = () => {
   interface ImageInput { data: string; mimeType: string; }
 
   const performAnalysis = async (content: string, sourceName: string, isAlreadyStructured: boolean = false, preParsedQuestions: Question[] = [], imageInput?: ImageInput) => {
+    // ... (Implementation unchanged)
     setView('convert_analysis');
     setAnalysisProgress(0);
     setAnalysisStatus(getRandomMessage('start'));
@@ -384,6 +426,7 @@ const NeuralApp: React.FC = () => {
   };
 
   const processFileForConversion = async (file: File) => {
+    // ... (Implementation unchanged)
     setAnalysisProgress(0);
     try {
       if (file.type.startsWith('image/')) {
@@ -441,6 +484,7 @@ const NeuralApp: React.FC = () => {
   };
 
   const handleUrlAnalysis = async () => {
+    // ... (Implementation unchanged)
     if (!urlToConvert.trim()) { toast.warning(t.alert_valid_url); return; }
     setView('convert_analysis');
     setAnalysisStatus("Iniciando escaneo de red neural...");
@@ -488,7 +532,7 @@ const NeuralApp: React.FC = () => {
     if (view === 'convert_result') step = 4;
     
     // Hide stepper during game or aux views
-    if (['home', 'help', 'privacy', 'terms', 'game_board', 'game_hex'].includes(view)) return null;
+    if (['home', 'help', 'privacy', 'terms', 'game_board', 'game_hex', 'public_view'].includes(view)) return null;
     
     // Custom label if in game flow
     const isGameFlow = view === 'game_lobby';
@@ -559,6 +603,79 @@ const NeuralApp: React.FC = () => {
     </div>
   );
 
+  const renderConvertUpload = () => (
+    <div className="max-w-3xl mx-auto space-y-8 animate-in slide-in-from-right-10 duration-500">
+       <div className="flex justify-between items-center">
+          <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
+          <div className="flex bg-black/40 rounded border border-gray-800 p-1">
+              <button onClick={() => setConvertTab('upload')} className={`px-4 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center gap-2 ${convertTab === 'upload' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}><FileUp className="w-4 h-4" /> {t.tab_upload}</button>
+              <button onClick={() => setConvertTab('paste')} className={`px-4 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center gap-2 ${convertTab === 'paste' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}><ClipboardPaste className="w-4 h-4" /> {t.tab_paste}</button>
+              <button onClick={() => setConvertTab('url')} className={`px-4 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center gap-2 ${convertTab === 'url' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}><LinkIcon className="w-4 h-4" /> {t.tab_url}</button>
+          </div>
+       </div>
+
+       <CyberCard title={t.upload_source}>
+          {convertTab === 'upload' && (
+              <div className={`border-2 border-dashed rounded-lg p-12 text-center transition-all cursor-pointer flex flex-col items-center gap-4 ${dragActive ? 'border-pink-400 bg-pink-950/20' : 'border-gray-700 bg-black/20 hover:border-pink-500/50'}`} 
+                   onDragEnter={handleConvertDrag} onDragLeave={handleConvertDrag} onDragOver={handleConvertDrag} onDrop={handleConvertDrop} 
+                   onClick={() => fileInputRef.current?.click()}>
+                  <input type="file" ref={fileInputRef} className="hidden" accept=".csv,.xlsx,.xls,.pdf,image/*,.txt,.md,.json" onChange={handleFileUpload} />
+                  <div className="p-4 bg-gray-900 rounded-full border border-gray-700"><UploadCloud className={`w-12 h-12 ${dragActive ? 'text-pink-400' : 'text-gray-500'}`} /></div>
+                  <div><h3 className="text-xl font-cyber text-white mb-2">{t.drop_file}</h3><p className="text-sm font-mono text-gray-400">{t.supports_fmt}</p><p className="text-xs text-gray-600 mt-2">{t.autodetect_fmt}</p></div>
+              </div>
+          )}
+
+          {convertTab === 'paste' && (
+              <div className="space-y-4">
+                  <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 text-sm text-blue-200 font-mono"><p>{t.paste_instr}</p></div>
+                  <CyberTextArea placeholder={t.paste_placeholder} value={textToConvert} onChange={(e) => setTextToConvert(e.target.value)} className="h-64 font-mono text-xs" />
+                  <CyberButton variant="neural" onClick={handlePasteAnalysis} disabled={!textToConvert.trim()} className="w-full">{t.analyze_btn}</CyberButton>
+              </div>
+          )}
+
+          {convertTab === 'url' && (
+              <div className="space-y-4">
+                  <div className="bg-purple-900/20 border-l-4 border-purple-500 p-4 text-sm text-purple-200 font-mono"><p>{t.url_instr}</p><p className="mt-2 opacity-70 text-xs">{t.url_hint}</p></div>
+                  <CyberInput placeholder={t.url_placeholder} value={urlToConvert} onChange={(e) => setUrlToConvert(e.target.value)} />
+                  <CyberButton variant="neural" onClick={handleUrlAnalysis} disabled={!urlToConvert.trim()} className="w-full">{t.scan_btn}</CyberButton>
+              </div>
+          )}
+       </CyberCard>
+    </div>
+  );
+
+  const renderAnalysis = () => (
+      <div className="max-w-2xl mx-auto py-20 text-center space-y-8 animate-in zoom-in-95 duration-500">
+          <div className="relative w-32 h-32 mx-auto">
+              <div className="absolute inset-0 rounded-full border-t-2 border-pink-500 animate-spin"></div>
+              <div className="absolute inset-2 rounded-full border-r-2 border-purple-500 animate-spin reverse duration-1000"></div>
+              <div className="absolute inset-0 flex items-center justify-center"><BrainCircuit className="w-12 h-12 text-pink-400 animate-pulse" /></div>
+          </div>
+          <div>
+              <h2 className="text-3xl font-cyber text-white mb-2">{t.processing}</h2>
+              <p className="text-pink-400 font-mono text-sm h-6">{analysisStatus}</p>
+          </div>
+          <div className="w-full max-w-md mx-auto">
+              <CyberProgressBar progress={analysisProgress} />
+          </div>
+      </div>
+  );
+
+  const renderConvertResult = () => (
+      <div className="max-w-2xl mx-auto py-20 text-center space-y-8 animate-in zoom-in-95 duration-500">
+          <div className="w-24 h-24 bg-green-900/30 rounded-full flex items-center justify-center mx-auto border border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
+              <Check className="w-12 h-12 text-green-400" />
+          </div>
+          <div>
+              <h2 className="text-3xl font-cyber text-white mb-2">{t.completed}</h2>
+              <p className="text-gray-400 font-mono">Los datos han sido extraídos y estructurados con éxito.</p>
+          </div>
+          <CyberButton onClick={() => setView('create_manual')} variant="neural" className="w-full max-w-sm mx-auto">
+              {t.proceed_editor}
+          </CyberButton>
+      </div>
+  );
+
   const renderCreateMenu = () => (
     <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-right-10 duration-300 w-full py-10">
       <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2 mb-4"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
@@ -568,61 +685,6 @@ const NeuralApp: React.FC = () => {
         <button onClick={() => { setQuiz(initialQuiz); setView('create_manual'); }} className="flex items-center gap-6 p-6 bg-black/40 border border-gray-700 hover:border-cyan-500 hover:bg-cyan-950/10 transition-all group text-left rounded"> <PenTool className="w-10 h-10 text-cyan-400 group-hover:scale-110 transition-transform" /> <div><h3 className="text-xl font-bold font-cyber text-white">{t.manual_editor}</h3><p className="text-sm font-mono text-gray-400">{t.manual_editor_desc}</p></div> </button>
       </div>
     </div>
-  );
-
-  const renderConvertUpload = () => (
-    <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 w-full">
-        <CyberButton variant="ghost" onClick={() => setView('create_menu')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back}</CyberButton>
-        <CyberCard title={t.universal_import}>
-            <div className="space-y-6">
-                <div className="flex bg-black/40 rounded border border-gray-800 p-1">
-                    <button onClick={() => setConvertTab('upload')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'upload' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}> <UploadCloud className="w-4 h-4" /> {t.tab_upload} </button>
-                    <button onClick={() => setConvertTab('paste')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'paste' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}> <ClipboardPaste className="w-4 h-4" /> {t.tab_paste} </button>
-                    <button onClick={() => setConvertTab('url')} className={`flex-1 py-2 text-xs font-mono font-bold rounded transition-colors flex items-center justify-center gap-2 ${convertTab === 'url' ? 'bg-pink-950 text-pink-400' : 'text-gray-500 hover:text-gray-300'}`}> <LinkIcon className="w-4 h-4" /> {t.tab_url} </button>
-                </div>
-                <div className="min-h-[300px]">
-                    {convertTab === 'upload' && (
-                        <div className={`border-2 border-dashed rounded-lg h-64 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer ${dragActive ? 'border-pink-500 bg-pink-950/20' : 'border-gray-700 bg-black/20 hover:border-pink-500/50'}`} onDragEnter={handleConvertDrag} onDragLeave={handleConvertDrag} onDragOver={handleConvertDrag} onDrop={handleConvertDrop} onClick={() => fileInputRef.current?.click()}>
-                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx,.xls,.csv,.pdf,.txt,.md,.json,image/*" />
-                            <div className="p-4 rounded-full bg-pink-950/30 border border-pink-500/30"> <FilePlus className="w-8 h-8 text-pink-400" /> </div>
-                            <div className="text-center"> <p className="text-sm text-gray-300 font-bold mb-1">{t.drop_file}</p> <p className="text-xs text-gray-500 font-mono">{t.supports_fmt}</p> <p className="text-[10px] text-gray-600 mt-2 font-mono">{t.autodetect_fmt}</p> </div>
-                        </div>
-                    )}
-                    {convertTab === 'paste' && (
-                        <div className="space-y-4">
-                            <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 text-xs text-blue-200 font-mono"> <p>{t.paste_instr}</p> </div>
-                            <CyberTextArea placeholder={t.paste_placeholder} value={textToConvert} onChange={(e) => setTextToConvert(e.target.value)} className="h-48 font-mono text-xs" />
-                            <CyberButton variant="neural" onClick={handlePasteAnalysis} disabled={!textToConvert.trim()} className="w-full"> {t.analyze_btn} </CyberButton>
-                        </div>
-                    )}
-                    {convertTab === 'url' && (
-                        <div className="space-y-6">
-                            <div className="bg-purple-900/20 border-l-4 border-purple-500 p-4 text-xs text-purple-200 font-mono space-y-2"> <p>{t.url_instr}</p> <p className="opacity-70 italic">{t.url_hint}</p> </div>
-                            <CyberInput placeholder={t.url_placeholder} value={urlToConvert} onChange={(e) => setUrlToConvert(e.target.value)} />
-                            <CyberButton variant="neural" onClick={handleUrlAnalysis} disabled={!urlToConvert.trim()} className="w-full"> {t.scan_btn} </CyberButton>
-                            <div className="grid grid-cols-3 gap-2 mt-4 opacity-50"> <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Kahoot</div></div> <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Blooket</div></div> <div className="text-center"><div className="text-[10px] font-mono text-gray-500">Quizizz</div></div> </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </CyberCard>
-    </div>
-  );
-
-  const renderAnalysis = () => (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-8 animate-in zoom-in-95">
-          <div className="relative"> <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full animate-pulse"></div> <BrainCircuit className="w-24 h-24 text-cyan-400 relative z-10 animate-bounce-slow" /> </div>
-          <div className="w-full max-w-md space-y-2 text-center"> <h3 className="text-2xl font-cyber text-white tracking-widest">{t.ai_generator_core}</h3> <p className="text-sm font-mono text-cyan-500 h-6">{analysisStatus}</p> <div className="pt-4"> <CyberProgressBar progress={analysisProgress} /> </div> </div>
-      </div>
-  );
-
-  const renderConvertResult = () => (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-6 animate-in zoom-in-95">
-          <div className="p-6 rounded-full bg-green-900/20 border border-green-500/50"> <Sparkles className="w-16 h-16 text-green-400" /> </div>
-          <h3 className="text-3xl font-cyber text-white">{t.completed}</h3>
-          <p className="text-gray-400 font-mono">Questions extracted successfully.</p>
-          <CyberButton onClick={() => setView('create_manual')} className="w-48"> {t.proceed_editor} </CyberButton>
-      </div>
   );
 
   return (
@@ -646,14 +708,33 @@ const NeuralApp: React.FC = () => {
         {view === 'terms' && <TermsView onBack={() => handleSafeExit('home')} />}
         {view === 'my_quizzes' && user && <MyQuizzes user={user} onBack={() => handleSafeExit('home')} onEdit={handleLoadQuiz} />}
 
+        {/* PUBLIC VIEW */}
+        {view === 'public_view' && sharedQuizId && (
+            <PublicQuizLanding 
+                quizId={sharedQuizId}
+                currentUser={user}
+                onBack={() => {
+                    setSharedQuizId(null);
+                    window.history.replaceState({}, '', window.location.pathname); // Clear URL
+                    setView('home');
+                }}
+                onPlay={(q, mode) => launchPublicGame(q, mode)}
+                onLoginReq={() => {
+                    signInWithGoogle().then(u => setUser(u.user)).catch(console.error);
+                }}
+            />
+        )}
+
         {/* GAME MODULE ROUTES */}
         {view === 'game_lobby' && (
             <GameLobby 
                 user={user} 
                 onBack={() => setView('home')} 
-                onStartGame={(q, teams, mode) => {
+                onStartGame={(q, teams, mode, timer, negPoints) => {
                     setGameQuiz(q);
                     setGameTeams(teams);
+                    setGameTimer(timer);
+                    setGameNegPoints(negPoints);
                     // Route based on mode
                     if (mode === 'HEX_CONQUEST') setView('game_hex');
                     else setView('game_board');
@@ -665,7 +746,9 @@ const NeuralApp: React.FC = () => {
         {view === 'game_board' && gameQuiz && (
             <JeopardyBoard 
                 quiz={gameQuiz} 
-                initialTeams={gameTeams} 
+                initialTeams={gameTeams}
+                timerValue={gameTimer}
+                allowNegativePoints={gameNegPoints}
                 onExit={() => {
                     if (confirm("¿Seguro que quieres salir de la partida?")) {
                         setView('home');

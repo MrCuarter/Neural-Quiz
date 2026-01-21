@@ -1,11 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
-import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash } from 'lucide-react';
+import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; // IMPORTED
+import { toggleQuizVisibility, updateCloningPermission } from '../services/shareService'; // NEW IMPORT
+import { useToast } from './ui/Toast';
 import * as XLSX from 'xlsx';
 
 interface QuizEditorProps {
@@ -23,6 +25,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   const [targetPlatform, setTargetPlatform] = useState<string>('UNIVERSAL');
   const [hasSelectedPlatform, setHasSelectedPlatform] = useState(false);
+  const toast = useToast();
   
   // AI & Modal State
   const [showAiModal, setShowAiModal] = useState(false);
@@ -30,6 +33,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [aiCount, setAiCount] = useState(3);
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  
+  // Share State
+  const [isPublishing, setIsPublishing] = useState(false);
   
   // Tags State
   const [newTag, setNewTag] = useState('');
@@ -73,35 +79,42 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }, 100);
   };
 
-  // --- DRAG & DROP LOGIC (SIDEBAR) ---
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-      setDraggedItemIndex(index);
-      e.dataTransfer.effectAllowed = "move";
-      // Transparent ghost
-      const ghost = document.createElement('div');
-      ghost.classList.add('opacity-0');
-      document.body.appendChild(ghost);
-      e.dataTransfer.setDragImage(ghost, 0, 0);
-      setTimeout(() => document.body.removeChild(ghost), 0);
+  // --- SHARE LOGIC ---
+  const handleTogglePublic = async (checked: boolean) => {
+      if (!quiz.id) {
+          toast.warning("Guarda el quiz primero para publicarlo.");
+          return;
+      }
+      setIsPublishing(true);
+      try {
+          // Provide user name if available in user object
+          const updatedQuiz = { ...quiz, authorName: user?.displayName || "Profe Anónimo" };
+          await toggleQuizVisibility(updatedQuiz, user.uid, checked);
+          setQuiz(prev => ({ ...prev, isPublic: checked }));
+          toast.success(checked ? "Quiz publicado en la biblioteca global." : "Quiz ocultado (Privado).");
+      } catch (e) {
+          toast.error("Error al cambiar visibilidad.");
+      } finally {
+          setIsPublishing(false);
+      }
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-      e.preventDefault();
-      if (draggedItemIndex === null || draggedItemIndex === index) return;
-
-      const newQuestions = [...quiz.questions];
-      const draggedItem = newQuestions[draggedItemIndex];
-      
-      // Remove and insert
-      newQuestions.splice(draggedItemIndex, 1);
-      newQuestions.splice(index, 0, draggedItem);
-      
-      setQuiz(prev => ({ ...prev, questions: newQuestions }));
-      setDraggedItemIndex(index);
+  const handleToggleCloning = async (checked: boolean) => {
+      if (!quiz.id) return;
+      try {
+          await updateCloningPermission(quiz.id, checked);
+          setQuiz(prev => ({ ...prev, allowCloning: checked }));
+          toast.info("Permisos de clonación actualizados.");
+      } catch (e) {
+          toast.error("Error al actualizar permisos.");
+      }
   };
 
-  const handleDragEnd = () => {
-      setDraggedItemIndex(null);
+  const copyShareLink = () => {
+      if (!quiz.id) return;
+      const url = `${window.location.origin}?shareId=${quiz.id}`;
+      navigator.clipboard.writeText(url);
+      toast.success("Enlace copiado al portapapeles.");
   };
 
   // --- CRUD OPERATIONS ---
@@ -455,10 +468,49 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       {/* --- TWO COLUMN LAYOUT --- */}
       <div className="flex flex-col lg:flex-row gap-6 items-start mt-6">
           
-          {/* SIDEBAR (TOC) */}
+          {/* SIDEBAR (TOC + SHARING) */}
           {quiz.questions.length > 0 && (
-              <div className="w-full lg:w-64 flex-shrink-0 lg:sticky lg:top-24 max-h-[600px] flex flex-col gap-2">
-                  <div className="bg-black/40 border border-gray-800 rounded-lg overflow-hidden flex flex-col max-h-full">
+              <div className="w-full lg:w-64 flex-shrink-0 lg:sticky lg:top-24 max-h-[calc(100vh-100px)] flex flex-col gap-4">
+                  
+                  {/* SHARE PANEL */}
+                  {user && quiz.id && (
+                      <div className="bg-blue-950/20 border border-blue-500/30 rounded-lg p-3 space-y-3">
+                          <div className="flex items-center gap-2 text-blue-400 font-bold text-xs border-b border-blue-500/20 pb-2">
+                              <Share2 className="w-3 h-3" /> PUBLICAR & COMPARTIR
+                          </div>
+                          
+                          <div className="space-y-2">
+                              <CyberCheckbox 
+                                  label={quiz.isPublic ? "PÚBLICO (Visible)" : "PRIVADO (Oculto)"} 
+                                  checked={!!quiz.isPublic} 
+                                  onChange={handleTogglePublic}
+                                  disabled={isPublishing}
+                              />
+                              <div className="pl-8">
+                                  <CyberCheckbox 
+                                      label="Permitir Clonar" 
+                                      checked={!!quiz.allowCloning} 
+                                      onChange={handleToggleCloning}
+                                      disabled={!quiz.isPublic}
+                                  />
+                              </div>
+                          </div>
+
+                          {quiz.isPublic && (
+                              <div className="pt-2">
+                                  <button 
+                                      onClick={copyShareLink}
+                                      className="w-full flex items-center justify-center gap-2 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-500/50 rounded p-2 text-xs text-blue-200 transition-colors"
+                                  >
+                                      <LinkIcon className="w-3 h-3" /> COPIAR ENLACE
+                                  </button>
+                              </div>
+                          )}
+                      </div>
+                  )}
+
+                  {/* TOC */}
+                  <div className="bg-black/40 border border-gray-800 rounded-lg overflow-hidden flex flex-col flex-1 max-h-[400px]">
                       <div className="p-3 border-b border-gray-800 bg-gray-900/50 font-mono text-xs font-bold text-gray-400 flex items-center justify-between">
                           <span className="flex items-center gap-2"><LayoutList className="w-3 h-3" /> INDEX</span>
                           <span className="text-[10px] text-gray-600">{quiz.questions.length} Items</span>
@@ -473,9 +525,21 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                   <div 
                                       key={q.id}
                                       draggable
-                                      onDragStart={(e) => handleDragStart(e, idx)}
-                                      onDragOver={(e) => handleDragOver(e, idx)}
-                                      onDragEnd={handleDragEnd}
+                                      onDragStart={(e) => {
+                                          setDraggedItemIndex(idx);
+                                          // HTML5 drag hack
+                                      }}
+                                      onDragOver={(e) => {
+                                          e.preventDefault();
+                                          if (draggedItemIndex === null || draggedItemIndex === idx) return;
+                                          const newQuestions = [...quiz.questions];
+                                          const draggedItem = newQuestions[draggedItemIndex];
+                                          newQuestions.splice(draggedItemIndex, 1);
+                                          newQuestions.splice(idx, 0, draggedItem);
+                                          setQuiz(prev => ({ ...prev, questions: newQuestions }));
+                                          setDraggedItemIndex(idx);
+                                      }}
+                                      onDragEnd={() => setDraggedItemIndex(null)}
                                       onClick={() => jumpToQuestion(idx)}
                                       className={`
                                           group flex items-center gap-2 p-2 rounded text-xs cursor-pointer transition-all border

@@ -46,6 +46,14 @@ export interface Quiz {
   tags?: string[]; // Organization tags
   createdAt?: any; // Timestamp
   updatedAt?: any; // Timestamp
+  
+  // COLLABORATIVE FIELDS
+  isPublic?: boolean;
+  allowCloning?: boolean;
+  authorName?: string; // For display in public library
+  originalAuthorId?: string; // To track lineage
+  visits?: number;
+  clones?: number;
 }
 
 // --- GAME TYPES ---
@@ -66,6 +74,7 @@ export interface GameTeam {
     name: string;
     score: number; // Points in Jeopardy, Gold in Hex
     inventory: PowerUp[];
+    usedInventory: PowerUp[]; // History of consumed items
     shielded: boolean;
     multiplier: number; // For x2 potion
     avatarColor: string;
