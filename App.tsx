@@ -246,7 +246,6 @@ const NeuralApp: React.FC = () => {
   };
 
   const processContextFiles = async (files: FileList | null) => {
-      // ... (Implementation unchanged)
       if (!files || files.length === 0) return;
       
       let combinedText = "";
@@ -287,7 +286,6 @@ const NeuralApp: React.FC = () => {
   const handleContextFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { processContextFiles(e.target.files); };
 
   const handleCreateAI = async () => {
-    // ... (Implementation unchanged)
     if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) {
       toast.warning(t.alert_topic);
       return;
@@ -338,7 +336,6 @@ const NeuralApp: React.FC = () => {
   interface ImageInput { data: string; mimeType: string; }
 
   const performAnalysis = async (content: string, sourceName: string, isAlreadyStructured: boolean = false, preParsedQuestions: Question[] = [], imageInput?: ImageInput) => {
-    // ... (Implementation unchanged)
     setView('convert_analysis');
     setAnalysisProgress(0);
     setAnalysisStatus(getRandomMessage('start'));
@@ -426,7 +423,6 @@ const NeuralApp: React.FC = () => {
   };
 
   const processFileForConversion = async (file: File) => {
-    // ... (Implementation unchanged)
     setAnalysisProgress(0);
     try {
       if (file.type.startsWith('image/')) {
@@ -484,7 +480,6 @@ const NeuralApp: React.FC = () => {
   };
 
   const handleUrlAnalysis = async () => {
-    // ... (Implementation unchanged)
     if (!urlToConvert.trim()) { toast.warning(t.alert_valid_url); return; }
     setView('convert_analysis');
     setAnalysisStatus("Iniciando escaneo de red neural...");

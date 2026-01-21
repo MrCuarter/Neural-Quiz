@@ -4,7 +4,6 @@ import { Quiz, GameTeam, GameMode } from '../types';
 import { getPublicQuiz, importQuizToLibrary } from '../services/shareService';
 import { CyberButton, CyberCard } from './ui/CyberUI';
 import { Loader2, AlertTriangle, Trophy, Map, Copy, ArrowLeft, Gamepad2, Share2, Download, User } from 'lucide-react';
-import { useToast } from '../ui/Toast';
 
 interface PublicQuizLandingProps {
     quizId: string;
@@ -18,7 +17,6 @@ export const PublicQuizLanding: React.FC<PublicQuizLandingProps> = ({ quizId, cu
     const [quiz, setQuiz] = useState<Quiz | null>(null);
     const [loading, setLoading] = useState(true);
     const [importing, setImporting] = useState(false);
-    const toast = useToast();
 
     useEffect(() => {
         loadQuiz();
@@ -46,10 +44,10 @@ export const PublicQuizLanding: React.FC<PublicQuizLandingProps> = ({ quizId, cu
         setImporting(true);
         try {
             await importQuizToLibrary(quiz, currentUser.uid);
-            toast.success("¡Quiz guardado en tu biblioteca!");
-            setTimeout(() => onBack(), 1500); // Redirect to home/library
+            alert("¡Quiz guardado en tu biblioteca!");
+            setTimeout(() => onBack(), 500); 
         } catch (e: any) {
-            toast.error("Error al importar: " + e.message);
+            alert("Error al importar: " + e.message);
         } finally {
             setImporting(false);
         }

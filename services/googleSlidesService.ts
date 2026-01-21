@@ -1,5 +1,5 @@
+
 import { Question } from "../types";
-import { getSafeImageUrl } from "./imageProxyService";
 
 const CREATE_PRESENTATION_URL = "https://slides.googleapis.com/v1/presentations";
 const BATCH_UPDATE_URL = (id: string) => `https://slides.googleapis.com/v1/presentations/${id}:batchUpdate`;
@@ -8,6 +8,25 @@ interface SlidesResponse {
     presentationId: string;
     presentationUrl?: string;
 }
+
+/**
+ * Utility to ensure images are safe for Google APIs.
+ * Converts to PNG using wsrv.nl proxy.
+ */
+const getSafeImageUrl = (url: string | undefined | null): string | null => {
+  if (!url) return null;
+  const cleanUrl = url.trim();
+  if (cleanUrl.length < 5) return null;
+  
+  // Use wsrv.nl to convert to PNG and ensure public access
+  // output=png is crucial for Google Slides API compatibility
+  try {
+      return `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&output=png`;
+  } catch (e) {
+      console.warn("Image encoding failed", e);
+      return null;
+  }
+};
 
 /**
  * Creates a Google Slides presentation from a Quiz.
@@ -112,7 +131,6 @@ export const exportToGoogleSlides = async (
         // ---------------------------------------------------------
         // VALIDACIÓN DE IMAGEN (USANDO PROXY CENTRALIZADO)
         // ---------------------------------------------------------
-        // getSafeImageUrl convierte WebP a PNG y asegura accesibilidad pública
         const validImageUrl = getSafeImageUrl(q.imageUrl);
         const hasImage = !!validImageUrl;
 
@@ -165,11 +183,12 @@ export const exportToGoogleSlides = async (
         }
 
         // 3. Cola de Imagen (SEPARADA)
+        // Solo añadimos si getSafeImageUrl devolvió una URL válida
         if (hasImage && validImageUrl) {
             imagePayloads.push({
                 createImage: {
                     objectId: imgObjectId,
-                    url: validImageUrl, // URL Proxy PNG Segura
+                    url: validImageUrl, 
                     elementProperties: {
                         pageObjectId: qSlideId,
                         size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 250, unit: 'PT' } },
