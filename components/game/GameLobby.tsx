@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Quiz, GameTeam, GameMode, JeopardyConfig, DistributionMode } from '../../types';
 import { getUserQuizzes } from '../../services/firebaseService';
+import { generateQuizCategories } from '../../services/geminiService';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberCheckbox } from '../ui/CyberUI';
-import { ArrowLeft, Gamepad2, Users, Play, Loader2, Search, Trophy, Map, Zap, Clock, Settings, Monitor, Lock, Shield, PenTool, BrainCircuit, Grid3X3, Dice5, List, CheckSquare, Layers } from 'lucide-react';
+import { ArrowLeft, Gamepad2, Users, Play, Loader2, Search, Trophy, Map, Zap, Clock, Settings, Monitor, Lock, Shield, PenTool, BrainCircuit, Grid3X3, Dice5, List, CheckSquare, Layers, Type, Wand2 } from 'lucide-react';
 import { DEMO_QUIZZES } from '../../data/demoQuizzes';
 
 interface GameLobbyProps {
@@ -40,8 +41,11 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
         randomEvents: true,
         catchUpLogic: true,
         distributionMode: 'STANDARD',
-        selectedQuestionIds: []
+        selectedQuestionIds: [],
+        categories: []
     });
+
+    const [isGeneratingCats, setIsGeneratingCats] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -49,17 +53,33 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
         }
     }, [user]);
 
-    // Initial Question Selection Logic
+    // Initial Question Selection & Categories Logic
     useEffect(() => {
         if (selectedQuiz) {
-            // Auto-select questions based on distribution logic
+            // Auto-select questions
             const slotsNeeded = getSlotsNeeded(config.distributionMode, config.rows, config.cols);
-            
-            // Default: Select the first N questions
             const initialIds = selectedQuiz.questions.slice(0, slotsNeeded).map(q => q.id);
-            setConfig(prev => ({ ...prev, selectedQuestionIds: initialIds }));
+            
+            // Adjust Categories Array Size
+            setConfig(prev => {
+                const currentCats = [...prev.categories];
+                // Resize array
+                if (currentCats.length < config.cols) {
+                    // Fill missing
+                    for(let i=currentCats.length; i<config.cols; i++) currentCats.push(`Cat ${i+1}`);
+                } else {
+                    // Trim
+                    currentCats.length = config.cols;
+                }
+                
+                return { 
+                    ...prev, 
+                    selectedQuestionIds: initialIds,
+                    categories: currentCats
+                };
+            });
         }
-    }, [selectedQuiz, config.distributionMode, config.rows, config.cols]);
+    }, [selectedQuiz, config.distributionMode, config.rows, config.cols]); 
 
     const loadUserQuizzes = async () => {
         setLoading(true);
@@ -100,6 +120,35 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
         const next = [...teamNames];
         next[idx] = name;
         setTeamNames(next);
+    };
+
+    const handleCategoryChange = (idx: number, val: string) => {
+        const newCats = [...config.categories];
+        newCats[idx] = val;
+        setConfig(prev => ({ ...prev, categories: newCats }));
+    };
+
+    const handleGenerateCategories = async () => {
+        if (!selectedQuiz) return;
+        setIsGeneratingCats(true);
+        try {
+            // Get text of selected questions to give context
+            const qTexts = selectedQuiz.questions
+                .filter(q => config.selectedQuestionIds.includes(q.id))
+                .slice(0, 15) // Limit context
+                .map(q => q.text);
+                
+            const newCats = await generateQuizCategories(qTexts, config.cols);
+            
+            // Fill if partial response
+            while(newCats.length < config.cols) newCats.push(`Cat ${newCats.length+1}`);
+            
+            setConfig(prev => ({ ...prev, categories: newCats }));
+        } catch (e) {
+            alert("Error generando categorías.");
+        } finally {
+            setIsGeneratingCats(false);
+        }
     };
 
     const toggleQuestionSelection = (qId: string) => {
@@ -346,9 +395,41 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
                 </CyberCard>
             </div>
 
-            {/* COLUMN 2: QUESTION SELECTION (NEW) */}
+            {/* COLUMN 2: CATEGORIES & QUESTIONS */}
             <div className="space-y-6 lg:h-[600px] flex flex-col">
                 <CyberCard className="border-cyan-500/30 flex-1 flex flex-col overflow-hidden">
+                    
+                    {/* CATEGORY INPUTS */}
+                    {selectedMode === 'JEOPARDY' && (
+                        <div className="mb-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-cyber font-bold text-white flex items-center gap-2">
+                                    <Type className="w-5 h-5 text-purple-400" /> CATEGORÍAS
+                                </h3>
+                                <button 
+                                    onClick={handleGenerateCategories}
+                                    disabled={isGeneratingCats}
+                                    className="text-[10px] bg-purple-900/50 text-purple-200 px-2 py-1 rounded flex items-center gap-1 border border-purple-500/30 hover:bg-purple-800 transition-colors"
+                                >
+                                    <Wand2 className={`w-3 h-3 ${isGeneratingCats ? 'animate-spin' : ''}`} /> GENERAR IA
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto custom-scrollbar p-1">
+                                {config.categories.map((cat, idx) => (
+                                    <input 
+                                        key={idx}
+                                        value={cat}
+                                        onChange={(e) => handleCategoryChange(idx, e.target.value)}
+                                        className="bg-black/40 border border-gray-700 text-xs text-white p-2 rounded focus:border-cyan-500 outline-none"
+                                        placeholder={`Columna ${idx + 1}`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="border-t border-gray-800 my-2"></div>
+
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="font-cyber font-bold text-white flex items-center gap-2">
                             <List className="w-5 h-5 text-cyan-400" /> PREGUNTAS

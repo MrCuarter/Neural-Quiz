@@ -71,6 +71,7 @@ export interface JeopardyConfig {
     catchUpLogic: boolean;
     distributionMode: DistributionMode; // New: Logic for question mapping
     selectedQuestionIds: string[]; // New: Manual selection
+    categories: string[]; // New: Custom category headers
 }
 
 export type PowerUpType = 'DOUBLE' | 'STEAL' | 'BOMB' | 'SWAP' | 'SHIELD';
@@ -104,6 +105,7 @@ export interface HexCell {
     col: number;
 }
 
+// ... rest of the file remains unchanged ...
 export interface DiscoveryAttempt {
     method: 'api_proxy' | 'jina_reader' | 'html_embedded' | 'direct_fetch';
     finalUrl: string;

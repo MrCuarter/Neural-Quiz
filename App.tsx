@@ -53,7 +53,8 @@ const DEFAULT_GAME_CONFIG: JeopardyConfig = {
     randomEvents: true,
     catchUpLogic: true,
     distributionMode: 'STANDARD',
-    selectedQuestionIds: []
+    selectedQuestionIds: [],
+    categories: []
 };
 
 // --- MAIN APP COMPONENT (Inner) ---

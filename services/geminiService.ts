@@ -372,7 +372,7 @@ export const generateQuizCategories = async (questions: string[], count: number 
         const ai = getAI();
         const response = await ai.models.generateContent({
           model: "gemini-3-flash-preview",
-          contents: `Generate ${count} short jeopardy categories based on these questions. Questions: ${questions.slice(0,10).join('|')}`,
+          contents: `Generate ${count} short jeopardy-style category titles (max 2-3 words) based on these questions. Output a simple JSON array of strings. Questions: ${questions.slice(0,10).join('|')}`,
           config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } } },
         });
         try { return JSON.parse(response.text || "[]"); } catch { return []; }
