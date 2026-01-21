@@ -1,16 +1,19 @@
 
 import { getSafeImageUrl } from "./imageProxyService";
 
-// @ts-ignore
-const PEXELS_KEY = import.meta.env.VITE_PEXELS_API_KEY;
-// @ts-ignore
-const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY;
-
-// Debug log to verify keys (masked)
-console.log('[ImageService] Config:', { 
-    pexels: PEXELS_KEY ? 'Present' : 'Missing', 
-    pixabay: PIXABAY_KEY ? 'Present' : 'Missing' 
-});
+// Helper for safe environment variable access (Crash Proof)
+const getEnvVar = (key: string): string => {
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      // @ts-ignore
+      return import.meta.env[key] || '';
+    }
+  } catch (e) { 
+      console.warn('Env var error', e); 
+  }
+  return '';
+};
 
 /**
  * Pre-processes the search query.
@@ -33,6 +36,10 @@ const cleanQuery = (text: string): string => {
 export const searchImage = async (rawQuery: string): Promise<string | null> => {
     const query = cleanQuery(rawQuery);
     let imageUrl: string | null = null;
+
+    // Get keys safely at execution time
+    const PEXELS_KEY = getEnvVar('VITE_PEXELS_API_KEY');
+    const PIXABAY_KEY = getEnvVar('VITE_PIXABAY_API_KEY');
 
     console.log(`[ImageService] Searching for: "${query}"`);
 

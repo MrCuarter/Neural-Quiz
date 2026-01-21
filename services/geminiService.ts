@@ -236,7 +236,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
     You must generate an 'image_search_query' field for every question.
     - This query will be used to search for a background stock photo.
     - It MUST be in ENGLISH.
-    - It MUST be aesthetic and contextual.
+    - It MUST be visual and atmospheric.
     - MOST IMPORTANT: It MUST NOT reveal the answer (Anti-Spoiler).
     
     Examples:
@@ -244,6 +244,10 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
     - Good: Question "Capital of France?", Query "European city aerial view" or "France map silhouette".
     - Bad: Question "Largest Animal?", Query "Blue Whale".
     - Good: Question "Largest Animal?", Query "Underwater ocean life" or "Deep sea background".
+    - Bad: Question "Who painted Mona Lisa?", Query "Mona Lisa painting".
+    - Good: Question "Who painted Mona Lisa?", Query "Renaissance art studio brushes".
+    
+    AVOID TEXT IN IMAGES.
     `;
 
     const response = await ai.models.generateContent({
@@ -252,7 +256,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a precise quiz engine with anti-spoiler image logic.`,
+        systemInstruction: `You are a precise quiz engine with STRICT anti-spoiler image logic.`,
       },
     });
 

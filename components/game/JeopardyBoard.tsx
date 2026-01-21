@@ -6,7 +6,6 @@ import { ArrowLeft, X, Trophy, Shield, Zap, Skull, Gem, HelpCircle, Settings, Pl
 import { useToast } from '../ui/Toast';
 import { GameInstructionsModal } from './GameInstructionsModal';
 import { translations } from '../../utils/translations';
-import { soundService } from '../../services/soundService';
 import { useGameQuizLoader } from '../../hooks/useGameQuizLoader'; 
 
 interface JeopardyBoardProps {
