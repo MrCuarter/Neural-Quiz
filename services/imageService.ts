@@ -1,9 +1,16 @@
+
 import { getSafeImageUrl } from "./imageProxyService";
 
 // @ts-ignore
 const PEXELS_KEY = import.meta.env.VITE_PEXELS_API_KEY;
 // @ts-ignore
 const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY;
+
+// Debug log to verify keys (masked)
+console.log('[ImageService] Config:', { 
+    pexels: PEXELS_KEY ? 'Present' : 'Missing', 
+    pixabay: PIXABAY_KEY ? 'Present' : 'Missing' 
+});
 
 /**
  * Pre-processes the search query.
@@ -21,10 +28,13 @@ const cleanQuery = (text: string): string => {
 /**
  * Main Image Search Service
  * Strategy: Waterfall (Pexels -> Pixabay -> Null)
+ * Input: query (English, Anti-Spoiler preferred)
  */
 export const searchImage = async (rawQuery: string): Promise<string | null> => {
     const query = cleanQuery(rawQuery);
     let imageUrl: string | null = null;
+
+    console.log(`[ImageService] Searching for: "${query}"`);
 
     // --- ATTEMPT 1: PEXELS (High Quality) ---
     if (PEXELS_KEY) {
@@ -41,6 +51,7 @@ export const searchImage = async (rawQuery: string): Promise<string | null> => {
                 const data = await res.json();
                 if (data.photos && data.photos.length > 0) {
                     imageUrl = data.photos[0].src.medium;
+                    console.log("[ImageService] Found on Pexels");
                 }
             } else {
                 console.warn(`[ImageService] Pexels Error: ${res.status}`);
@@ -67,6 +78,7 @@ export const searchImage = async (rawQuery: string): Promise<string | null> => {
                 const data = await res.json();
                 if (data.hits && data.hits.length > 0) {
                     imageUrl = data.hits[0].webformatURL;
+                    console.log("[ImageService] Found on Pixabay");
                 }
             } else {
                 console.warn(`[ImageService] Pixabay Error: ${res.status}`);
@@ -81,6 +93,7 @@ export const searchImage = async (rawQuery: string): Promise<string | null> => {
         return getSafeImageUrl(imageUrl);
     }
 
+    console.log("[ImageService] No image found.");
     // Both failed
     return null;
 };

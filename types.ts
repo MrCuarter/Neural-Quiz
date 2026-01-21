@@ -18,6 +18,9 @@ export interface Question {
   feedback?: string;
   questionType?: string; // e.g., "Multiple Choice"
   
+  // ANTI-SPOILER IMAGE SEARCH
+  image_search_query?: string; 
+
   // FORENSIC ANALYSIS FIELDS
   reconstructed?: boolean;
   sourceEvidence?: string;

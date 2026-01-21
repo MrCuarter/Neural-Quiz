@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Quiz, Question, GameTeam, PowerUp, PowerUpType, JeopardyConfig } from '../../types';
 import { CyberButton, CyberCard, CyberSelect, CyberCheckbox } from '../ui/CyberUI';
-import { ArrowLeft, X, Trophy, Shield, Zap, Skull, Gem, HelpCircle, Settings, Play, Check, Minus, Gavel, Dna, Crown, Clock, Volume2, VolumeX, AlertTriangle, Loader2, Gift, Lock, RefreshCw, Award, Dice5, Info, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, X, Trophy, Shield, Zap, Skull, Gem, HelpCircle, Settings, Play, Check, Minus, Gavel, Dna, Crown, Clock, AlertTriangle, Loader2, Gift, Lock, RefreshCw, Award, Dice5, Info, TrendingUp, TrendingDown } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { GameInstructionsModal } from './GameInstructionsModal';
 import { translations } from '../../utils/translations';
@@ -89,7 +89,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
     const [teams, setTeams] = useState<GameTeam[]>(initialTeams);
     const [showInstructions, setShowInstructions] = useState(false);
     const [showPowerUpsInfo, setShowPowerUpsInfo] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
     
     // Visual Effects State
     const [scoreDeltas, setScoreDeltas] = useState<Record<string, number | null>>({});
@@ -116,12 +115,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
     // Inventory UX
     const [selectedItem, setSelectedItem] = useState<{ teamIdx: number, itemIdx: number } | null>(null);
 
-    // --- SOUND MUTE TOGGLE ---
-    const toggleMute = () => {
-        const muted = soundService.toggleMute();
-        setIsMuted(muted);
-    };
-
     // --- TIMER EFFECT ---
     useEffect(() => {
         let interval: any = null;
@@ -131,7 +124,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                     if (prev <= 1) {
                         clearInterval(interval);
                         setIsTimeUp(true);
-                        soundService.play('wrong');
                         return 0;
                     }
                     return prev - 1;
@@ -150,7 +142,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             const allDone = grid.every(c => c.answered || c.locked);
             if (allDone) {
                 setTimeout(() => setPhase('GAME_OVER'), 1000);
-                soundService.play('correct');
             }
         }
     }, [grid, phase]);
@@ -224,7 +215,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             }
             setGrid(newGrid);
             setPhase('BOARD');
-            soundService.play('click');
         };
 
         generateGrid();
@@ -232,7 +222,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
 
     // --- GAMEPLAY FLOW HANDLERS ---
     
-    // Fix: Accurate Score Delta Calculation
     const updateTeamScore = (teamIdx: number, delta: number) => {
         const newTeams = [...teams];
         const team = newTeams[teamIdx];
@@ -261,7 +250,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         // --- WILDCARD LOGIC (INSTANT) ---
         if (cell.isWildcard) {
             setPhase('WILDCARD_REVEAL');
-            soundService.play('win_item');
             return;
         }
 
@@ -269,7 +257,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         setTimeLeft(gameConfig.timer);
         setIsTimeUp(false);
         setShowAnswer(false);
-        soundService.play('click');
 
         const initialAnswers: Record<string, any> = {};
         teams.forEach(t => initialAnswers[t.id] = 'NONE');
@@ -279,7 +266,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             const evt = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
             setActiveEvent(evt);
             setPhase('EVENT_REVEAL');
-            soundService.play('event');
         } else {
             setActiveEvent(null);
             setPhase('QUESTION');
@@ -302,7 +288,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                     newTeams[richIdx].shielded = false;
                     setTeams(newTeams);
                     toast.info(`${rich.name} bloqueó ROBIN HOOD con su escudo!`);
-                    soundService.play('block');
                 } else {
                     const transfer = Math.floor(rich.score * 0.2);
                     updateTeamScore(richIdx, -transfer);
@@ -320,7 +305,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             const next = current === 'NONE' ? 'CORRECT' : current === 'CORRECT' ? 'WRONG' : 'NONE';
             return { ...prev, [teamId]: next };
         });
-        soundService.play('click');
     };
 
     const submitScores = () => {
@@ -350,7 +334,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 correctCount++;
                 if (team.multiplier > 1) { points *= team.multiplier; team.multiplier = 1; }
                 finalDelta = points;
-                soundService.play('correct');
             } else if (status === 'WRONG') {
                 let penalty = Math.floor(points / 2);
                 if (activeEvent?.effect === 'DOUBLE_PENALTY') penalty = points; 
@@ -359,11 +342,9 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 if (team.shielded) {
                     team.shielded = false;
                     toast.info(`🛡️ ${team.name} usó su ESCUDO para evitar la penalización!`);
-                    soundService.play('block');
                     finalDelta = 0;
                 } else {
                     finalDelta = -penalty;
-                    soundService.play('wrong');
                 }
             }
 
@@ -424,7 +405,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
 
     const spinRoulette = () => {
         setIsSpinning(true);
-        soundService.play('spin');
         let winnerIndex = 0;
         
         // Catch Up Logic: Weighted random
@@ -449,7 +429,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         const maxSpins = 20 + Math.floor(Math.random() * 10);
         const interval = setInterval(() => {
             setRouletteWinnerIdx(spins % teams.length);
-            soundService.play('click');
             spins++;
             if (spins >= maxSpins) {
                 clearInterval(interval);
@@ -459,7 +438,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 newTeams[winnerIndex].inventory.push(wonItem);
                 setTeams(newTeams);
                 setIsSpinning(false);
-                soundService.play('win_item');
             }
         }, 100);
     };
@@ -489,7 +467,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 if (newTeams[leaderIdx].shielded) {
                     newTeams[leaderIdx].shielded = false; 
                     msg = `¡${leader.name} BLOQUEÓ el robo con su ESCUDO!`; 
-                    soundService.play('block');
                 } else {
                     updateTeamScore(leaderIdx, -300);
                     updateTeamScore(teamIdx, 300);
@@ -508,7 +485,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 }
             });
             msg = `¡BOOM! Bomba lanzada. ${blockedCount > 0 ? `${blockedCount} escudos rotos.` : ''}`;
-            soundService.play('event');
         }
         else if (item.type === 'SWAP') {
             const targets = newTeams.map((_, i) => i).filter(i => i !== teamIdx);
@@ -517,7 +493,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 if (newTeams[targetIdx].shielded) {
                     newTeams[targetIdx].shielded = false;
                     msg = `${newTeams[targetIdx].name} evitó el Glitch Swap con su ESCUDO!`; 
-                    soundService.play('block');
                 } else {
                     const temp = userTeam.score;
                     userTeam.score = newTeams[targetIdx].score;
@@ -535,7 +510,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         setTeams(newTeams);
         setSelectedItem(null); // Close popover
         toast.info(msg);
-        soundService.play('click');
     };
 
     const getCellColor = (points: number, answered: boolean, locked?: boolean) => {
@@ -604,9 +578,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 <div className="flex gap-2">
                     <button onClick={() => setShowPowerUpsInfo(true)} className="p-2 text-yellow-400 hover:text-yellow-200 transition-colors" title="Power-Ups">
                         <Zap className="w-6 h-6" />
-                    </button>
-                    <button onClick={toggleMute} className="p-2 text-gray-400 hover:text-white transition-colors">
-                        {isMuted ? <VolumeX className="w-6 h-6 text-red-500" /> : <Volume2 className="w-6 h-6 text-green-400" />}
                     </button>
                     <button onClick={() => setShowInstructions(true)} className="p-2 text-cyan-400 hover:text-white transition-colors">
                         <HelpCircle className="w-6 h-6" />

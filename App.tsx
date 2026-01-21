@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { QuizEditor } from './components/QuizEditor';
@@ -21,6 +22,7 @@ import { extractTextFromPDF } from './services/pdfService';
 import { fetchUrlContent, analyzeUrl } from './services/urlService';
 import { getRandomMessage, getDetectionMessage } from './services/messageService';
 import { auth, onAuthStateChanged, saveQuizToFirestore, signInWithGoogle } from './services/firebaseService';
+import { searchImage } from './services/imageService'; // NEW IMPORT
 import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
@@ -316,14 +318,32 @@ const NeuralApp: React.FC = () => {
         topic: genParams.topic, count: Number(genParams.count) || 5, types: genParams.types, age: genParams.age, context: genParams.context, urls: urlList, language: selectedLang, includeFeedback
       });
       
-      const newQuestions = generatedQs.map(gq => ({
-          ...gq,
-          id: uuid(),
-          correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []),
+      setGenerationStatus("Buscando imágenes (Anti-Spoiler)...");
+
+      // --- INTEGRATION: AUTO IMAGE SEARCH ---
+      // We process all questions in parallel to speed up
+      const enhancedQuestions = await Promise.all(generatedQs.map(async (gq) => {
+          const qObj = {
+              ...gq,
+              id: uuid(),
+              correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []),
+          };
+
+          // If AI suggested a query, use it!
+          if (qObj.image_search_query && !qObj.imageUrl) {
+              const url = await searchImage(qObj.image_search_query);
+              if (url) qObj.imageUrl = url;
+          } else if (!qObj.imageUrl) {
+              // Fallback: search using text if query missing (risky but okay for basic topics)
+              const url = await searchImage(qObj.text);
+              if (url) qObj.imageUrl = url;
+          }
+          
+          return qObj;
       }));
 
       setQuiz({
-        title: genParams.topic || 'AI Generated Quiz', description: `Generated for ${genParams.age} - ${targetPlatform}`, questions: newQuestions, tags: ['AI Generated', targetPlatform] 
+        title: genParams.topic || 'AI Generated Quiz', description: `Generated for ${genParams.age} - ${targetPlatform}`, questions: enhancedQuestions, tags: ['AI Generated', targetPlatform] 
       });
       toast.success("Quiz Generated Successfully!");
       setView('create_manual'); 

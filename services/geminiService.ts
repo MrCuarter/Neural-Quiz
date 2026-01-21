@@ -154,11 +154,12 @@ const questionSchema: Schema = {
     feedback: { type: Type.STRING },
     type: { type: Type.STRING }, // "Multiple Choice", etc.
     imageUrl: { type: Type.STRING },
+    image_search_query: { type: Type.STRING, description: "Short English query for stock photo search. Aesthetic, contextual, ANTI-SPOILER." },
     reconstructed: { type: Type.BOOLEAN },
     sourceEvidence: { type: Type.STRING },
     imageReconstruction: { type: Type.STRING, enum: ["direct", "partial", "inferred", "none"] }
   },
-  required: ["text", "options", "type"]
+  required: ["text", "options", "type", "image_search_query"]
 };
 
 const quizSchema: Schema = {
@@ -194,6 +195,7 @@ const enhanceSchema: Schema = {
             }
         },
         imageUrl: { type: Type.STRING, nullable: true },
+        image_search_query: { type: Type.STRING, nullable: true },
         confidenceGlobal: { type: Type.NUMBER }
     },
     required: ["options", "reconstructed"]
@@ -229,6 +231,19 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
     3. 'Multi-Select': SEVERAL correct answers.
     4. 'Order': Options MUST be in the CORRECT FINAL ORDER.
     ${includeFeedback ? "5. You MUST generate educational feedback/explanation." : ""}
+    
+    CRITICAL INSTRUCTION - ANTI-SPOILER IMAGE QUERY:
+    You must generate an 'image_search_query' field for every question.
+    - This query will be used to search for a background stock photo.
+    - It MUST be in ENGLISH.
+    - It MUST be aesthetic and contextual.
+    - MOST IMPORTANT: It MUST NOT reveal the answer (Anti-Spoiler).
+    
+    Examples:
+    - Bad: Question "Capital of France?", Query "Eiffel Tower" (Too obvious).
+    - Good: Question "Capital of France?", Query "European city aerial view" or "France map silhouette".
+    - Bad: Question "Largest Animal?", Query "Blue Whale".
+    - Good: Question "Largest Animal?", Query "Underwater ocean life" or "Deep sea background".
     `;
 
     const response = await ai.models.generateContent({
@@ -237,7 +252,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a precise quiz engine.`,
+        systemInstruction: `You are a precise quiz engine with anti-spoiler image logic.`,
       },
     });
 
@@ -252,7 +267,6 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
     }
     
     // ZOD VALIDATION & SANITIZATION
-    // This ensures that even if AI returns junk, we get valid Question objects or fail cleanly.
     return validateQuizQuestions(data);
   });
 };
@@ -269,7 +283,8 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
         
         const prompt = `You are a Quiz Data Extraction Engine. Output Language: ${language}.
         Source Content: ${truncatedText}
-        Task: Identify questions, answers, and correct answers. Reconstruct structure.`;
+        Task: Identify questions, answers, and correct answers. Reconstruct structure.
+        Also generate 'image_search_query' (English, Anti-Spoiler) for each question.`;
 
         contents.push({ text: prompt });
 
@@ -296,7 +311,8 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
 export const enhanceQuestion = async (q: Question, context: string, language: string): Promise<Question> => {
     return withRetry(async () => {
         const ai = getAI();
-        const prompt = `Enhance this quiz question. Language: ${language}. Question: "${q.text}". Options: ${JSON.stringify(q.options.map(o => o.text))}. Context: ${context.substring(0,500)}.`;
+        const prompt = `Enhance this quiz question. Language: ${language}. Question: "${q.text}". Options: ${JSON.stringify(q.options.map(o => o.text))}. Context: ${context.substring(0,500)}.
+        Generate a valid 'image_search_query' in English that is Anti-Spoiler.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
@@ -311,9 +327,6 @@ export const enhanceQuestion = async (q: Question, context: string, language: st
         const data = JSON.parse(response.text || "{}");
         if (!data.options) throw new Error("Enhance AI failed to generate options");
 
-        // Manually map to Question structure (Zod handles primitive validation if we wanted to add it here too)
-        // But for enhance, we build the question object carefully:
-        
         const newOptions = data.options.map((o: any) => ({
             id: Math.random().toString(36).substring(2, 9),
             text: String(o.text || "").trim()
@@ -338,7 +351,8 @@ export const enhanceQuestion = async (q: Question, context: string, language: st
             sourceEvidence: data.sourceEvidence,
             qualityFlags: data.qualityFlags,
             confidenceScore: data.confidenceGlobal,
-            imageUrl: data.imageUrl || q.imageUrl || ""
+            imageUrl: data.imageUrl || q.imageUrl || "",
+            image_search_query: data.image_search_query
         };
     });
 };
@@ -350,7 +364,7 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
         
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `Fix these quiz questions. Generate 4 options for each. Language: ${language}. JSON: ${JSON.stringify(qs)}`,
+            contents: `Fix these quiz questions. Generate 4 options for each. Language: ${language}. Also generate 'image_search_query' (English, Anti-Spoiler) for each. JSON: ${JSON.stringify(qs)}`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: quizSchema,
