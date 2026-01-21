@@ -59,6 +59,20 @@ export interface Quiz {
 // --- GAME TYPES ---
 export type GameMode = 'JEOPARDY' | 'HEX_CONQUEST';
 
+export type DistributionMode = 'STANDARD' | 'RIGGED' | 'SPLIT';
+
+export interface JeopardyConfig {
+    timer: number;
+    allowNegativePoints: boolean;
+    rows: number;
+    cols: number;
+    usePowerUps: boolean;
+    randomEvents: boolean;
+    catchUpLogic: boolean;
+    distributionMode: DistributionMode; // New: Logic for question mapping
+    selectedQuestionIds: string[]; // New: Manual selection
+}
+
 export type PowerUpType = 'DOUBLE' | 'STEAL' | 'BOMB' | 'SWAP' | 'SHIELD';
 
 export interface PowerUp {

@@ -1,21 +1,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Quiz, Question, GameTeam, PowerUp, PowerUpType } from '../../types';
+import { Quiz, Question, GameTeam, PowerUp, PowerUpType, JeopardyConfig } from '../../types';
 import { CyberButton, CyberCard, CyberSelect, CyberCheckbox } from '../ui/CyberUI';
 import { ArrowLeft, X, Trophy, Shield, Zap, Skull, Gem, HelpCircle, Settings, Play, Check, Minus, Gavel, Dna, Crown, Clock, Volume2, VolumeX, AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { GameInstructionsModal } from './GameInstructionsModal';
 import { translations } from '../../utils/translations';
 import { soundService } from '../../services/soundService';
-import { useGameQuizLoader } from '../../hooks/useGameQuizLoader'; // IMPORT HOOK
+import { useGameQuizLoader } from '../../hooks/useGameQuizLoader'; 
 
 interface JeopardyBoardProps {
-    quiz?: Quiz; // Optional now
-    quizId?: string; // Optional ID for direct loading
+    quiz?: Quiz;
+    quizId?: string;
     initialTeams: GameTeam[];
     onExit: () => void;
-    timerValue: number; 
-    allowNegativePoints?: boolean; 
+    gameConfig: JeopardyConfig; 
 }
 
 // --- CONSTANTS & TYPES ---
@@ -75,7 +74,7 @@ const ScoreDelta: React.FC<{ value: number, onEnd: () => void }> = ({ value, onE
     );
 };
 
-export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, quizId, initialTeams, onExit, timerValue, allowNegativePoints }) => {
+export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, quizId, initialTeams, onExit, gameConfig }) => {
     const toast = useToast();
     const t = translations['es'];
     
@@ -92,16 +91,6 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
     // Visual Effects State
     const [scoreDeltas, setScoreDeltas] = useState<Record<string, number | null>>({});
 
-    // Config State
-    const [config, setConfig] = useState({
-        rows: 5,
-        cols: 5,
-        distribution: 'STANDARD' as 'STANDARD' | 'RIGGED' | 'SPLIT',
-        usePowerUps: true,
-        randomEvents: true,
-        catchUpLogic: true // "Ajuste"
-    });
-
     // Game Board State
     const [grid, setGrid] = useState<BoardCell[]>([]);
     const [activeCell, setActiveCell] = useState<BoardCell | null>(null);
@@ -109,7 +98,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
     const [showAnswer, setShowAnswer] = useState(false);
 
     // Timer State
-    const [timeLeft, setTimeLeft] = useState(timerValue);
+    const [timeLeft, setTimeLeft] = useState(gameConfig.timer);
     const [isTimeUp, setIsTimeUp] = useState(false);
 
     // Scoring State
@@ -151,40 +140,55 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
     useEffect(() => {
         if (!activeQuiz || loading || error) return;
         
-        // Safety check for questions
         if (!activeQuiz.questions || activeQuiz.questions.length === 0) {
             console.error("Jeopardy: Quiz loaded but has no questions.");
             return;
         }
 
         const generateGrid = () => {
-            const totalCells = config.rows * config.cols;
             const newGrid: BoardCell[] = [];
+            
+            // Filter valid questions based on selection (if any) or all
+            let availableQuestions = activeQuiz.questions;
+            if (gameConfig.selectedQuestionIds && gameConfig.selectedQuestionIds.length > 0) {
+                availableQuestions = activeQuiz.questions.filter(q => gameConfig.selectedQuestionIds.includes(q.id));
+                // Maintain order of selection if possible, otherwise original order
+                if (availableQuestions.length === 0) availableQuestions = activeQuiz.questions; // Fallback
+            }
+
             let qIndex = 0;
 
-            for (let c = 0; c < config.cols; c++) {
-                for (let r = 0; r < config.rows; r++) {
+            for (let c = 0; c < gameConfig.cols; c++) {
+                for (let r = 0; r < gameConfig.rows; r++) {
                     let questionForCell: Question | null = null;
                     let isWildcard = false;
 
-                    // Robust safe access
-                    const questions = activeQuiz.questions || [];
-
-                    if (config.distribution === 'RIGGED') {
-                        if (c < questions.length) questionForCell = questions[c];
-                        else isWildcard = true;
-                    } else if (config.distribution === 'SPLIT') {
-                        const qIdxBase = c * 2; 
-                        if (r < 3) {
-                            if (qIdxBase < questions.length) questionForCell = questions[qIdxBase];
-                            else isWildcard = true;
+                    // --- DISTRIBUTION LOGIC ---
+                    
+                    if (gameConfig.distributionMode === 'RIGGED') {
+                        // RIGGED: Entire column gets the SAME question (1 question per column)
+                        if (c < availableQuestions.length) {
+                            questionForCell = availableQuestions[c];
                         } else {
-                            if (qIdxBase + 1 < questions.length) questionForCell = questions[qIdxBase + 1];
-                            else isWildcard = true;
+                            isWildcard = true; // Not enough questions for columns
                         }
-                    } else {
-                        if (qIndex < questions.length) {
-                            questionForCell = questions[qIndex];
+                    } 
+                    else if (gameConfig.distributionMode === 'SPLIT') {
+                        // SPLIT: Top half uses Q1, Bottom half uses Q2 per column (2 questions per column)
+                        const qIdxBase = c * 2;
+                        const isTop = r < Math.ceil(gameConfig.rows / 2);
+                        const targetQIndex = isTop ? qIdxBase : qIdxBase + 1;
+
+                        if (targetQIndex < availableQuestions.length) {
+                            questionForCell = availableQuestions[targetQIndex];
+                        } else {
+                            isWildcard = true;
+                        }
+                    } 
+                    else {
+                        // STANDARD: 1 question per cell
+                        if (qIndex < availableQuestions.length) {
+                            questionForCell = availableQuestions[qIndex];
                             qIndex++;
                         } else {
                             isWildcard = true;
@@ -208,7 +212,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         };
 
         generateGrid();
-    }, [activeQuiz, loading, error]); // Regenerate when quiz loads
+    }, [activeQuiz, loading, error]); 
 
     // --- GAMEPLAY FLOW HANDLERS ---
     const applyScoreDelta = (teamId: string, amount: number) => {
@@ -220,7 +224,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         if (!cell || cell.answered) return;
 
         setActiveCell(cell);
-        setTimeLeft(timerValue);
+        setTimeLeft(gameConfig.timer);
         setIsTimeUp(false);
         setShowAnswer(false);
         soundService.play('click');
@@ -229,7 +233,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         teams.forEach(t => initialAnswers[t.id] = 'NONE');
         setTeamAnswers(initialAnswers);
 
-        if (config.randomEvents && Math.random() > 0.5) {
+        if (gameConfig.randomEvents && Math.random() > 0.5) {
             const evt = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
             setActiveEvent(evt);
             setPhase('EVENT_REVEAL');
@@ -307,8 +311,19 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                     soundService.play('block');
                     applyScoreDelta(team.id, 0);
                 } else {
-                    team.score -= penalty;
-                    if (!allowNegativePoints && team.score < 0) team.score = 0;
+                    // --- FIX NEGATIVE POINTS LOGIC ---
+                    const projectedScore = team.score - penalty;
+                    
+                    if (!gameConfig.allowNegativePoints) {
+                        // Option A: Just floor at 0.
+                        team.score = Math.max(0, projectedScore);
+                        // Visual update should show what was effectively subtracted
+                        const effectiveSubtraction = team.score - (team.score + penalty); // Tricky calculation, simpler:
+                        // If they had 50 and penalty is 100. New score is 0. Delta is -50.
+                    } else {
+                        team.score = projectedScore;
+                    }
+                    
                     applyScoreDelta(team.id, -penalty);
                     soundService.play('wrong');
                 }
@@ -320,7 +335,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         setShowAnswer(false);
         setActiveCell(null);
 
-        if (config.usePowerUps && correctCount > 0) {
+        if (gameConfig.usePowerUps && correctCount > 0) {
             setPhase('ROULETTE');
         } else {
             setPhase('BOARD');
@@ -331,7 +346,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         setIsSpinning(true);
         soundService.play('spin');
         let winnerIndex = 0;
-        if (config.catchUpLogic) {
+        if (gameConfig.catchUpLogic) {
             const maxScore = Math.max(...teams.map(t => t.score)) + 100; 
             const weights = teams.map(t => maxScore - t.score);
             const totalWeight = weights.reduce((a,b) => a+b, 0);
@@ -392,7 +407,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                     leader.shielded = false; msg = `¡${leader.name} BLOQUEÓ el robo con su ESCUDO!`; soundService.play('block');
                 } else {
                     leader.score -= 300; userTeam.score += 300;
-                    if (!allowNegativePoints && leader.score < 0) leader.score = 0;
+                    if (!gameConfig.allowNegativePoints && leader.score < 0) leader.score = 0;
                     applyScoreDelta(leader.id, -300); applyScoreDelta(userTeam.id, 300);
                     msg = `¡${userTeam.name} roba 300 pts a ${leader.name}!`;
                 }
@@ -403,7 +418,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             newTeams.forEach((t, i) => {
                 if (i !== teamIdx) {
                     if (t.shielded) { t.shielded = false; blockedCount++; } 
-                    else { t.score -= 200; if (!allowNegativePoints && t.score < 0) t.score = 0; applyScoreDelta(t.id, -200); }
+                    else { t.score -= 200; if (!gameConfig.allowNegativePoints && t.score < 0) t.score = 0; applyScoreDelta(t.id, -200); }
                 }
             });
             msg = `¡BOOM! Bomba lanzada. ${blockedCount > 0 ? `${blockedCount} escudos rotos.` : ''}`;
@@ -545,7 +560,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                     {phase === 'CONFIG' ? (
                         <div className="animate-spin text-cyan-500"><Loader2 className="w-8 h-8" /></div>
                     ) : (
-                        <div className="grid gap-3 w-full max-w-6xl aspect-video" style={{ gridTemplateColumns: `repeat(${config.cols}, 1fr)` }}>
+                        <div className="grid gap-3 w-full max-w-6xl aspect-video" style={{ gridTemplateColumns: `repeat(${gameConfig.cols}, 1fr)` }}>
                             {grid.map((cell) => (
                                 <button
                                     key={cell.id}
@@ -561,7 +576,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                                     {cell.answered ? <Check className="w-8 h-8 opacity-20" /> : (
                                         <>
                                             <span>{cell.points}</span>
-                                            {cell.isWildcard && <span className="text-[10px] text-yellow-500 absolute bottom-2">WILD</span>}
+                                            {cell.isWildcard && <span className="text-[10px] text-yellow-500 absolute bottom-2">COMODÍN</span>}
                                         </>
                                     )}
                                 </button>
@@ -571,7 +586,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 </div>
             </div>
 
-            {/* MODALS: EVENT, QUESTION, ROULETTE (unchanged structure, just ensured safe prop access) */}
+            {/* MODALS: EVENT, QUESTION, ROULETTE */}
             {phase === 'EVENT_REVEAL' && activeEvent && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur animate-in zoom-in-95">
                     <CyberCard className="w-full max-w-lg border-purple-500 text-center space-y-6 p-10">

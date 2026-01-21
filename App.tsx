@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode } from './types';
+import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -44,6 +43,18 @@ const PLATFORMS_WITH_FEEDBACK = [
     ExportFormat.WAYGROUND,
     ExportFormat.UNIVERSAL_CSV
 ];
+
+const DEFAULT_GAME_CONFIG: JeopardyConfig = {
+    timer: 20,
+    allowNegativePoints: false,
+    rows: 5,
+    cols: 5,
+    usePowerUps: true,
+    randomEvents: true,
+    catchUpLogic: true,
+    distributionMode: 'STANDARD',
+    selectedQuestionIds: []
+};
 
 // --- MAIN APP COMPONENT (Inner) ---
 const NeuralApp: React.FC = () => {
@@ -101,8 +112,7 @@ const NeuralApp: React.FC = () => {
   // GAME STATE
   const [gameQuiz, setGameQuiz] = useState<Quiz | null>(null);
   const [gameTeams, setGameTeams] = useState<GameTeam[]>([]);
-  const [gameTimer, setGameTimer] = useState<number>(20); 
-  const [gameNegPoints, setGameNegPoints] = useState<boolean>(false);
+  const [gameConfig, setGameConfig] = useState<JeopardyConfig>(DEFAULT_GAME_CONFIG);
 
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
@@ -238,8 +248,7 @@ const NeuralApp: React.FC = () => {
       
       setGameQuiz(q);
       setGameTeams(defaultTeams);
-      setGameTimer(20);
-      setGameNegPoints(false); // Safer default
+      setGameConfig(DEFAULT_GAME_CONFIG);
       
       if (mode === 'HEX_CONQUEST') setView('game_hex');
       else setView('game_board');
@@ -725,11 +734,10 @@ const NeuralApp: React.FC = () => {
             <GameLobby 
                 user={user} 
                 onBack={() => setView('home')} 
-                onStartGame={(q, teams, mode, timer, negPoints) => {
+                onStartGame={(q, teams, mode, config) => {
                     setGameQuiz(q);
                     setGameTeams(teams);
-                    setGameTimer(timer);
-                    setGameNegPoints(negPoints);
+                    setGameConfig(config);
                     // Route based on mode
                     if (mode === 'HEX_CONQUEST') setView('game_hex');
                     else setView('game_board');
@@ -742,8 +750,6 @@ const NeuralApp: React.FC = () => {
             <JeopardyBoard 
                 quiz={gameQuiz} 
                 initialTeams={gameTeams}
-                timerValue={gameTimer}
-                allowNegativePoints={gameNegPoints}
                 onExit={() => {
                     if (confirm("¿Seguro que quieres salir de la partida?")) {
                         setView('home');
@@ -751,6 +757,7 @@ const NeuralApp: React.FC = () => {
                         setGameTeams([]);
                     }
                 }}
+                gameConfig={gameConfig} // Pass Full Config
             />
         )}
 
