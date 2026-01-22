@@ -20,35 +20,21 @@ import {
   orderBy, 
   serverTimestamp 
 } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 import { Quiz } from "../types";
 
-// --- 1. VALIDACIÓN DE ENTORNO ---
-// @ts-ignore
-const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-if (!apiKey) {
-  console.error("🔥 CRITICAL: Faltan variables de entorno de Firebase. Revisa tu archivo .env");
-}
-
-// --- 2. CONFIGURACIÓN DEL PROYECTO (NeuralQuiz2) ---
-// Acceso directo a import.meta.env para evitar errores de referencia
+// --- 1. CONFIGURACIÓN DEL PROYECTO 'UNA-PARA-TODAS' ---
 const firebaseConfig = { 
-  // @ts-ignore
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
-  // @ts-ignore
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, 
-  // @ts-ignore
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID, 
-  // @ts-ignore
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, 
-  // @ts-ignore
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, 
-  // @ts-ignore
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: "AIzaSyCAhcayYuNdENYbAF-ezITwZA5EeVnbcZ0", 
+  authDomain: "una-para-todas.firebaseapp.com", 
+  projectId: "una-para-todas", 
+  storageBucket: "una-para-todas.firebasestorage.app", 
+  messagingSenderId: "1005385021667", 
+  appId: "1:1005385021667:web:b0c13438ab526d29bcadd6", 
+  measurementId: "G-M5VDERWPRJ" 
 };
 
-// --- 3. INICIALIZACIÓN ---
+// --- 2. INICIALIZACIÓN ---
 const app = initializeApp(firebaseConfig);
 
 // Inicializar Analytics solo si estamos en un entorno de navegador
@@ -57,12 +43,10 @@ if (typeof window !== 'undefined') {
   analytics = getAnalytics(app);
 }
 
-// Exportación de servicios
 export const db = getFirestore(app);
 export const auth = getAuth(app);
-export const storage = getStorage(app);
 
-// --- 4. CONFIGURACIÓN CRÍTICA DEL PROVEEDOR (SCOPES) ---
+// --- 3. CONFIGURACIÓN CRÍTICA DEL PROVEEDOR (SCOPES) ---
 export const googleProvider = new GoogleAuthProvider();
 
 // Scopes reducidos para verificación de Google. 
@@ -72,9 +56,9 @@ googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 // Exportamos onAuthStateChanged para uso en componentes
 export { onAuthStateChanged };
 
-console.log(`🔥 Firebase inicializado: ${firebaseConfig.projectId}`);
+console.log("🔥 Firebase (NPM) 'una-para-todas' inicializado. Scope: drive.file");
 
-// --- 5. FUNCIONES DE AUTENTICACIÓN ---
+// --- 4. FUNCIONES DE AUTENTICACIÓN ---
 
 export const signInWithGoogle = async (): Promise<{ user: any, token: string | null }> => {
   try {
@@ -104,7 +88,7 @@ export const logoutFirebase = async () => {
   }
 };
 
-// --- 6. FUNCIONES DE GESTIÓN DE DATOS (FIRESTORE) ---
+// --- 5. FUNCIONES DE GESTIÓN DE DATOS (FIRESTORE) ---
 
 /**
  * Guardar o Actualizar un Quiz
@@ -168,7 +152,7 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
             return docRef.id;
         }
     } catch (e: any) {
-        console.error("🔥 Error al guardar en Firestore.");
+        console.error("🔥 Error al guardar en Firestore (una-para-todas).");
         console.error(">> Datos:", cleanData); 
         console.error(">> Error:", e);
         throw e;
