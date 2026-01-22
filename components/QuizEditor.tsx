@@ -2,11 +2,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
-import { getSafeImageUrl } from '../services/imageProxyService'; // IMPORTED
-import { toggleQuizVisibility, updateCloningPermission } from '../services/shareService'; // NEW IMPORT
+import { getSafeImageUrl } from '../services/imageProxyService'; 
+import { toggleQuizVisibility, updateCloningPermission } from '../services/shareService'; 
+import { uploadImageToCloudinary } from '../services/cloudinaryService'; // IMPORT UPDATED
 import { useToast } from './ui/Toast';
 import * as XLSX from 'xlsx';
 
@@ -33,6 +34,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [aiCount, setAiCount] = useState(3);
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  
+  // Upload State
+  const [uploadingQId, setUploadingQId] = useState<string | null>(null);
   
   // Share State
   const [isPublishing, setIsPublishing] = useState(false);
@@ -115,6 +119,32 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       const url = `${window.location.origin}?shareId=${quiz.id}`;
       navigator.clipboard.writeText(url);
       toast.success("Enlace copiado al portapapeles.");
+  };
+
+  // --- UPLOAD LOGIC ---
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, qId: string) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+          toast.warning("Por favor selecciona un archivo de imagen válido.");
+          return;
+      }
+
+      setUploadingQId(qId);
+      toast.info("⏳ Comprimiendo y Subiendo...");
+      
+      try {
+          const url = await uploadImageToCloudinary(file);
+          updateQuestion(qId, { imageUrl: url });
+          toast.success("Imagen subida y optimizada correctamente");
+      } catch (error: any) {
+          console.error(error);
+          toast.error(`Error al subir imagen: ${error.message}`);
+      } finally {
+          setUploadingQId(null);
+          e.target.value = ''; // Reset input
+      }
   };
 
   // --- CRUD OPERATIONS ---
@@ -575,6 +605,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                         const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
                         const needsEnhance = (!isValid && q.options.length < 2) || (q.options.length > 0 && !q.correctOptionId);
                         const isEnhancing = enhancingId === q.id;
+                        const isUploading = uploadingQId === q.id;
 
                         // --- CORRECT ANSWER LOGIC ---
                         const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
@@ -649,7 +680,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
                                       </div>
 
-                                      {/* IMAGE URL & PREVIEW */}
+                                      {/* IMAGE URL & PREVIEW + UPLOAD BUTTON */}
                                       <div className="bg-black/20 p-3 rounded border border-gray-800/50">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <LinkIcon className="w-4 h-4 text-gray-500" />
@@ -662,7 +693,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                     value={q.imageUrl || ''} 
                                                     onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })} 
                                                     onBlur={(e) => {
-                                                        // AUTO CONVERT WEBP TO PNG ON BLUR
                                                         const val = e.target.value;
                                                         const safeUrl = getSafeImageUrl(val);
                                                         if (safeUrl && safeUrl !== val) {
@@ -671,6 +701,21 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                     }}
                                                     className="bg-black/40 border border-gray-700 p-2 rounded w-full text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500" 
                                                 />
+                                                {/* UPLOAD BUTTON */}
+                                                <label className={`cursor-pointer bg-gray-800 hover:bg-gray-700 text-white p-2 rounded flex items-center justify-center min-w-[40px] transition-colors border border-gray-700 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`} title="Subir imagen">
+                                                    {isUploading ? (
+                                                        <FolderOpen className="w-4 h-4 animate-pulse text-cyan-400" />
+                                                    ) : (
+                                                        <Upload className="w-4 h-4 text-cyan-400" />
+                                                    )}
+                                                    <input 
+                                                        type="file" 
+                                                        className="hidden" 
+                                                        accept="image/*" 
+                                                        onChange={(e) => handleImageUpload(e, q.id)}
+                                                        disabled={isUploading}
+                                                    />
+                                                </label>
                                             </div>
                                             
                                             {q.imageUrl && (

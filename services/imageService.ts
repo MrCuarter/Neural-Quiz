@@ -55,12 +55,12 @@ const trackUnsplashDownload = async (downloadLocation: string) => {
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult | null> => {
     const query = cleanQuery(rawQuery || "");
     
-    // 0. Fallback Check (Optimization)
+    // 0. Fallback Check
     if (!query) return getFallback(fallbackCategory);
 
     console.log(`[ImageService] Searching: "${query}" (Fallback: ${fallbackCategory})`);
 
-    // --- STRATEGY 1: UNSPLASH (Best Quality + Legal Tracking) ---
+    // --- STRATEGY 1: UNSPLASH (Priority) ---
     if (KEYS.UNSPLASH) {
         try {
             const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&client_id=${KEYS.UNSPLASH}`;
@@ -71,7 +71,7 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
                 const photo = data.results?.[0];
                 
                 if (photo) {
-                    // Trigger tracking asynchronously (fire & forget)
+                    // Trigger tracking (Fire & Forget)
                     trackUnsplashDownload(photo.links.download_location);
 
                     return {
@@ -85,7 +85,7 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
                 }
             }
         } catch (e) {
-            console.warn("[ImageService] Unsplash failed, falling back...", e);
+            console.warn("[ImageService] Unsplash failed, trying next...", e);
         }
     }
 
@@ -111,7 +111,7 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
                 }
             }
         } catch (e) {
-            console.warn("[ImageService] Pexels failed, falling back...", e);
+            console.warn("[ImageService] Pexels failed, trying next...", e);
         }
     }
 
@@ -137,7 +137,7 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
                 }
             }
         } catch (e) {
-            console.warn("[ImageService] Pixabay failed, falling back...", e);
+            console.warn("[ImageService] Pixabay failed, trying next...", e);
         }
     }
 

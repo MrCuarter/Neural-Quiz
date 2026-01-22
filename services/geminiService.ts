@@ -153,8 +153,8 @@ const questionSchema: Schema = {
     feedback: { type: Type.STRING },
     type: { type: Type.STRING }, 
     imageUrl: { type: Type.STRING },
-    image_search_query: { type: Type.STRING, description: "TRANSLATED ENGLISH QUERY for image search. 2-4 words. Anti-Spoiler." },
-    fallback_category: { type: Type.STRING, description: "Category ID for local image bank (e.g., 'animals', 'history')." },
+    image_search_query: { type: Type.STRING, description: "ENGLISH query for image search. 2-4 keywords. MUST NOT reveal the answer (Anti-Spoiler)." },
+    fallback_category: { type: Type.STRING, description: "Broad category ID: 'animals', 'history', 'science', 'art', 'geography', 'tech'." },
     reconstructed: { type: Type.BOOLEAN },
     sourceEvidence: { type: Type.STRING },
     imageReconstruction: { type: Type.STRING, enum: ["direct", "partial", "inferred", "none"] }
@@ -203,31 +203,28 @@ const enhanceSchema: Schema = {
 };
 
 // --- SYSTEM PROMPT ---
-const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. Tu misión es generar cuestionarios JSON.
+const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. Tu misión es generar cuestionarios JSON precisos.
 
-LÓGICA DE IMÁGENES (Traducción & Anti-Spoiler):
-Para cada pregunta, genera OBLIGATORIAMENTE:
+### 🖼️ PROTOCOLO DE IMÁGENES (CRÍTICO)
+Para cada pregunta, debes generar el campo "image_search_query" siguiendo estas reglas ESTRICTAS:
 
-1. "image_search_query": 
-   - Analiza la pregunta en ESPAÑOL.
-   - Extrae el sujeto principal o el contexto.
-   - TRADÚCELO A INGLÉS para la búsqueda de imágenes.
-   - REGLA ANTI-SPOILER: La búsqueda NO DEBE revelar la respuesta.
+1. **IDIOMA:** La búsqueda debe estar SIEMPRE en **INGLÉS**, aunque la pregunta sea en español.
+   - *Razón:* Los bancos de imágenes (Unsplash) funcionan mejor en inglés.
+
+2. **ANTI-SPOILER:** La imagen NUNCA debe revelar la respuesta correcta.
+   - *Mal:* Pregunta: "¿Quién pintó la Mona Lisa?", Query: "Leonardo Da Vinci". (¡Spoiler!)
+   - *Bien:* Query: "Renaissance art painting museum". (Contextual)
    
-   Ejemplos:
-   - Pregunta: "¿Quién pintó Las Meninas?" (Resp: Velázquez) -> Query: "Baroque painter classic art studio" (Nunca "Velazquez").
-   - Pregunta: "¿Capital de Alemania?" (Resp: Berlín) -> Query: "Germany city aerial landmark" (Nunca "Berlin TV Tower" si es muy obvio).
-   - Pregunta: "¿Qué animal tiene trompa?" (Resp: Elefante) -> Query: "African savanna wildlife landscape".
+   - *Mal:* Pregunta: "¿Capital de Francia?", Query: "Eiffel Tower Paris". (¡Demasiado obvio!)
+   - *Bien:* Query: "France city aerial river seine". (Contextual)
 
-2. "fallback_category": Elige UNA categoría de esta lista basada en el tema:
-   - chemistry, physics, universe, flora, animals, math, math_kids
-   - boy_thinking (Contexto escolar primaria masculino)
-   - girl_thinking (Contexto escolar primaria femenino)
-   - teen_boy_thinking, teen_girl_thinking (Secundaria)
-   - uni_thinking (Universidad/Adultos)
-   - man_thinking, woman_thinking (Genérico)
+3. **CONCISIÓN:** Usa 2-4 palabras clave descriptivas.
 
-Genera preguntas educativas, precisas y desafiantes.`;
+### 📂 CATEGORÍA DE RESPALDO
+Elige una "fallback_category" de esta lista:
+- science, history, geography, art, literature, sports, music, movies, nature, animals, technology, math.
+
+Genera contenido educativo de alta calidad.`;
 
 interface GenParams {
   topic: string;
@@ -253,12 +250,12 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
     if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
 
-    prompt += `\n\nSTRICT ENGINEERING RULES:
+    prompt += `\n\nRULES:
     1. 'Fill in the Blank': Text MUST contain '__' for missing words.
     2. 'Multiple Choice': ONLY ONE correct answer.
     3. 'Multi-Select': SEVERAL correct answers.
     4. 'Order': Options MUST be in the CORRECT FINAL ORDER.
-    ${includeFeedback ? "5. You MUST generate educational feedback/explanation." : ""}
+    ${includeFeedback ? "5. Generate brief educational feedback." : ""}
     `;
 
     const response = await ai.models.generateContent({
@@ -299,7 +296,7 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
         const prompt = `You are a Quiz Data Extraction Engine. Output Language: ${language}.
         Source Content: ${truncatedText}
         Task: Identify questions, answers, and correct answers. Reconstruct structure.
-        Generate 'image_search_query' in English based on the question context (Anti-Spoiler).`;
+        Generate 'image_search_query' in English (Anti-Spoiler) based on context.`;
 
         contents.push({ text: prompt });
 
