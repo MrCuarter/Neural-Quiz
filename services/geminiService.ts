@@ -39,7 +39,8 @@ const getAI = () => {
   const keys = getAPIKeys();
   if (keys.length === 0) {
       if (process.env.API_KEY) return new GoogleGenAI({ apiKey: process.env.API_KEY });
-      throw new Error("Configuration Error: No valid API Keys found.");
+      // Fallback for demo purposes if no key found (won't work for real calls but prevents crash on init)
+      return new GoogleGenAI({ apiKey: "dummy" }); 
   }
   if (currentKeyIndex >= keys.length) currentKeyIndex = 0;
   const activeKey = keys[currentKeyIndex];
@@ -249,7 +250,7 @@ interface GenParams {
 }
 
 // MODEL CONSTANT
-const MODEL_NAME = "gemini-1.5-flash"; // STABLE MODEL
+const MODEL_NAME = "gemini-3-flash-preview"; 
 
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
