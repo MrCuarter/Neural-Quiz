@@ -29,17 +29,6 @@ export interface ImageResult {
     credit?: ImageCredit;
 }
 
-// --- 3. HELPER FUNCTIONS ---
-
-const cleanQuery = (text: string): string => {
-    if (!text) return "";
-    // REMOVED AGGRESSIVE REGEX: Was deleting accents (á -> '').
-    // Now we rely on the AI giving us English, but if it fails,
-    // we want to preserve the Spanish text integrity for the API search.
-    const clean = text.trim().replace(/\s+/g, ' '); 
-    return clean; 
-};
-
 /**
  * UNSPLASH SPECIFIC: Trigger download event (Required by API terms)
  */
@@ -55,7 +44,8 @@ const trackUnsplashDownload = async (downloadLocation: string) => {
 // --- 4. MAIN SEARCH FUNCTION (WATERFALL) ---
 
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult | null> => {
-    const query = cleanQuery(rawQuery || "");
+    // User requested NO manual cleaning. AI provides the perfect English keyword string.
+    const query = rawQuery ? rawQuery.trim() : "";
     
     // 0. Fallback Check
     if (!query) return getFallback(fallbackCategory);

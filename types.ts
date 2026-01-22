@@ -26,7 +26,7 @@ export interface Question {
   questionType?: string; // e.g., "Multiple Choice"
   
   // ANTI-SPOILER IMAGE SEARCH
-  image_search_query?: string; 
+  imageSearchQuery?: string; // RENAMED: AI Generated English Keywords
   fallback_category?: string; // AI suggested category for local images
 
   // FORENSIC ANALYSIS FIELDS

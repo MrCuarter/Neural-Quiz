@@ -153,13 +153,13 @@ const questionSchema: Schema = {
     feedback: { type: Type.STRING },
     type: { type: Type.STRING }, 
     imageUrl: { type: Type.STRING },
-    image_search_query: { type: Type.STRING, description: "ENGLISH query combining GLOBAL TOPIC + SPECIFIC SUBJECT. Ex: 'chloroplast plant cell diagram'." },
+    imageSearchQuery: { type: Type.STRING, description: "2-3 ENGLISH keywords. No verbs/articles. Ex: 'plant cell microscope'." },
     fallback_category: { type: Type.STRING, description: "Broad category ID: 'animals', 'history', 'science', 'art', 'geography', 'tech'." },
     reconstructed: { type: Type.BOOLEAN },
     sourceEvidence: { type: Type.STRING },
     imageReconstruction: { type: Type.STRING, enum: ["direct", "partial", "inferred", "none"] }
   },
-  required: ["text", "options", "type", "image_search_query", "fallback_category"]
+  required: ["text", "options", "type", "imageSearchQuery", "fallback_category"]
 };
 
 const quizSchema: Schema = {
@@ -195,7 +195,7 @@ const enhanceSchema: Schema = {
             }
         },
         imageUrl: { type: Type.STRING, nullable: true },
-        image_search_query: { type: Type.STRING, nullable: true },
+        imageSearchQuery: { type: Type.STRING, nullable: true },
         fallback_category: { type: Type.STRING, nullable: true },
         confidenceGlobal: { type: Type.NUMBER }
     },
@@ -206,22 +206,16 @@ const enhanceSchema: Schema = {
 const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. Tu misión es generar cuestionarios JSON precisos.
 
 ### 🖼️ PROTOCOLO DE IMÁGENES (CRÍTICO)
-Para cada pregunta, debes generar el campo "image_search_query" siguiendo estas reglas ESTRICTAS:
+Para cada pregunta, debes generar el campo "imageSearchQuery" siguiendo estas reglas ESTRICTAS:
 
-1. **IDIOMA:** La búsqueda debe estar SIEMPRE en **INGLÉS**.
-   - *Razón:* Los bancos de imágenes (Unsplash) funcionan mejor en inglés.
-
-2. **ESTRUCTURA DE QUERY (CONTEXTO + SUJETO):**
-   - La búsqueda debe combinar el **TEMA GLOBAL** del quiz con el **OBJETO ESPECÍFICO** de la pregunta para evitar ambigüedades.
-   - *Ejemplo Mal:* Quiz sobre Células -> Pregunta sobre "Vacuolas" -> Query: "vacuole" (Puede salir cualquier cosa).
-   - *Ejemplo Bien:* Quiz sobre Células -> Pregunta sobre "Vacuolas" -> Query: "plant cell vacuole diagram biology".
-   
-   - *Ejemplo Mal:* Quiz sobre Roma -> Pregunta sobre "César" -> Query: "caesar" (Puede salir una ensalada).
-   - *Ejemplo Bien:* Quiz sobre Roma -> Pregunta sobre "César" -> Query: "julius caesar roman empire statue".
-
-3. **ANTI-SPOILER:**
-   - La imagen NO debe revelar la respuesta si la pregunta es visual.
-   - Si la pregunta es "¿Quién pintó esto?", la query NO debe ser el nombre del pintor, sino el estilo o la época.
+1. **IDIOMA:** SIEMPRE EN INGLÉS.
+2. **FORMATO:** 2 o 3 palabras clave visuales que describan el sujeto principal.
+3. **RESTRICCIONES:** 
+   - NO uses verbos.
+   - NO uses artículos ("the", "a").
+   - NO uses frases completas.
+   - *Ejemplo Mal:* "What is a cell" / "painting of van gogh" / "chloroplast"
+   - *Ejemplo Bien:* "van gogh portrait", "plant cell microscope", "roman colosseum".
 
 ### 📂 CATEGORÍA DE RESPALDO
 Elige una "fallback_category" de esta lista:
@@ -299,7 +293,7 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
         const prompt = `You are a Quiz Data Extraction Engine. Output Language: ${language}.
         Source Content: ${truncatedText}
         Task: Identify questions, answers, and correct answers. Reconstruct structure.
-        Generate 'image_search_query' in English (Anti-Spoiler) based on context.`;
+        Generate 'imageSearchQuery' in English (keywords only) based on context.`;
 
         contents.push({ text: prompt });
 
@@ -367,7 +361,7 @@ export const enhanceQuestion = async (q: Question, context: string, language: st
             qualityFlags: data.qualityFlags,
             confidenceScore: data.confidenceGlobal,
             imageUrl: data.imageUrl || q.imageUrl || "",
-            image_search_query: data.image_search_query,
+            imageSearchQuery: data.imageSearchQuery,
             fallback_category: data.fallback_category
         };
     });

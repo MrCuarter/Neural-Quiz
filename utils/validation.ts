@@ -59,7 +59,10 @@ export const QuestionSchema = z.object({
   reconstructed: z.boolean().optional(),
   sourceEvidence: z.string().optional(),
   needsEnhanceAI: z.boolean().optional(),
-  enhanceReason: z.string().optional()
+  enhanceReason: z.string().optional(),
+  
+  // New field
+  imageSearchQuery: z.string().optional()
 }).transform((data) => {
     // Post-processing to normalize aliases
     let qType = data.questionType;
