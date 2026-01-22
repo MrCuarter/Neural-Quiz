@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Quiz, Question, GameTeam, PowerUp, PowerUpType, JeopardyConfig } from '../../types';
 import { CyberButton, CyberCard, CyberSelect, CyberCheckbox } from '../ui/CyberUI';
-import { ArrowLeft, X, Trophy, Shield, Zap, Skull, Gem, HelpCircle, Settings, Play, Check, Minus, Gavel, Dna, Crown, Clock, AlertTriangle, Loader2, Gift, Lock, RefreshCw, Award, Dice5, Info, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, X, Trophy, Shield, Zap, Skull, Gem, HelpCircle, Settings, Play, Check, Minus, Gavel, Dna, Crown, Clock, AlertTriangle, Loader2, Gift, Lock, RefreshCw, Award, Dice5, Info, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { GameInstructionsModal } from './GameInstructionsModal';
 import { translations } from '../../utils/translations';
@@ -565,12 +565,12 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-black to-black -z-10 pointer-events-none"></div>
 
             {/* HEADER */}
-            <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-black/50 backdrop-blur-md z-10">
+            <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-black/50 backdrop-blur-md z-10 sticky top-0">
                 <CyberButton variant="ghost" onClick={onExit} className="pl-0 gap-2 text-xs">
                     <ArrowLeft className="w-4 h-4" /> SALIR
                 </CyberButton>
                 <div className="flex flex-col items-center">
-                    <h1 className="font-cyber text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 tracking-widest text-center">
+                    <h1 className="font-cyber text-xl md:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 tracking-widest text-center truncate max-w-[200px] md:max-w-full">
                         {activeQuiz.title?.toUpperCase() || "NEURAL JEOPARDY"}
                     </h1>
                 </div>
@@ -586,14 +586,14 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
                 
-                {/* SIDEBAR: TEAMS */}
-                <div className="w-full lg:w-80 bg-gray-900/50 border-r border-gray-800 overflow-y-auto p-4 space-y-4 z-10 custom-scrollbar relative">
+                {/* SIDEBAR: TEAMS (Scrollable on mobile) */}
+                <div className="w-full lg:w-80 bg-gray-900/50 border-b lg:border-b-0 lg:border-r border-gray-800 overflow-y-auto p-4 space-y-4 z-10 custom-scrollbar relative max-h-48 lg:max-h-full">
                     {teams.sort((a,b) => b.score - a.score).map((team, idx) => (
-                        <div key={team.id} className={`relative p-4 rounded border-2 transition-all ${idx === 0 ? 'border-yellow-500/50 bg-yellow-900/10' : 'border-gray-700 bg-black/40'}`}>
-                            {idx === 0 && <Trophy className="absolute -top-3 -right-3 w-8 h-8 text-yellow-400 drop-shadow-lg" />}
+                        <div key={team.id} className={`relative p-3 md:p-4 rounded border-2 transition-all ${idx === 0 ? 'border-yellow-500/50 bg-yellow-900/10' : 'border-gray-700 bg-black/40'}`}>
+                            {idx === 0 && <Trophy className="absolute -top-3 -right-3 w-6 h-6 md:w-8 md:h-8 text-yellow-400 drop-shadow-lg" />}
                             
                             <div className="flex justify-between items-center mb-2">
-                                <h3 className={`font-bold font-mono ${idx === 0 ? 'text-yellow-100' : 'text-gray-300'}`}>{team.name}</h3>
+                                <h3 className={`font-bold font-mono text-sm md:text-base ${idx === 0 ? 'text-yellow-100' : 'text-gray-300'}`}>{team.name}</h3>
                                 <div className="flex gap-2">
                                     {team.shielded && <Shield className="w-4 h-4 text-cyan-400 animate-pulse" />}
                                     {team.multiplier > 1 && <Zap className="w-4 h-4 text-yellow-400" />}
@@ -601,7 +601,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                             </div>
                             
                             <div className="relative">
-                                <div className="text-3xl font-cyber text-white mb-2">{team.score}</div>
+                                <div className="text-2xl md:text-3xl font-cyber text-white mb-2">{team.score}</div>
                                 <ScoreDelta value={scoreDeltas[team.id] || 0} onEnd={() => setScoreDeltas(prev => ({ ...prev, [team.id]: null }))} />
                             </div>
 
@@ -610,105 +610,99 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                                     <div key={i} className="relative group">
                                         <button 
                                             onClick={() => setSelectedItem({ teamIdx: teams.indexOf(team), itemIdx: i })}
-                                            className="text-xl hover:scale-110 transition-transform bg-black/50 rounded p-1 border border-gray-600 hover:border-white" 
+                                            className="text-lg md:text-xl hover:scale-110 transition-transform bg-black/50 rounded p-1 border border-gray-600 hover:border-white" 
                                         >
                                             {item.icon}
                                         </button>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 bg-black/90 border border-cyan-500 rounded text-[10px] text-cyan-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-lg">
-                                            <span className="font-bold block text-center mb-0.5 text-white">{item.name}</span>
-                                            {item.desc}
-                                        </div>
                                     </div>
                                 ))}
                             </div>
-
-                            {team.usedInventory && team.usedInventory.length > 0 && (
-                                <div className="flex gap-1 flex-wrap opacity-40 grayscale border-t border-gray-800 pt-2">
-                                    {team.usedInventory.map((item, i) => (
-                                        <span key={`used-${i}`} className="text-xs">{item.icon}</span>
-                                    ))}
-                                </div>
-                            )}
                         </div>
                     ))}
                 </div>
 
-                {/* BOARD AREA */}
-                <div className="flex-1 p-4 lg:p-8 overflow-y-auto flex flex-col items-center justify-start">
-                    {/* CATEGORY HEADERS */}
-                    <div className="grid gap-3 w-full max-w-6xl mb-3" style={{ gridTemplateColumns: `repeat(${gameConfig.cols}, 1fr)` }}>
-                        {gameConfig.categories.map((cat, i) => (
-                            <div key={i} className="text-center font-mono font-bold text-cyan-400 text-xs sm:text-sm uppercase tracking-widest bg-black/40 border border-cyan-900/50 p-2 rounded truncate" title={cat}>
-                                {cat || `CAT ${i+1}`}
+                {/* BOARD AREA (RESPONSIVE GRID) */}
+                <div className="flex-1 p-4 lg:p-8 overflow-y-auto flex flex-col items-center justify-start bg-[#050505]">
+                    {/* SCROLLABLE WRAPPER FOR MOBILE GRID INTEGRITY */}
+                    <div className="w-full overflow-x-auto pb-4">
+                        <div className="min-w-[600px] w-full max-w-6xl mx-auto">
+                            {/* CATEGORY HEADERS */}
+                            <div className="grid gap-3 w-full mb-3" style={{ gridTemplateColumns: `repeat(${gameConfig.cols}, 1fr)` }}>
+                                {gameConfig.categories.map((cat, i) => (
+                                    <div 
+                                        key={i} 
+                                        className="text-center font-mono font-bold text-cyan-400 text-[10px] sm:text-xs md:text-sm uppercase tracking-widest bg-black/40 border border-cyan-900/50 p-2 rounded break-words whitespace-normal leading-tight h-auto min-h-[3.5rem] flex items-center justify-center" 
+                                        title={cat}
+                                    >
+                                        {cat || `CAT ${i+1}`}
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
 
-                    {phase === 'CONFIG' ? (
-                        <div className="animate-spin text-cyan-500"><Loader2 className="w-8 h-8" /></div>
-                    ) : (
-                        <div className="grid gap-3 w-full max-w-6xl aspect-video" style={{ gridTemplateColumns: `repeat(${gameConfig.cols}, 1fr)` }}>
-                            {grid.map((cell) => (
-                                <button
-                                    key={cell.id}
-                                    onClick={() => handleCellClick(cell.id)}
-                                    disabled={cell.answered || cell.locked}
-                                    className={`
-                                        relative rounded-lg border-2 flex items-center justify-center flex-col
-                                        font-cyber text-2xl transition-all duration-300 transform
-                                        ${getCellColor(cell.points, cell.answered, cell.locked)}
-                                        ${(!cell.answered && !cell.locked) && 'hover:scale-105 hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] cursor-pointer'}
-                                    `}
-                                >
-                                    {cell.answered ? <Check className="w-8 h-8 opacity-20" /> : (
-                                        cell.locked ? <Lock className="w-6 h-6 opacity-30" /> : (
-                                            <>
-                                                <span>{cell.points}</span>
-                                                {cell.isWildcard && <span className="text-[10px] text-yellow-500 absolute bottom-2">COMODÍN</span>}
-                                            </>
-                                        )
-                                    )}
-                                </button>
-                            ))}
+                            {phase === 'CONFIG' ? (
+                                <div className="animate-spin text-cyan-500"><Loader2 className="w-8 h-8" /></div>
+                            ) : (
+                                <div className="grid gap-3 w-full aspect-video" style={{ gridTemplateColumns: `repeat(${gameConfig.cols}, 1fr)` }}>
+                                    {grid.map((cell) => (
+                                        <button
+                                            key={cell.id}
+                                            onClick={() => handleCellClick(cell.id)}
+                                            disabled={cell.answered || cell.locked}
+                                            className={`
+                                                relative rounded-lg border-2 flex items-center justify-center flex-col
+                                                font-cyber transition-all duration-300 transform p-1
+                                                text-lg sm:text-xl md:text-2xl
+                                                ${getCellColor(cell.points, cell.answered, cell.locked)}
+                                                ${(!cell.answered && !cell.locked) && 'hover:scale-105 hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] cursor-pointer'}
+                                            `}
+                                        >
+                                            {cell.answered ? <Check className="w-6 h-6 md:w-8 md:h-8 opacity-20" /> : (
+                                                cell.locked ? <Lock className="w-5 h-5 md:w-6 md:h-6 opacity-30" /> : (
+                                                    <>
+                                                        <span>{cell.points}</span>
+                                                        {cell.isWildcard && <span className="text-[8px] md:text-[10px] text-yellow-500 absolute bottom-1 md:bottom-2">COMODÍN</span>}
+                                                    </>
+                                                )
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
 
             {/* --- MODALS --- */}
 
-            {/* SCORE SUMMARY SCREEN (JUICY) */}
+            {/* SCORE SUMMARY SCREEN */}
             {phase === 'SCORE_SUMMARY' && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md animate-in zoom-in-95">
                     <CyberCard className="w-full max-w-2xl border-cyan-500/50 shadow-[0_0_50px_rgba(6,182,212,0.3)]">
                         <div className="text-center mb-8">
-                            <h2 className="text-3xl font-cyber text-white mb-2">RESULTADOS DE LA RONDA</h2>
+                            <h2 className="text-2xl md:text-3xl font-cyber text-white mb-2">RESULTADOS DE LA RONDA</h2>
                             <div className="w-32 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent mx-auto"></div>
                         </div>
 
-                        <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar px-2">
+                        <div className="space-y-4 max-h-[50vh] overflow-y-auto custom-scrollbar px-2">
                             {teams.map(team => {
                                 const delta = roundDeltas[team.id] || 0;
                                 return (
-                                    <div key={team.id} className="flex items-center justify-between bg-gray-900/50 p-4 rounded border border-gray-700">
+                                    <div key={team.id} className="flex items-center justify-between bg-gray-900/50 p-3 md:p-4 rounded border border-gray-700">
                                         <div className="flex items-center gap-3">
                                             <div className={`w-3 h-3 rounded-full ${team.avatarColor}`}></div>
-                                            <span className="font-bold text-lg text-white">{team.name}</span>
+                                            <span className="font-bold text-base md:text-lg text-white truncate max-w-[120px] md:max-w-none">{team.name}</span>
                                         </div>
                                         
-                                        <div className="flex items-center gap-6">
-                                            {/* DELTA ANIMATION */}
+                                        <div className="flex items-center gap-4 md:gap-6">
                                             {delta !== 0 && (
-                                                <div className={`text-2xl font-black font-mono animate-bounce ${delta > 0 ? 'text-green-400' : 'text-red-500'}`}>
+                                                <div className={`text-xl md:text-2xl font-black font-mono animate-bounce ${delta > 0 ? 'text-green-400' : 'text-red-500'}`}>
                                                     {delta > 0 ? '+' : ''}{delta}
                                                 </div>
                                             )}
-                                            {delta === 0 && <span className="text-gray-600 font-mono">-</span>}
-
-                                            {/* CURRENT SCORE */}
-                                            <div className="text-right w-20">
-                                                <span className="text-xs text-gray-500 block">TOTAL</span>
-                                                <span className="text-xl font-mono text-cyan-300">{team.score}</span>
+                                            <div className="text-right w-16 md:w-20">
+                                                <span className="text-[10px] text-gray-500 block">TOTAL</span>
+                                                <span className="text-lg md:text-xl font-mono text-cyan-300">{team.score}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -717,7 +711,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                         </div>
 
                         <div className="mt-8 flex justify-center">
-                            <CyberButton onClick={proceedFromSummary} className="px-12 py-4 text-lg">
+                            <CyberButton onClick={proceedFromSummary} className="px-8 md:px-12 py-3 md:py-4 text-base md:text-lg">
                                 CONTINUAR
                             </CyberButton>
                         </div>
@@ -728,31 +722,31 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             {/* POWER UPS INFO MODAL */}
             {showPowerUpsInfo && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
-                    <CyberCard className="w-full max-w-lg border-yellow-500/50">
-                        <div className="flex justify-between items-start mb-6 border-b border-gray-800 pb-4">
+                    <CyberCard className="w-full max-w-lg border-yellow-500/50 max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex justify-between items-start mb-6 border-b border-gray-800 pb-4 shrink-0">
                             <div className="flex items-center gap-3 text-yellow-400">
-                                <Zap className="w-8 h-8" />
-                                <h2 className="text-2xl font-cyber">GUÍA DE POWER-UPS</h2>
+                                <Zap className="w-6 h-6 md:w-8 md:h-8" />
+                                <h2 className="text-xl md:text-2xl font-cyber">GUÍA DE POWER-UPS</h2>
                             </div>
                             <button onClick={() => setShowPowerUpsInfo(false)} className="text-gray-500 hover:text-white transition-colors">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                        <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2 flex-1">
                             {Object.values(ITEMS).map((item, idx) => (
-                                <div key={idx} className="flex items-start gap-4 bg-gray-900/50 p-4 rounded border border-gray-800">
-                                    <div className="text-4xl">{item.icon}</div>
+                                <div key={idx} className="flex items-start gap-4 bg-gray-900/50 p-3 md:p-4 rounded border border-gray-800">
+                                    <div className="text-3xl md:text-4xl">{item.icon}</div>
                                     <div>
-                                        <h3 className="font-bold text-white font-cyber text-lg">{item.name}</h3>
-                                        <p className="text-gray-300 text-sm mb-2">{item.desc}</p>
-                                        <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded border ${item.usageType.includes('PASIVO') ? 'bg-cyan-900/30 text-cyan-400 border-cyan-500/30' : 'bg-red-900/30 text-red-400 border-red-500/30'}`}>
+                                        <h3 className="font-bold text-white font-cyber text-base md:text-lg">{item.name}</h3>
+                                        <p className="text-gray-300 text-xs md:text-sm mb-2">{item.desc}</p>
+                                        <span className={`text-[9px] md:text-[10px] font-mono font-bold px-2 py-1 rounded border ${item.usageType.includes('PASIVO') ? 'bg-cyan-900/30 text-cyan-400 border-cyan-500/30' : 'bg-red-900/30 text-red-400 border-red-500/30'}`}>
                                             {item.usageType}
                                         </span>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-6 text-center">
+                        <div className="mt-4 md:mt-6 text-center shrink-0">
                             <CyberButton onClick={() => setShowPowerUpsInfo(false)}>CERRAR</CyberButton>
                         </div>
                     </CyberCard>
@@ -774,13 +768,13 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 </div>
             )}
 
-            {/* WILDCARD REVEAL (CHEST) */}
+            {/* WILDCARD REVEAL */}
             {phase === 'WILDCARD_REVEAL' && activeCell && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur animate-in zoom-in-95">
                     <div className="text-center max-w-lg w-full space-y-8">
-                        <Gift className="w-32 h-32 text-yellow-400 mx-auto animate-bounce" />
-                        <h2 className="text-4xl font-cyber text-yellow-400">¡COMODÍN ENCONTRADO!</h2>
-                        <p className="text-xl text-white font-mono">Puntos Gratis: <span className="text-cyan-400 font-bold">{activeCell.points}</span></p>
+                        <Gift className="w-24 h-24 md:w-32 md:h-32 text-yellow-400 mx-auto animate-bounce" />
+                        <h2 className="text-3xl md:text-4xl font-cyber text-yellow-400">¡COMODÍN ENCONTRADO!</h2>
+                        <p className="text-lg md:text-xl text-white font-mono">Puntos Gratis: <span className="text-cyan-400 font-bold">{activeCell.points}</span></p>
                         <p className="text-sm text-gray-500">Selecciona el equipo afortunado:</p>
                         <div className="grid grid-cols-2 gap-3">
                             {teams.map((team, idx) => (
@@ -800,67 +794,84 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
             {/* EVENT REVEAL */}
             {phase === 'EVENT_REVEAL' && activeEvent && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur animate-in zoom-in-95">
-                    <CyberCard className="w-full max-w-lg border-purple-500 text-center space-y-6 p-10">
+                    <CyberCard className="w-full max-w-lg border-purple-500 text-center space-y-6 p-6 md:p-10">
                         <div className="flex justify-center animate-bounce">{activeEvent.icon}</div>
-                        <h2 className="text-3xl font-cyber text-purple-400">EVENTO ALEATORIO</h2>
-                        <h3 className="text-xl font-bold text-white">{activeEvent.name}</h3>
-                        <p className="text-gray-400 font-mono">{activeEvent.desc}</p>
+                        <h2 className="text-2xl md:text-3xl font-cyber text-purple-400">EVENTO ALEATORIO</h2>
+                        <h3 className="text-lg md:text-xl font-bold text-white">{activeEvent.name}</h3>
+                        <p className="text-gray-400 font-mono text-sm">{activeEvent.desc}</p>
                         <CyberButton onClick={resolveEvent} className="w-full mt-4">CONTINUAR</CyberButton>
                     </CyberCard>
                 </div>
             )}
 
-            {/* QUESTION & SCORING */}
+            {/* QUESTION & SCORING MODAL */}
             {(phase === 'QUESTION' || phase === 'SCORING') && activeCell && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur animate-in slide-in-from-bottom-10">
-                    <CyberCard className="w-full max-w-5xl border-cyan-500/30 flex flex-col max-h-[90vh] relative overflow-hidden">
-                        <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-4 z-10 relative">
+                    <CyberCard className="w-full max-w-5xl border-cyan-500/30 flex flex-col max-h-[90vh] md:max-h-[85vh] relative overflow-hidden">
+                        <div className="flex justify-between items-center border-b border-gray-800 pb-3 mb-3 z-10 relative">
                             <div className="flex items-center gap-4">
-                                <span className="text-2xl font-cyber text-cyan-400">{activeCell.points} PTS</span>
-                                {activeEvent && <span className="text-xs bg-purple-900/50 px-2 py-1 rounded text-purple-300 border border-purple-500">Event Active: {activeEvent.name}</span>}
+                                <span className="text-lg md:text-2xl font-cyber text-cyan-400">{activeCell.points} PTS</span>
+                                {activeEvent && <span className="text-[10px] md:text-xs bg-purple-900/50 px-2 py-1 rounded text-purple-300 border border-purple-500">Event: {activeEvent.name}</span>}
                             </div>
                             {!showAnswer && (
-                                <div className={`flex items-center gap-2 font-mono text-2xl font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                                    <Clock className="w-6 h-6" /> {timeLeft}s
+                                <div className={`flex items-center gap-2 font-mono text-xl md:text-2xl font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                                    <Clock className="w-5 h-5 md:w-6 md:h-6" /> {timeLeft}s
                                 </div>
                             )}
                             <button onClick={() => { setActiveCell(null); setPhase('BOARD'); }}><X className="w-6 h-6 text-gray-500 hover:text-white"/></button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto mb-6 text-center space-y-6 px-4 z-10 relative">
+                        {/* CONTENT AREA: Scrollable Y */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar mb-4 text-center space-y-4 md:space-y-6 px-2 md:px-4 z-10 relative">
+                            {/* IMAGE DISPLAY WITH ATTRIBUTION */}
                             {activeCell.q?.imageUrl && (
-                                <img src={activeCell.q.imageUrl} className="max-h-60 mx-auto rounded border border-gray-700" alt="Q" />
+                                <div className="relative inline-block max-w-full">
+                                    <img src={activeCell.q.imageUrl} className="max-h-40 md:max-h-60 mx-auto rounded border border-gray-700" alt="Q" />
+                                    
+                                    {/* LEGAL ATTRIBUTION OVERLAY */}
+                                    {activeCell.q.imageCredit && (
+                                        <div className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-sm text-[8px] md:text-[9px] text-white px-2 py-1 rounded border border-white/20 flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity">
+                                            <span>📷 {activeCell.q.imageCredit.name}</span>
+                                            <span className="opacity-50">|</span>
+                                            <a href={activeCell.q.imageCredit.link} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-0.5 text-cyan-200">
+                                                {activeCell.q.imageCredit.source} <ExternalLink className="w-2 h-2" />
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
                             )}
-                            <h2 className="text-2xl md:text-4xl font-bold text-white leading-tight">
+
+                            {/* Responsive Text */}
+                            <h2 className="text-xl sm:text-2xl md:text-4xl font-bold text-white leading-tight break-words">
                                 {activeCell.q?.text || "COMODÍN / PREGUNTA SORPRESA"}
                             </h2>
                             {!showAnswer ? (
-                                <CyberButton onClick={() => { setShowAnswer(true); setPhase('SCORING'); }} className="mx-auto animate-pulse z-20 relative">
+                                <CyberButton onClick={() => { setShowAnswer(true); setPhase('SCORING'); }} className="mx-auto animate-pulse z-20 relative text-sm md:text-base">
                                     <Gem className="w-4 h-4 mr-2"/> VER RESPUESTA
                                 </CyberButton>
                             ) : (
-                                <div className="bg-green-900/20 border border-green-500/50 p-6 rounded-lg animate-in fade-in">
-                                    <p className="text-green-400 font-cyber text-xl">
+                                <div className="bg-green-900/20 border border-green-500/50 p-4 md:p-6 rounded-lg animate-in fade-in">
+                                    <p className="text-green-400 font-cyber text-lg md:text-xl break-words">
                                         {activeCell.q ? (activeCell.q.options.find(o => activeCell.q!.correctOptionIds?.includes(o.id) || o.id === activeCell.q!.correctOptionId)?.text) : "El docente valida la respuesta."}
                                     </p>
                                 </div>
                             )}
                         </div>
 
-                        {/* TIME UP */}
+                        {/* TIME UP OVERLAY */}
                         {isTimeUp && !showAnswer && (
                             <div className="absolute inset-0 bg-black/80 z-10 flex flex-col items-center justify-center animate-in fade-in duration-500 pointer-events-none">
-                                <h1 className="text-6xl md:text-8xl font-black text-red-600 font-cyber tracking-tighter drop-shadow-[0_0_15px_rgba(220,38,38,0.8)] animate-pulse">
-                                    ¡TIEMPO AGOTADO!
+                                <h1 className="text-4xl md:text-8xl font-black text-red-600 font-cyber tracking-tighter drop-shadow-[0_0_15px_rgba(220,38,38,0.8)] animate-pulse">
+                                    ¡TIEMPO!
                                 </h1>
-                                <p className="text-gray-400 font-mono mt-4">Esperando al profesor...</p>
+                                <p className="text-gray-400 font-mono mt-4 text-xs md:text-base">Esperando al profesor...</p>
                             </div>
                         )}
 
                         {showAnswer && (
-                            <div className="border-t border-gray-800 pt-6 animate-in slide-in-from-bottom-4 z-10 relative">
-                                <h3 className="text-sm font-mono text-gray-500 mb-4 text-center uppercase tracking-widest">ASIGNAR PUNTUACIÓN</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                            <div className="border-t border-gray-800 pt-4 md:pt-6 animate-in slide-in-from-bottom-4 z-10 relative shrink-0">
+                                <h3 className="text-xs md:text-sm font-mono text-gray-500 mb-2 md:mb-4 text-center uppercase tracking-widest">ASIGNAR PUNTUACIÓN</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4 md:mb-6">
                                     {teams.map(team => {
                                         const status = teamAnswers[team.id];
                                         return (
@@ -868,23 +879,23 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                                                 key={team.id}
                                                 onClick={() => toggleTeamAnswer(team.id)}
                                                 className={`
-                                                    flex items-center justify-between p-3 rounded border transition-all
+                                                    flex items-center justify-between p-2 md:p-3 rounded border transition-all
                                                     ${status === 'CORRECT' ? 'bg-green-900/40 border-green-500 text-green-200' : 
                                                       status === 'WRONG' ? 'bg-red-900/40 border-red-500 text-red-200' : 
                                                       'bg-gray-800 border-gray-700 text-gray-500'}
                                                 `}
                                             >
-                                                <span className="font-bold truncate max-w-[100px]">{team.name}</span>
+                                                <span className="font-bold truncate max-w-[80px] md:max-w-[100px] text-xs md:text-sm">{team.name}</span>
                                                 <div className="flex gap-1">
-                                                    {status === 'CORRECT' && <Check className="w-5 h-5" />}
-                                                    {status === 'WRONG' && <X className="w-5 h-5" />}
-                                                    {status === 'NONE' && <Minus className="w-5 h-5" />}
+                                                    {status === 'CORRECT' && <Check className="w-4 h-4 md:w-5 md:h-5" />}
+                                                    {status === 'WRONG' && <X className="w-4 h-4 md:w-5 md:h-5" />}
+                                                    {status === 'NONE' && <Minus className="w-4 h-4 md:w-5 md:h-5" />}
                                                 </div>
                                             </button>
                                         );
                                     })}
                                 </div>
-                                <CyberButton onClick={submitScores} variant="neural" className="w-full h-12 text-lg">
+                                <CyberButton onClick={submitScores} variant="neural" className="w-full h-10 md:h-12 text-sm md:text-lg">
                                     APLICAR RESULTADOS
                                 </CyberButton>
                             </div>

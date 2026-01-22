@@ -85,7 +85,6 @@ const globalQueue = new RequestQueue();
 // --- RETRY & ERROR MAPPING ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper to map raw API errors to user-friendly messages
 const mapAPIError = (error: any): Error => {
     const msg = error.message || "";
     const status = error.status || error.code;
@@ -152,14 +151,15 @@ const questionSchema: Schema = {
     correctAnswerIndex: { type: Type.INTEGER },
     correctAnswerIndices: { type: Type.ARRAY, items: { type: Type.INTEGER } },
     feedback: { type: Type.STRING },
-    type: { type: Type.STRING }, // "Multiple Choice", etc.
+    type: { type: Type.STRING }, 
     imageUrl: { type: Type.STRING },
-    image_search_query: { type: Type.STRING, description: "Short English query for stock photo search. Aesthetic, contextual, ANTI-SPOILER." },
+    image_search_query: { type: Type.STRING, description: "TRANSLATED ENGLISH QUERY for image search. 2-4 words. Anti-Spoiler." },
+    fallback_category: { type: Type.STRING, description: "Category ID for local image bank (e.g., 'animals', 'history')." },
     reconstructed: { type: Type.BOOLEAN },
     sourceEvidence: { type: Type.STRING },
     imageReconstruction: { type: Type.STRING, enum: ["direct", "partial", "inferred", "none"] }
   },
-  required: ["text", "options", "type", "image_search_query"]
+  required: ["text", "options", "type", "image_search_query", "fallback_category"]
 };
 
 const quizSchema: Schema = {
@@ -196,10 +196,38 @@ const enhanceSchema: Schema = {
         },
         imageUrl: { type: Type.STRING, nullable: true },
         image_search_query: { type: Type.STRING, nullable: true },
+        fallback_category: { type: Type.STRING, nullable: true },
         confidenceGlobal: { type: Type.NUMBER }
     },
     required: ["options", "reconstructed"]
 };
+
+// --- SYSTEM PROMPT ---
+const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. Tu misión es generar cuestionarios JSON.
+
+LÓGICA DE IMÁGENES (Traducción & Anti-Spoiler):
+Para cada pregunta, genera OBLIGATORIAMENTE:
+
+1. "image_search_query": 
+   - Analiza la pregunta en ESPAÑOL.
+   - Extrae el sujeto principal o el contexto.
+   - TRADÚCELO A INGLÉS para la búsqueda de imágenes.
+   - REGLA ANTI-SPOILER: La búsqueda NO DEBE revelar la respuesta.
+   
+   Ejemplos:
+   - Pregunta: "¿Quién pintó Las Meninas?" (Resp: Velázquez) -> Query: "Baroque painter classic art studio" (Nunca "Velazquez").
+   - Pregunta: "¿Capital de Alemania?" (Resp: Berlín) -> Query: "Germany city aerial landmark" (Nunca "Berlin TV Tower" si es muy obvio).
+   - Pregunta: "¿Qué animal tiene trompa?" (Resp: Elefante) -> Query: "African savanna wildlife landscape".
+
+2. "fallback_category": Elige UNA categoría de esta lista basada en el tema:
+   - chemistry, physics, universe, flora, animals, math, math_kids
+   - boy_thinking (Contexto escolar primaria masculino)
+   - girl_thinking (Contexto escolar primaria femenino)
+   - teen_boy_thinking, teen_girl_thinking (Secundaria)
+   - uni_thinking (Universidad/Adultos)
+   - man_thinking, woman_thinking (Genérico)
+
+Genera preguntas educativas, precisas y desafiantes.`;
 
 interface GenParams {
   topic: string;
@@ -219,7 +247,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
     const safeCount = Math.min(Math.max(count, 1), 30);
 
     let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
-    prompt += `\nTarget Audience: ${age}. Language: ${language}.`;
+    prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;
     prompt += `\nSTRICTLY ALLOWED TYPES: ${types.join(', ')}.`;
     
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
@@ -231,23 +259,6 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
     3. 'Multi-Select': SEVERAL correct answers.
     4. 'Order': Options MUST be in the CORRECT FINAL ORDER.
     ${includeFeedback ? "5. You MUST generate educational feedback/explanation." : ""}
-    
-    CRITICAL INSTRUCTION - ANTI-SPOILER IMAGE QUERY:
-    You must generate an 'image_search_query' field for every question.
-    - This query will be used to search for a background stock photo.
-    - It MUST be in ENGLISH.
-    - It MUST be visual and atmospheric.
-    - MOST IMPORTANT: It MUST NOT reveal the answer (Anti-Spoiler).
-    
-    Examples:
-    - Bad: Question "Capital of France?", Query "Eiffel Tower" (Too obvious).
-    - Good: Question "Capital of France?", Query "European city aerial view" or "France map silhouette".
-    - Bad: Question "Largest Animal?", Query "Blue Whale".
-    - Good: Question "Largest Animal?", Query "Underwater ocean life" or "Deep sea background".
-    - Bad: Question "Who painted Mona Lisa?", Query "Mona Lisa painting".
-    - Good: Question "Who painted Mona Lisa?", Query "Renaissance art studio brushes".
-    
-    AVOID TEXT IN IMAGES.
     `;
 
     const response = await ai.models.generateContent({
@@ -256,7 +267,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
       config: {
         responseMimeType: "application/json",
         responseSchema: quizSchema,
-        systemInstruction: `You are a precise quiz engine with STRICT anti-spoiler image logic.`,
+        systemInstruction: SYSTEM_INSTRUCTION,
       },
     });
 
@@ -288,7 +299,7 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
         const prompt = `You are a Quiz Data Extraction Engine. Output Language: ${language}.
         Source Content: ${truncatedText}
         Task: Identify questions, answers, and correct answers. Reconstruct structure.
-        Also generate 'image_search_query' (English, Anti-Spoiler) for each question.`;
+        Generate 'image_search_query' in English based on the question context (Anti-Spoiler).`;
 
         contents.push({ text: prompt });
 
@@ -298,6 +309,7 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
           config: {
             responseMimeType: "application/json",
             responseSchema: quizSchema,
+            systemInstruction: SYSTEM_INSTRUCTION
           },
         });
         
@@ -315,8 +327,7 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
 export const enhanceQuestion = async (q: Question, context: string, language: string): Promise<Question> => {
     return withRetry(async () => {
         const ai = getAI();
-        const prompt = `Enhance this quiz question. Language: ${language}. Question: "${q.text}". Options: ${JSON.stringify(q.options.map(o => o.text))}. Context: ${context.substring(0,500)}.
-        Generate a valid 'image_search_query' in English that is Anti-Spoiler.`;
+        const prompt = `Enhance this quiz question. Language: ${language}. Question: "${q.text}". Options: ${JSON.stringify(q.options.map(o => o.text))}. Context: ${context.substring(0,500)}.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
@@ -324,7 +335,7 @@ export const enhanceQuestion = async (q: Question, context: string, language: st
             config: {
                 responseMimeType: "application/json",
                 responseSchema: enhanceSchema,
-                systemInstruction: `Complete missing data. Generate distractors if missing.`
+                systemInstruction: `${SYSTEM_INSTRUCTION} Complete missing data. Generate distractors if missing.`
             }
         });
 
@@ -356,7 +367,8 @@ export const enhanceQuestion = async (q: Question, context: string, language: st
             qualityFlags: data.qualityFlags,
             confidenceScore: data.confidenceGlobal,
             imageUrl: data.imageUrl || q.imageUrl || "",
-            image_search_query: data.image_search_query
+            image_search_query: data.image_search_query,
+            fallback_category: data.fallback_category
         };
     });
 };
@@ -368,10 +380,11 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
         
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `Fix these quiz questions. Generate 4 options for each. Language: ${language}. Also generate 'image_search_query' (English, Anti-Spoiler) for each. JSON: ${JSON.stringify(qs)}`,
+            contents: `Fix these quiz questions. Generate 4 options for each. Language: ${language}. JSON: ${JSON.stringify(qs)}`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: quizSchema,
+                systemInstruction: SYSTEM_INSTRUCTION
             }
         });
 
@@ -385,6 +398,7 @@ export const enhanceQuestionsWithOptions = async (questions: Question[], languag
     });
 };
 
+// ... other exports (generateQuizCategories, adaptQuestionsToPlatform) remain mostly the same but could use simple prompts
 export const generateQuizCategories = async (questions: string[], count: number = 6): Promise<string[]> => {
     return withRetry(async () => {
         const ai = getAI();
@@ -410,19 +424,15 @@ export const adaptQuestionsToPlatform = async (questions: Question[], platformNa
         });
         try {
             const data = JSON.parse(response.text || "[]");
-            // We use loose validation here because we are merging back into existing question IDs manually in App.tsx
             const items = Array.isArray(data) ? data : (data.questions || []);
             return items.map((aq: any, index: number) => {
                  const originalQ: any = questions[index] || { id: Math.random().toString() }; 
-                 
-                 // Manually construct mostly to preserve IDs if possible or regen
-                 // But validation ensures structure is sound
                  return {
                      ...originalQ,
                      text: aq.text || "Adapted",
                      options: (aq.options || []).map((t: string) => ({ id: Math.random().toString(), text: t })),
                      questionType: aq.type,
-                     correctOptionId: "", // Reset logic required downstream
+                     correctOptionId: "",
                      correctOptionIds: []
                  };
             });

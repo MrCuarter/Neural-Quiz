@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Loader2, Check } from 'lucide-react';
 
@@ -139,7 +140,7 @@ export const CyberProgressBar: React.FC<{ progress: number, text?: string }> = (
 
 export const CyberCard: React.FC<{ children: React.ReactNode, className?: string, title?: string }> = ({ children, className = '', title }) => {
   return (
-    <div className={`cyber-card relative bg-gray-950/60 border border-gray-800 p-6 backdrop-blur-md shadow-xl ${className}`}>
+    <div className={`cyber-card relative bg-gray-950/60 border border-gray-800 p-4 md:p-6 backdrop-blur-md shadow-xl ${className}`}>
       {/* Tech Decorations - Hidden in classroom mode via CSS if conflicting */}
       <div className="absolute -top-[1px] -left-[1px] w-4 h-4 border-t border-l border-cyan-500" />
       <div className="absolute -top-[1px] -right-[1px] w-4 h-4 border-t border-r border-cyan-500" />

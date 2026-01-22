@@ -5,6 +5,12 @@ export interface Option {
   imageUrl?: string;
 }
 
+export interface ImageCredit {
+  name: string;
+  link: string;
+  source: 'Unsplash' | 'Pexels' | 'Pixabay';
+}
+
 export interface Question {
   id: string;
   text: string;
@@ -13,6 +19,7 @@ export interface Question {
   correctOptionIds?: string[]; // THE UPGRADE: Supports multiple correct answers
   timeLimit?: number; // seconds
   imageUrl?: string;
+  imageCredit?: ImageCredit; // NEW: Legal attribution
   videoUrl?: string;
   audioUrl?: string;
   feedback?: string;
@@ -20,6 +27,7 @@ export interface Question {
   
   // ANTI-SPOILER IMAGE SEARCH
   image_search_query?: string; 
+  fallback_category?: string; // AI suggested category for local images
 
   // FORENSIC ANALYSIS FIELDS
   reconstructed?: boolean;
