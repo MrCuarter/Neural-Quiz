@@ -20,44 +20,66 @@ import { Quiz } from "../types";
 const PUBLIC_COLLECTION = "public_quizzes";
 
 /**
- * Ensures user is authenticated (Anonymously if needed)
+ * Sanitizes object to remove undefined values which Firestore rejects.
+ * Replaces undefined with null.
  */
-const ensureAuth = async () => {
-    if (!auth.currentUser) {
-        console.log("[Community] No user. Signing in anonymously...");
-        await signInAnonymously(auth);
-    }
-    return auth.currentUser;
+const sanitizeQuizData = (data: any): any => {
+    return JSON.parse(JSON.stringify(data, (key, value) => {
+        return value === undefined ? null : value;
+    }));
 };
 
 /**
  * Publish a Quiz to the Community
  */
 export const publishQuiz = async (quiz: Quiz, finalTags: string[]): Promise<string> => {
-    const user = await ensureAuth();
-    if (!user) throw new Error("Authentication failed.");
+    // 1. Authentication Check & Anonymous Fallback
+    let user = auth.currentUser;
+    if (!user) {
+        console.log("[Community] No user found. Signing in anonymously for publication...");
+        const result = await signInAnonymously(auth);
+        user = result.user;
+    }
 
-    // Clean data for public view
-    const publicData = {
-        title: quiz.title,
+    if (!user) throw new Error("Authentication failed. Cannot publish.");
+
+    // 2. Determine Author Identity
+    // Logic: If anonymous, use generic community name. If logged in, use profile.
+    const isAnonymous = user.isAnonymous;
+    const authorName = isAnonymous ? "Comunidad NeuralQuiz" : (user.displayName || "Usuario");
+    const authorPhoto = isAnonymous ? null : (user.photoURL || null);
+
+    // 3. Prepare Data
+    const rawData = {
+        title: quiz.title || "Untitled Quiz",
         description: quiz.description || "Sin descripción",
-        questions: quiz.questions,
-        tags: finalTags.map(t => t.toLowerCase().trim()),
+        questions: quiz.questions || [],
+        tags: (finalTags || []).map(t => t.toLowerCase().trim()), // Ensure tags is array
+        
+        // Metadata
         authorId: user.uid,
-        authorName: quiz.authorName || (user.isAnonymous ? "Anónimo" : user.displayName || "Usuario"),
+        authorName: authorName,
+        authorPhoto: authorPhoto,
+        isAnonymous: isAnonymous, // Flag for future reference
+        
+        // Stats
         createdAt: serverTimestamp(),
         likes: 0,
         plays: 0,
-        isPublic: true
+        isPublic: true,
+        questionCount: quiz.questions?.length || 0
     };
+
+    // 4. Sanitize (Critical fix for "Unsupported field value: undefined")
+    const publicData = sanitizeQuizData(rawData);
 
     try {
         const docRef = await addDoc(collection(db, PUBLIC_COLLECTION), publicData);
-        console.log("[Community] Quiz Published ID:", docRef.id);
+        console.log("[Community] Quiz Published Successfully. ID:", docRef.id);
         return docRef.id;
-    } catch (error) {
+    } catch (error: any) {
         console.error("[Community] Publish Error:", error);
-        throw error;
+        throw new Error(`Error al publicar en la comunidad: ${error.message}`);
     }
 };
 
@@ -103,6 +125,7 @@ export const searchQuizzes = async (searchTerm: string = ""): Promise<Quiz[]> =>
         return results;
     } catch (error) {
         console.error("[Community] Search Error:", error);
-        throw error;
+        // Don't throw here to avoid breaking UI on empty search or permission issues
+        return [];
     }
 };

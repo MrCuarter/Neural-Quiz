@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { CyberCard, CyberButton, CyberInput } from './ui/CyberUI';
-import { Share2, X, Hash, Globe, Loader2, CheckCircle2 } from 'lucide-react';
+import { Share2, X, Hash, Globe, CheckCircle2, AlertTriangle, User } from 'lucide-react';
+import { auth } from '../services/firebaseService';
 
 interface PublishModalProps {
     isOpen: boolean;
@@ -16,10 +17,12 @@ export const PublishModal: React.FC<PublishModalProps> = ({
 }) => {
     const [tags, setTags] = useState<string[]>([]);
     const [currentInput, setCurrentInput] = useState("");
+    const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
     useEffect(() => {
         if (isOpen) {
             setTags(initialTags);
+            setCurrentUser(auth.currentUser); // Refresh auth state on open
         }
     }, [isOpen, initialTags]);
 
@@ -44,6 +47,8 @@ export const PublishModal: React.FC<PublishModalProps> = ({
 
     if (!isOpen) return null;
 
+    const isAnonymous = !currentUser || currentUser.isAnonymous;
+
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
             <CyberCard className="w-full max-w-lg border-cyan-500/50 shadow-[0_0_50px_rgba(6,182,212,0.2)]">
@@ -63,16 +68,40 @@ export const PublishModal: React.FC<PublishModalProps> = ({
 
                 {/* Content */}
                 <div className="space-y-6">
-                    <div className="bg-blue-900/20 p-4 rounded border border-blue-500/30">
-                        <p className="text-sm text-blue-200 font-mono flex items-start gap-2">
-                            <Share2 className="w-4 h-4 mt-0.5 shrink-0" />
-                            Tu quiz será visible públicamente. La IA ha sugerido estas etiquetas para facilitar su búsqueda.
+                    
+                    {/* User Identity Status Box */}
+                    {isAnonymous ? (
+                        <div className="bg-yellow-900/20 p-4 rounded border border-yellow-500/30 flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 shrink-0" />
+                            <div>
+                                <h4 className="text-sm font-bold text-yellow-200 mb-1">Modo Invitado Detectado</h4>
+                                <p className="text-xs text-yellow-100/80 font-mono leading-relaxed">
+                                    No has iniciado sesión. Tu quiz se publicará bajo el nombre genérico <strong>"Comunidad NeuralQuiz"</strong> y no podrás editarlo ni eliminarlo una vez publicado.
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-blue-900/20 p-4 rounded border border-blue-500/30 flex items-start gap-3">
+                            <User className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                            <div>
+                                <h4 className="text-sm font-bold text-blue-200 mb-1">Publicando como {currentUser?.displayName || "Usuario"}</h4>
+                                <p className="text-xs text-blue-100/80 font-mono">
+                                    Este quiz se vinculará a tu perfil público.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="bg-cyan-900/10 p-3 rounded border border-cyan-500/20">
+                        <p className="text-xs text-cyan-200 font-mono flex items-center gap-2">
+                            <Share2 className="w-3 h-3 shrink-0" />
+                            La IA ha precargado etiquetas para facilitar la búsqueda.
                         </p>
                     </div>
 
                     <div className="space-y-2">
                         <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest block">
-                            ETIQUETAS INTELIGENTES (SMART TAGS)
+                            ETIQUETAS (TAGS)
                         </label>
                         
                         <div className="flex flex-wrap gap-2 mb-3 bg-black/40 p-3 rounded border border-gray-800 min-h-[50px]">
@@ -108,7 +137,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
                         isLoading={isPublishing}
                         className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-none"
                     >
-                        {isPublishing ? 'PUBLICANDO...' : <><CheckCircle2 className="w-4 h-4 mr-2" /> CONFIRMAR PUBLICACIÓN</>}
+                        {isPublishing ? 'PUBLICANDO...' : <><CheckCircle2 className="w-4 h-4 mr-2" /> CONFIRMAR Y PUBLICAR</>}
                     </CyberButton>
                 </div>
             </CyberCard>
