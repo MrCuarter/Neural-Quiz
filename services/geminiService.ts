@@ -153,7 +153,7 @@ const questionSchema: Schema = {
     feedback: { type: Type.STRING },
     type: { type: Type.STRING }, 
     imageUrl: { type: Type.STRING },
-    image_search_query: { type: Type.STRING, description: "ENGLISH query for image search. 2-4 keywords. MUST NOT reveal the answer (Anti-Spoiler)." },
+    image_search_query: { type: Type.STRING, description: "ENGLISH query combining GLOBAL TOPIC + SPECIFIC SUBJECT. Ex: 'chloroplast plant cell diagram'." },
     fallback_category: { type: Type.STRING, description: "Broad category ID: 'animals', 'history', 'science', 'art', 'geography', 'tech'." },
     reconstructed: { type: Type.BOOLEAN },
     sourceEvidence: { type: Type.STRING },
@@ -208,17 +208,20 @@ const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. Tu 
 ### 🖼️ PROTOCOLO DE IMÁGENES (CRÍTICO)
 Para cada pregunta, debes generar el campo "image_search_query" siguiendo estas reglas ESTRICTAS:
 
-1. **IDIOMA:** La búsqueda debe estar SIEMPRE en **INGLÉS**, aunque la pregunta sea en español.
+1. **IDIOMA:** La búsqueda debe estar SIEMPRE en **INGLÉS**.
    - *Razón:* Los bancos de imágenes (Unsplash) funcionan mejor en inglés.
 
-2. **ANTI-SPOILER:** La imagen NUNCA debe revelar la respuesta correcta.
-   - *Mal:* Pregunta: "¿Quién pintó la Mona Lisa?", Query: "Leonardo Da Vinci". (¡Spoiler!)
-   - *Bien:* Query: "Renaissance art painting museum". (Contextual)
+2. **ESTRUCTURA DE QUERY (CONTEXTO + SUJETO):**
+   - La búsqueda debe combinar el **TEMA GLOBAL** del quiz con el **OBJETO ESPECÍFICO** de la pregunta para evitar ambigüedades.
+   - *Ejemplo Mal:* Quiz sobre Células -> Pregunta sobre "Vacuolas" -> Query: "vacuole" (Puede salir cualquier cosa).
+   - *Ejemplo Bien:* Quiz sobre Células -> Pregunta sobre "Vacuolas" -> Query: "plant cell vacuole diagram biology".
    
-   - *Mal:* Pregunta: "¿Capital de Francia?", Query: "Eiffel Tower Paris". (¡Demasiado obvio!)
-   - *Bien:* Query: "France city aerial river seine". (Contextual)
+   - *Ejemplo Mal:* Quiz sobre Roma -> Pregunta sobre "César" -> Query: "caesar" (Puede salir una ensalada).
+   - *Ejemplo Bien:* Quiz sobre Roma -> Pregunta sobre "César" -> Query: "julius caesar roman empire statue".
 
-3. **CONCISIÓN:** Usa 2-4 palabras clave descriptivas.
+3. **ANTI-SPOILER:**
+   - La imagen NO debe revelar la respuesta si la pregunta es visual.
+   - Si la pregunta es "¿Quién pintó esto?", la query NO debe ser el nombre del pintor, sino el estilo o la época.
 
 ### 📂 CATEGORÍA DE RESPALDO
 Elige una "fallback_category" de esta lista:

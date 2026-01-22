@@ -33,9 +33,11 @@ export interface ImageResult {
 
 const cleanQuery = (text: string): string => {
     if (!text) return "";
-    const clean = text.replace(/[^\w\s]/gi, '').trim();
-    // Use up to 4 words for better context match in stock photos
-    return clean.split(/\s+/).slice(0, 4).join(" "); 
+    // REMOVED AGGRESSIVE REGEX: Was deleting accents (á -> '').
+    // Now we rely on the AI giving us English, but if it fails,
+    // we want to preserve the Spanish text integrity for the API search.
+    const clean = text.trim().replace(/\s+/g, ' '); 
+    return clean; 
 };
 
 /**
