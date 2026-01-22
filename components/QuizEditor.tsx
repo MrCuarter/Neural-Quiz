@@ -2,12 +2,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2 } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
 import { toggleQuizVisibility, updateCloningPermission } from '../services/shareService'; 
-import { uploadImageToCloudinary } from '../services/cloudinaryService'; // IMPORT UPDATED
+import { uploadImageToCloudinary } from '../services/cloudinaryService'; 
 import { useToast } from './ui/Toast';
 import * as XLSX from 'xlsx';
 
@@ -20,9 +20,10 @@ interface QuizEditorProps {
   user?: any;
   showImportOptions?: boolean;
   t: any;
+  onPlay: (quiz: Quiz) => void; // NEW PROP
 }
 
-export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t }) => {
+export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t, onPlay }) => {
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   const [targetPlatform, setTargetPlatform] = useState<string>('UNIVERSAL');
   const [hasSelectedPlatform, setHasSelectedPlatform] = useState(false);
@@ -478,6 +479,18 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           <div className="flex items-center gap-4 w-full md:w-auto">
              <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
              <CyberButton onClick={() => setShowAiModal(!showAiModal)} variant="secondary" className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Bot className="w-4 h-4" /> {t.add_gen_ai}</CyberButton>
+             
+             {/* NEW PLAY BUTTON (HEADER) */}
+             {quiz.questions.length > 3 && (
+                 <CyberButton 
+                    onClick={() => onPlay(quiz)} 
+                    variant="neural" 
+                    className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9 bg-yellow-600 hover:bg-yellow-500 border-yellow-400 text-black font-bold shadow-[0_0_10px_rgba(234,179,8,0.4)]"
+                 >
+                    <Gamepad2 className="w-4 h-4" /> ¡JUGAR!
+                 </CyberButton>
+             )}
+
              {quiz.questions.length > 0 && <CyberButton variant="ghost" onClick={onExport} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9 border border-gray-700 bg-black/40"><Download className="w-4 h-4" /> {t.go_export}</CyberButton>}
           </div>
       </div>
@@ -893,6 +906,23 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                             >
                                 NEXT <ChevronRight className="w-4 h-4" />
                             </CyberButton>
+                        </div>
+                    )}
+
+                    {/* PLAY NOW CTA (BOTTOM) */}
+                    {quiz.questions.length > 3 && (
+                        <div className="mt-12 p-8 border-2 border-yellow-500/50 rounded-xl bg-yellow-950/10 text-center relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-yellow-500/5 group-hover:bg-yellow-500/10 transition-colors"></div>
+                            <div className="relative z-10 flex flex-col items-center gap-4">
+                                <h3 className="text-2xl font-cyber text-yellow-400">¿QUIERES PROBARLO EN VIVO?</h3>
+                                <p className="text-gray-400 font-mono text-sm max-w-md">Lanza una partida ahora mismo con estos datos. No requiere guardar ni iniciar sesión.</p>
+                                <CyberButton 
+                                    onClick={() => onPlay(quiz)} 
+                                    className="h-14 px-8 text-lg font-black bg-gradient-to-r from-yellow-600 to-orange-600 border-none shadow-[0_0_20px_rgba(234,179,8,0.4)] hover:scale-105 transition-transform"
+                                >
+                                    <Gamepad2 className="w-6 h-6 mr-3" /> ¡JUGAR AHORA!
+                                </CyberButton>
+                            </div>
                         </div>
                     )}
                 </>

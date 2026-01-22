@@ -12,11 +12,12 @@ interface GameLobbyProps {
     onBack: () => void;
     onStartGame: (quiz: Quiz, teams: GameTeam[], mode: GameMode, config: JeopardyConfig) => void;
     t: any;
+    preSelectedQuiz?: Quiz | null; // NEW PROP
 }
 
 type LobbyPhase = 'SELECTION' | 'CONFIG';
 
-export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame, t }) => {
+export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame, t, preSelectedQuiz }) => {
     // --- STATE ---
     const [phase, setPhase] = useState<LobbyPhase>('SELECTION');
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -47,11 +48,14 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
 
     const [isGeneratingCats, setIsGeneratingCats] = useState(false);
 
+    // HANDLE PRE-SELECTED QUIZ (FROM EDITOR)
     useEffect(() => {
-        if (user) {
+        if (preSelectedQuiz) {
+            handleQuizSelect(preSelectedQuiz);
+        } else if (user) {
             loadUserQuizzes();
         }
-    }, [user]);
+    }, [user, preSelectedQuiz]);
 
     // Initial Question Selection & Categories Logic
     useEffect(() => {
@@ -295,7 +299,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
                         <h3 className="font-cyber font-bold text-white flex items-center gap-2">
                             <Settings className="w-5 h-5 text-purple-400" /> AJUSTES PARTIDA
                         </h3>
-                        <button onClick={() => setPhase('SELECTION')} className="text-xs text-gray-500 hover:text-white underline">Cambiar</button>
+                        {/* Only allow changing quiz if we are NOT in pre-selected mode, or simply reload if they want to exit */}
+                        {!preSelectedQuiz && <button onClick={() => setPhase('SELECTION')} className="text-xs text-gray-500 hover:text-white underline">Cambiar Quiz</button>}
                     </div>
 
                     <div className="space-y-6">

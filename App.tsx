@@ -257,6 +257,15 @@ const NeuralApp: React.FC = () => {
       else setView('game_board');
   };
 
+  const handlePlayFromEditor = (q: Quiz) => {
+      if (q.questions.length < 4) {
+          toast.warning("Necesitas al menos 4 preguntas para jugar.");
+          return;
+      }
+      setGameQuiz(q); // Prepare it for Lobby
+      setView('game_lobby');
+  };
+
   const processContextFiles = async (files: FileList | null) => {
       if (!files || files.length === 0) return;
       
@@ -759,6 +768,7 @@ const NeuralApp: React.FC = () => {
             <GameLobby 
                 user={user} 
                 onBack={() => setView('home')} 
+                preSelectedQuiz={gameQuiz} // Pass "hot" quiz from editor
                 onStartGame={(q, teams, mode, config) => {
                     setGameQuiz(q);
                     setGameTeams(teams);
@@ -828,7 +838,17 @@ const NeuralApp: React.FC = () => {
              </div>
              
              <div className="space-y-12">
-                <QuizEditor quiz={quiz} setQuiz={setQuiz} onExport={scrollToExport} onSave={handleSaveQuiz} isSaving={isSaving} user={user} showImportOptions={quiz.questions.length === 0} t={t} />
+                <QuizEditor 
+                    quiz={quiz} 
+                    setQuiz={setQuiz} 
+                    onExport={scrollToExport} 
+                    onSave={handleSaveQuiz} 
+                    isSaving={isSaving} 
+                    user={user} 
+                    showImportOptions={quiz.questions.length === 0} 
+                    t={t}
+                    onPlay={handlePlayFromEditor} // NEW PROP
+                />
                 {quiz.questions.length > 0 && ( <div ref={exportSectionRef} className="border-t border-gray-800 pt-12"><h3 className="text-2xl font-cyber text-center mb-8 text-white">{t.export_data}</h3><ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} initialTargetPlatform={targetPlatform} /></div> )}
              </div>
           </div>
