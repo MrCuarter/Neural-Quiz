@@ -44,10 +44,10 @@ const trackUnsplashDownload = async (downloadLocation: string) => {
 // --- 4. MAIN SEARCH FUNCTION (WATERFALL) ---
 
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult | null> => {
-    // User requested NO manual cleaning. AI provides the perfect English keyword string.
+    // Direct usage of the query provided by AI (presumed to be optimized English keywords)
     const query = rawQuery ? rawQuery.trim() : "";
     
-    // 0. Fallback Check
+    // 0. Fallback Check: If no query is provided (e.g. AI failed to generate keywords), go straight to fallback.
     if (!query) return getFallback(fallbackCategory);
 
     console.log(`[ImageService] Searching: "${query}" (Fallback: ${fallbackCategory})`);

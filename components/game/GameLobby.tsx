@@ -13,11 +13,12 @@ interface GameLobbyProps {
     onStartGame: (quiz: Quiz, teams: GameTeam[], mode: GameMode, config: JeopardyConfig) => void;
     t: any;
     preSelectedQuiz?: Quiz | null; // NEW PROP
+    language?: string;
 }
 
 type LobbyPhase = 'SELECTION' | 'CONFIG';
 
-export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame, t, preSelectedQuiz }) => {
+export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame, t, preSelectedQuiz, language }) => {
     // --- STATE ---
     const [phase, setPhase] = useState<LobbyPhase>('SELECTION');
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);

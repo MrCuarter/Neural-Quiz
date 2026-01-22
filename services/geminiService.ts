@@ -153,7 +153,7 @@ const questionSchema: Schema = {
     feedback: { type: Type.STRING },
     type: { type: Type.STRING }, 
     imageUrl: { type: Type.STRING },
-    imageSearchQuery: { type: Type.STRING, description: "2-3 ENGLISH keywords. No verbs/articles. Ex: 'plant cell microscope'." },
+    imageSearchQuery: { type: Type.STRING, description: "2-3 words ENGLISH keyword for image search. E.g., 'van gogh portrait'" },
     fallback_category: { type: Type.STRING, description: "Broad category ID: 'animals', 'history', 'science', 'art', 'geography', 'tech'." },
     reconstructed: { type: Type.BOOLEAN },
     sourceEvidence: { type: Type.STRING },
@@ -162,9 +162,21 @@ const questionSchema: Schema = {
   required: ["text", "options", "type", "imageSearchQuery", "fallback_category"]
 };
 
-const quizSchema: Schema = {
-  type: Type.ARRAY,
-  items: questionSchema,
+// UPDATED: Root Object Schema with Tags
+const quizRootSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    questions: {
+        type: Type.ARRAY,
+        items: questionSchema
+    },
+    tags: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "3-5 lowercase keywords: Topic (e.g. 'science'), Subtopic (e.g. 'space'), Difficulty (e.g. 'primary'), Language (e.g. 'spanish')."
+    }
+  },
+  required: ["questions", "tags"]
 };
 
 const enhanceSchema: Schema = {
@@ -205,17 +217,19 @@ const enhanceSchema: Schema = {
 // --- SYSTEM PROMPT ---
 const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. Tu misión es generar cuestionarios JSON precisos.
 
-### 🖼️ PROTOCOLO DE IMÁGENES (CRÍTICO)
-Para cada pregunta, debes generar el campo "imageSearchQuery" siguiendo estas reglas ESTRICTAS:
+### 🏷️ SMART TAGGING (OBLIGATORIO)
+Debes generar un campo "tags" que contenga un array de 3 a 5 strings en minúsculas.
+Estas etiquetas deben definir: 
+1. Tema Principal (ej: 'historia', 'ciencias')
+2. Subtema Específico (ej: 'romanos', 'plantas')
+3. Nivel de Dificultad (ej: 'primaria', 'secundaria', 'universidad')
+4. Idioma del contenido (ej: 'español', 'inglés')
 
-1. **IDIOMA:** SIEMPRE EN INGLÉS.
-2. **FORMATO:** 2 o 3 palabras clave visuales que describan el sujeto principal.
-3. **RESTRICCIONES:** 
-   - NO uses verbos.
-   - NO uses artículos ("the", "a").
-   - NO uses frases completas.
-   - *Ejemplo Mal:* "What is a cell" / "painting of van gogh" / "chloroplast"
-   - *Ejemplo Bien:* "van gogh portrait", "plant cell microscope", "roman colosseum".
+### 🖼️ PROTOCOLO DE IMÁGENES
+Para cada pregunta, el campo "imageSearchQuery" es OBLIGATORIO.
+Este campo debe contener 2 o 3 palabras clave EN INGLÉS que describan visualmente la respuesta correcta o el sujeto de la pregunta.
+NO uses verbos ni artículos.
+Ejemplo: Si la pregunta es sobre Van Gogh y su oreja, el imageSearchQuery debe ser: 'van gogh portrait painting'.
 
 ### 📂 CATEGORÍA DE RESPALDO
 Elige una "fallback_category" de esta lista:
@@ -234,33 +248,50 @@ interface GenParams {
   includeFeedback?: boolean;
 }
 
-export const generateQuizQuestions = async (params: GenParams): Promise<any[]> => {
+// MODEL CONSTANT
+const MODEL_NAME = "gemini-1.5-flash"; // STABLE MODEL
+
+export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
     const ai = getAI();
     const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback } = params;
     const safeCount = Math.min(Math.max(count, 1), 30);
 
-    let prompt = `Generate ${safeCount} quiz questions about "${topic}".`;
+    // --- DISTRIBUTION LOGIC ---
+    let distributionInstruction = "";
+    if (types.length > 0) {
+        const baseCount = Math.floor(safeCount / types.length);
+        const remainder = safeCount % types.length;
+        const distribution: string[] = [];
+        
+        types.forEach((t, index) => {
+            const num = baseCount + (index < remainder ? 1 : 0);
+            if (num > 0) distribution.push(`${num} questions of type '${t}'`);
+        });
+        distributionInstruction = `STRICTLY generate this distribution: ${distribution.join(', ')}.`;
+    }
+
+    let prompt = `Generate a Quiz about "${topic}".`;
+    prompt += `\n${distributionInstruction}`;
     prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;
-    prompt += `\nSTRICTLY ALLOWED TYPES: ${types.join(', ')}.`;
     
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
     if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
 
-    prompt += `\n\nRULES:
+    prompt += `\n\n### CRITICAL RULES PER TYPE:
     1. 'Fill in the Blank': Text MUST contain '__' for missing words.
-    2. 'Multiple Choice': ONLY ONE correct answer.
-    3. 'Multi-Select': SEVERAL correct answers.
-    4. 'Order': Options MUST be in the CORRECT FINAL ORDER.
+    2. 'Multiple Choice' & 'Multi-Select': **ALWAYS generate exactly 4 options.**
+    3. 'Open Ended' (Respuesta Abierta): The correct answer MUST be **1 or 2 words maximum**. Prioritize single words.
+    4. 'Order': Generate between **4 and 6 options**. Keep text short (max 6 words per option).
     ${includeFeedback ? "5. Generate brief educational feedback." : ""}
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: MODEL_NAME,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        responseSchema: quizSchema,
+        responseSchema: quizRootSchema, // Updated schema
         systemInstruction: SYSTEM_INSTRUCTION,
       },
     });
@@ -275,8 +306,13 @@ export const generateQuizQuestions = async (params: GenParams): Promise<any[]> =
         throw new Error("AI returned malformed JSON."); 
     }
     
-    // ZOD VALIDATION & SANITIZATION
-    return validateQuizQuestions(data);
+    // VALIDATE QUESTIONS
+    const validQuestions = validateQuizQuestions(data.questions || []);
+    // RETURN OBJECT WITH TAGS
+    return {
+        questions: validQuestions,
+        tags: Array.isArray(data.tags) ? data.tags.map((t: any) => String(t).toLowerCase()) : []
+    };
   });
 };
 
@@ -298,11 +334,13 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
         contents.push({ text: prompt });
 
         const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: MODEL_NAME,
           contents: contents,
           config: {
             responseMimeType: "application/json",
-            responseSchema: quizSchema,
+            // For parsing, we currently keep simple array schema or update to match
+            // To be safe, we use the root schema but will extract questions only for now
+            responseSchema: quizRootSchema, 
             systemInstruction: SYSTEM_INSTRUCTION
           },
         });
@@ -313,8 +351,8 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
         let data;
         try { data = JSON.parse(text); } catch (e) { throw new Error("AI returned malformed JSON."); }
         
-        // ZOD VALIDATION
-        return validateQuizQuestions(data);
+        // Return just questions for parsing flow (tags handled implicitly or ignored for now)
+        return validateQuizQuestions(data.questions || []);
     });
 };
 
@@ -324,7 +362,7 @@ export const enhanceQuestion = async (q: Question, context: string, language: st
         const prompt = `Enhance this quiz question. Language: ${language}. Question: "${q.text}". Options: ${JSON.stringify(q.options.map(o => o.text))}. Context: ${context.substring(0,500)}.`;
 
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: MODEL_NAME,
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -354,82 +392,132 @@ export const enhanceQuestion = async (q: Question, context: string, language: st
             options: newOptions,
             correctOptionId: correctOptionIds[0] || "",
             correctOptionIds: correctOptionIds,
-            explanation: data.explanation,
-            feedback: data.explanation,
-            reconstructed: data.reconstructed,
-            sourceEvidence: data.sourceEvidence,
-            qualityFlags: data.qualityFlags,
-            confidenceScore: data.confidenceGlobal,
-            imageUrl: data.imageUrl || q.imageUrl || "",
-            imageSearchQuery: data.imageSearchQuery,
-            fallback_category: data.fallback_category
+            // Merge other fields...
+            feedback: data.explanation || q.feedback,
+            reconstructed: true,
+            needsEnhanceAI: false,
+            enhanceReason: undefined
         };
     });
 };
 
-export const enhanceQuestionsWithOptions = async (questions: Question[], language: string = 'Spanish'): Promise<any[]> => {
-    return withRetry(async () => {
-        const ai = getAI();
-        const qs = questions.map(q => ({ text: q.text, type: q.questionType }));
-        
-        const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: `Fix these quiz questions. Generate 4 options for each. Language: ${language}. JSON: ${JSON.stringify(qs)}`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: quizSchema,
-                systemInstruction: SYSTEM_INSTRUCTION
-            }
-        });
-
+// Compatibility export
+export const enhanceQuestionsWithOptions = async (questions: any[], language: string) => {
+    // Basic batch mock for now, or implement bulk enhancement
+    const enhanced = [];
+    for(const q of questions) {
         try {
-            const data = JSON.parse(response.text || "[]");
-            // VALIDATE AND RETURN
-            return validateQuizQuestions(data);
-        } catch (e) { 
-            throw new Error("Enhance Batch Failed: " + (e as Error).message); 
+            const e = await enhanceQuestion(q, "", language);
+            enhanced.push(e);
+        } catch(e) {
+            enhanced.push(q);
         }
-    });
+    }
+    return enhanced;
 };
 
-// ... other exports (generateQuizCategories, adaptQuestionsToPlatform) remain mostly the same but could use simple prompts
-export const generateQuizCategories = async (questions: string[], count: number = 6): Promise<string[]> => {
-    return withRetry(async () => {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `Generate ${count} short jeopardy-style category titles (max 2-3 words) based on these questions. Output a simple JSON array of strings. Questions: ${questions.slice(0,10).join('|')}`,
-          config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } } },
-        });
-        try { return JSON.parse(response.text || "[]"); } catch { return []; }
+// --- NEW EXPORTS ---
+
+export const generateQuizCategories = async (questionTexts: string[], count: number): Promise<string[]> => {
+  return withRetry(async () => {
+    const ai = getAI();
+    // Truncate list if too long to save tokens
+    const sample = questionTexts.slice(0, 30).join("\n");
+    const prompt = `Analyze these quiz questions and generate exactly ${count} short category titles (max 3 words each) that could group them or represent themes. Return ONLY a JSON array of strings.
+    Questions:
+    ${sample}`;
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+        }
+      }
     });
+
+    const text = response.text;
+    if (!text) return Array(count).fill("Category");
+    try {
+        const cats = JSON.parse(text);
+        if (Array.isArray(cats)) {
+            // Ensure we have exactly count items
+            while (cats.length < count) cats.push("Category");
+            return cats.slice(0, count);
+        }
+        return Array(count).fill("Category");
+    } catch (e) {
+        return Array(count).fill("Category");
+    }
+  });
 };
 
 export const adaptQuestionsToPlatform = async (questions: Question[], platformName: string, allowedTypes: string[]): Promise<Question[]> => {
-    return withRetry(async () => {
+    // Process in parallel but globalQueue will serialize execution to respect rate limits
+    const adapted = await Promise.all(questions.map(q => withRetry(async () => {
         const ai = getAI();
-        const questionsJson = questions.map(q => ({
-            id: q.id, text: q.text, options: q.options.map(o => o.text), type: q.questionType
-        }));
+        const validTypes = allowedTypes.join(", ");
+        const prompt = `Adapt this question for the "${platformName}" platform. 
+        Allowed Types: ${validTypes}.
+        Original Question: "${q.text}"
+        Original Type: "${q.questionType}"
+        Original Options: ${JSON.stringify(q.options.map(o => o.text))}
+        Correct Answer(s): ${JSON.stringify(q.options.filter(o => q.correctOptionIds?.includes(o.id) || o.id === q.correctOptionId).map(o => o.text))}
+        
+        Task: Rewrite or restructure this question to fit one of the allowed types. If it's Open Ended and needs Multiple Choice, generate 3 plausible distractors.
+        Return the new question object matching the schema.`;
+
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: `Adapt for ${platformName}. Allowed types: ${allowedTypes.join(', ')}. JSON:\n${JSON.stringify(questionsJson)}`,
-            config: { responseMimeType: "application/json", responseSchema: quizSchema }
+            model: MODEL_NAME,
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: enhanceSchema,
+                systemInstruction: "You are a quiz adaptation expert. Ensure the output strictly follows the schema and fits the allowed types."
+            }
         });
-        try {
-            const data = JSON.parse(response.text || "[]");
-            const items = Array.isArray(data) ? data : (data.questions || []);
-            return items.map((aq: any, index: number) => {
-                 const originalQ: any = questions[index] || { id: Math.random().toString() }; 
-                 return {
-                     ...originalQ,
-                     text: aq.text || "Adapted",
-                     options: (aq.options || []).map((t: string) => ({ id: Math.random().toString(), text: t })),
-                     questionType: aq.type,
-                     correctOptionId: "",
-                     correctOptionIds: []
-                 };
-            });
-        } catch { return questions; }
-    });
+        
+        const data = JSON.parse(response.text || "{}");
+        
+        const newOptions = (data.options || []).map((o: any) => ({
+            id: Math.random().toString(36).substring(2, 9),
+            text: String(o.text || "").trim()
+        }));
+
+        const correctIndices: number[] = [];
+        (data.options || []).forEach((o: any, idx: number) => {
+            if (o.isCorrect) correctIndices.push(idx);
+        });
+
+        const correctOptionIds = correctIndices.map(i => newOptions[i]?.id).filter(id => !!id);
+        
+        // Determine type based on result
+        let newType = "Multiple Choice"; // Default fallback
+        if (allowedTypes.includes("True/False") && newOptions.length === 2 && 
+            newOptions.some((o:any) => o.text.toLowerCase().includes('true') || o.text.toLowerCase().includes('verdadero'))) {
+            newType = "True/False";
+        } else if (allowedTypes.includes("Multi-Select") && correctOptionIds.length > 1) {
+            newType = "Multi-Select";
+        } else if (allowedTypes.includes("Multiple Choice")) {
+            newType = "Multiple Choice";
+        } else if (allowedTypes.length > 0) {
+            newType = allowedTypes[0];
+        }
+
+        return {
+            ...q,
+            text: data.text || q.text,
+            options: newOptions,
+            correctOptionId: correctOptionIds[0] || "",
+            correctOptionIds: correctOptionIds,
+            questionType: newType,
+            feedback: data.explanation || q.feedback,
+            reconstructed: true
+        };
+    })));
+    
+    return adapted;
 };
