@@ -9,9 +9,10 @@ interface HeaderProps {
   setLanguage: (lang: Language) => void;
   onHelp: () => void;
   onMyQuizzes: () => void;
+  onHome: () => void; // New prop for Hub navigation
 }
 
-export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes }) => {
+export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes, onHome }) => {
   const [user, setUser] = useState<any>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
@@ -53,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
         
         {/* SECCIÓN IZQUIERDA: LOGO GRÁFICO + TEXTO */}
         <div className="flex items-center gap-6">
-            <a href="/" onClick={(e) => { e.preventDefault(); window.location.reload(); }} className="flex items-center gap-3 cursor-pointer group decoration-0">
+            <button onClick={onHome} className="flex items-center gap-3 cursor-pointer group decoration-0 bg-transparent border-none p-0">
                  <img 
                     src="https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png" 
                     alt="Neural Quiz Logo" 
@@ -62,7 +63,7 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                  <h1 className="text-xl font-bold text-white font-cyber tracking-tight">
                     NEURAL<span className="text-cyan-400">_QUIZ</span>
                  </h1>
-            </a>
+            </button>
         </div>
         
         {/* SECCIÓN DERECHA: ACCIONES */}
@@ -76,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                 className="flex items-center gap-2 px-3 py-1.5 bg-gray-900/50 border border-gray-700/50 rounded hover:bg-gray-800 hover:border-gray-600 text-gray-400 hover:text-white transition-all group mr-2"
              >
                 <Home className="w-3 h-3" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">{t.main_web_btn || "WEB PRINCIPAL"}</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">WEB MR. CUARTER</span>
              </a>
 
              {/* LOGIN/USER BUTTON */}

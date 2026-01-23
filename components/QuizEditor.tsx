@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2 } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
@@ -11,6 +11,7 @@ import { publishQuiz } from '../services/communityService'; // NEW
 import { uploadImageToCloudinary } from '../services/cloudinaryService'; 
 import { useToast } from './ui/Toast';
 import { PublishModal } from './PublishModal'; // NEW
+import { ImagePickerModal } from './ui/ImagePickerModal'; // NEW
 import * as XLSX from 'xlsx';
 
 interface QuizEditorProps {
@@ -39,8 +40,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   
-  // Upload State
-  const [uploadingQId, setUploadingQId] = useState<string | null>(null);
+  // Image Picker State
+  const [showImagePicker, setShowImagePicker] = useState(false);
+  const [pickingImageForId, setPickingImageForId] = useState<string | null>(null);
   
   // Share/Publish State
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -115,30 +117,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }
   };
 
-  // --- UPLOAD LOGIC ---
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, qId: string) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  // --- IMAGE PICKER HANDLERS ---
+  const openImagePicker = (qId: string) => {
+      setPickingImageForId(qId);
+      setShowImagePicker(true);
+  };
 
-      if (!file.type.startsWith('image/')) {
-          toast.warning("Por favor selecciona un archivo de imagen válido.");
-          return;
+  const handleImageSelected = (url: string) => {
+      if (pickingImageForId) {
+          updateQuestion(pickingImageForId, { imageUrl: url });
+          toast.success("Imagen actualizada");
       }
-
-      setUploadingQId(qId);
-      toast.info("⏳ Comprimiendo y Subiendo...");
-      
-      try {
-          const url = await uploadImageToCloudinary(file);
-          updateQuestion(qId, { imageUrl: url });
-          toast.success("Imagen subida y optimizada correctamente");
-      } catch (error: any) {
-          console.error(error);
-          toast.error(`Error al subir imagen: ${error.message}`);
-      } finally {
-          setUploadingQId(null);
-          e.target.value = ''; // Reset input
-      }
+      setPickingImageForId(null);
+      setShowImagePicker(false);
   };
 
   // --- CRUD OPERATIONS ---
@@ -168,7 +159,36 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
         setTimeout(() => setCurrentPage(Math.ceil(newQs.length / ITEMS_PER_PAGE)), 50);
         return { ...prev, questions: newQs };
     });
-    setExpandedQuestionId(newQ.id);
+    setExpandedQuestionId(newQ.id); // Auto-expand new, collapse others
+  };
+
+  const duplicateQuestion = (qId: string) => {
+      const original = quiz.questions.find(q => q.id === qId);
+      if (!original) return;
+
+      const newOptions = original.options.map(o => ({...o, id: uuid()}));
+      // Map old correct IDs to new IDs based on index
+      const newCorrectIds = (original.correctOptionIds || []).map(oldId => {
+          const idx = original.options.findIndex(o => o.id === oldId);
+          return idx !== -1 ? newOptions[idx].id : null;
+      }).filter(id => id !== null) as string[];
+
+      const clone: Question = {
+          ...original,
+          id: uuid(),
+          text: `${original.text} (Copia)`,
+          options: newOptions,
+          correctOptionIds: newCorrectIds,
+          correctOptionId: newCorrectIds[0] || ""
+      };
+
+      setQuiz(prev => {
+          const index = prev.questions.findIndex(q => q.id === qId);
+          const newQs = [...prev.questions];
+          newQs.splice(index + 1, 0, clone);
+          return { ...prev, questions: newQs };
+      });
+      toast.info("Pregunta duplicada");
   };
 
   const removeQuestion = (id: string, e?: React.MouseEvent) => {
@@ -305,25 +325,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }
   };
 
-  const fixFillGap = (qId: string) => {
-      setQuiz(prev => ({
-          ...prev,
-          questions: prev.questions.map(q => {
-              if (q.id !== qId) return q;
-              const gapCount = (q.text.match(/__/g) || []).length;
-              let newOptions = [...q.options];
-              if (newOptions.length > gapCount) {
-                  newOptions = newOptions.slice(0, gapCount);
-              } else {
-                  while (newOptions.length < gapCount) {
-                      newOptions.push({ id: uuid(), text: '' });
-                  }
-              }
-              return { ...q, options: newOptions };
-          })
-      }));
-  };
-
   const ensureOptions = (q: Question) => {
       if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.length === 0) {
           const newOpts = [
@@ -340,14 +341,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
     try {
       const platformTypes = PLATFORM_SPECS[targetPlatform].types;
       
-      // Update: Receive { questions, tags } from service
       const aiResult = await generateQuizQuestions({
         topic: aiTopic, count: aiCount, types: platformTypes.filter(t => t !== QUESTION_TYPES.DRAW), age: 'Universal', language: 'Spanish'
       });
       
       const newQuestions: Question[] = aiResult.questions.map((gq: any) => {
         const qId = uuid();
-        // The service already returns cleaner objects now, but we double check options
         const options: Option[] = gq.options.map((opt: any) => ({ 
             id: opt.id || uuid(), 
             text: opt.text 
@@ -370,9 +369,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
       setQuiz(prev => {
           const updatedQs = [...prev.questions, ...newQuestions];
-          // Merge AI tags with existing ones
           const newTags = Array.from(new Set([...(prev.tags || []), ...(aiResult.tags || [])]));
-          
           setTimeout(() => setCurrentPage(Math.ceil(updatedQs.length / ITEMS_PER_PAGE)), 50);
           return { ...prev, questions: updatedQs, tags: newTags };
       });
@@ -425,12 +422,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      
+      {/* GLOBAL MODALS */}
       <PublishModal 
           isOpen={showPublishModal} 
           onClose={() => setShowPublishModal(false)}
           onConfirm={handleConfirmPublish}
           initialTags={quiz.tags || []}
           isPublishing={isPublishing}
+      />
+      <ImagePickerModal
+          isOpen={showImagePicker}
+          onClose={() => setShowImagePicker(false)}
+          onSelect={handleImageSelected}
       />
 
       {/* --- HEADER ACTIONS --- */}
@@ -609,7 +613,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                         const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
                         const needsEnhance = (!isValid && q.options.length < 2) || (q.options.length > 0 && !q.correctOptionId);
                         const isEnhancing = enhancingId === q.id;
-                        const isUploading = uploadingQId === q.id;
 
                         // --- CORRECT ANSWER LOGIC ---
                         const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
@@ -617,8 +620,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                            : (q.correctOptionId ? [q.correctOptionId] : []);
                         
                         const correctTexts = q.options.filter(o => correctIds.includes(o.id)).map(o => o.text).join(", ");
-                        const hasExposedCorrect = correctIds.length > 0;
-
+                        
                         return (
                           <div 
                             key={q.id} 
@@ -626,38 +628,54 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                             className={`transition-all duration-300 ${isExpanded ? 'scale-[1.01] z-10' : ''}`}
                           >
                             <CyberCard title={!isExpanded ? `Q-${index + 1}` : undefined} className={`group transition-colors cursor-pointer ${!isValid ? 'border-red-500/50' : isExpanded ? 'border-cyan-500/50' : 'hover:border-cyan-500/30'}`}>
+                              
+                              {/* --- COLLAPSED VIEW --- */}
                               <div className="flex items-center justify-between" onClick={() => toggleExpand(q.id)}>
                                   <div className="flex items-center gap-4 flex-1 overflow-hidden">
                                       {!isExpanded && (
-                                          <div className="flex-1 flex items-center gap-3">
-                                              <div className={`p-1.5 rounded border ${getTypeColor(q.questionType)}`}>
-                                                  {getTypeIcon(q.questionType)}
+                                          <div className="flex-1 flex flex-col gap-1">
+                                              {/* Top Line: Icon | Text | Image Thumb */}
+                                              <div className="flex items-center gap-3">
+                                                  <div className={`p-1.5 rounded border ${getTypeColor(q.questionType)}`}>
+                                                      {getTypeIcon(q.questionType)}
+                                                  </div>
+                                                  <span className={`font-bold font-mono truncate max-w-[60%] ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>
+                                                      {q.text || t.enter_question}
+                                                  </span>
+                                                  {q.imageUrl && (
+                                                      <div className="w-8 h-8 rounded border border-gray-700 bg-black overflow-hidden shrink-0">
+                                                          <img src={q.imageUrl} alt="Q" className="w-full h-full object-cover" />
+                                                      </div>
+                                                  )}
+                                                  {!isValid && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
                                               </div>
-                                              <span className={`font-bold font-mono truncate ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>{q.text || t.enter_question}</span>
-                                              {!isValid && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
-                                              {q.qualityFlags?.needsHumanReview && <span title="Needs Human Review"><Eye className="w-4 h-4 text-yellow-500 shrink-0 animate-pulse" /></span>}
-                                              {q.reconstructed && <span title="Reconstructed by AI"><FileSearch className="w-4 h-4 text-purple-400 shrink-0" /></span>}
+                                              
+                                              {/* Bottom Line: Correct Answer */}
+                                              {correctTexts && (
+                                                  <div className="flex items-center gap-1 text-[10px] text-green-500/80 font-mono pl-10">
+                                                      <Check className="w-3 h-3" /> {correctTexts}
+                                                  </div>
+                                              )}
                                           </div>
                                       )}
+                                      
+                                      {/* Header Title when Expanded */}
                                       {isExpanded && <div className="flex items-center gap-2 text-cyan-400"><span className="font-cyber text-lg">{t.editing} Q-{index+1}</span></div>}
                                   </div>
+                                  
+                                  {/* Right Actions */}
                                   <div className="flex items-center gap-2">
-                                      {needsEnhance && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); handleEnhanceQuestion(q); }} 
-                                                disabled={isEnhancing}
-                                                className="p-2 bg-purple-900/40 text-purple-300 hover:text-white border border-purple-500/50 hover:bg-purple-600 rounded transition-colors flex items-center gap-2 text-xs font-bold"
-                                                title="Auto-Fix with AI"
-                                            >
-                                                <Wand2 className={`w-4 h-4 ${isEnhancing ? 'animate-spin' : ''}`} />
-                                                {isEnhancing ? 'FIXING...' : 'ENHANCE'}
-                                            </button>
+                                      {!isExpanded && (
+                                          <>
+                                              <button onClick={(e) => { e.stopPropagation(); duplicateQuestion(q.id); }} className="p-2 text-gray-600 hover:text-cyan-400 transition-colors rounded hover:bg-cyan-950/20" title="Duplicar"><Copy className="w-4 h-4" /></button>
+                                              <button onClick={(e) => removeQuestion(q.id, e)} className="p-2 text-gray-600 hover:text-red-500 transition-colors rounded hover:bg-red-950/20" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
+                                          </>
                                       )}
-                                      <button onClick={(e) => removeQuestion(q.id, e)} className="p-2 text-gray-600 hover:text-red-500 transition-colors rounded hover:bg-red-950/20"><Trash2 className="w-5 h-5" /></button>
                                       <div className="p-2 text-cyan-500">{isExpanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}</div>
                                   </div>
                               </div>
 
+                              {/* --- EXPANDED VIEW --- */}
                               {isExpanded && (
                                   <div className="space-y-6 mt-6 border-t border-gray-800 pt-6 animate-in slide-in-from-top-2 cursor-default" onClick={e => e.stopPropagation()}>
                                       
@@ -666,7 +684,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           <div className="flex items-center gap-4 p-2 bg-purple-950/20 border-l-4 border-purple-500 rounded text-xs font-mono text-purple-200">
                                               {q.reconstructed && <span className="flex items-center gap-1"><FileSearch className="w-3 h-3"/> Reconstructed by AI</span>}
                                               {q.qualityFlags?.needsHumanReview && <span className="flex items-center gap-1 text-yellow-300"><Eye className="w-3 h-3"/> Needs Review</span>}
-                                              {q.sourceEvidence && <span className="text-gray-500 italic ml-auto truncate max-w-[200px]">Evidence: {q.sourceEvidence}</span>}
                                           </div>
                                       )}
 
@@ -681,70 +698,41 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           </div>
                                       </div>
 
-                                      {/* QUESTION TEXT */}
-                                      <div className="space-y-2">
-                                          <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
-                                      </div>
-
-                                      {/* IMAGE URL & PREVIEW + UPLOAD BUTTON */}
-                                      <div className="bg-black/20 p-3 rounded border border-gray-800/50">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <LinkIcon className="w-4 h-4 text-gray-500" />
-                                                <span className="text-xs font-mono text-gray-500 uppercase">{t.media_url}</span>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="https://..." 
-                                                    value={q.imageUrl || ''} 
-                                                    onChange={(e) => updateQuestion(q.id, { imageUrl: e.target.value })} 
-                                                    onBlur={(e) => {
-                                                        const val = e.target.value;
-                                                        const safeUrl = getSafeImageUrl(val);
-                                                        if (safeUrl && safeUrl !== val) {
-                                                            updateQuestion(q.id, { imageUrl: safeUrl });
-                                                        }
-                                                    }}
-                                                    className="bg-black/40 border border-gray-700 p-2 rounded w-full text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500" 
-                                                />
-                                                {/* UPLOAD BUTTON */}
-                                                <label className={`cursor-pointer bg-gray-800 hover:bg-gray-700 text-white p-2 rounded flex items-center justify-center min-w-[40px] transition-colors border border-gray-700 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`} title="Subir imagen">
-                                                    {isUploading ? (
-                                                        <FolderOpen className="w-4 h-4 animate-pulse text-cyan-400" />
-                                                    ) : (
-                                                        <Upload className="w-4 h-4 text-cyan-400" />
-                                                    )}
-                                                    <input 
-                                                        type="file" 
-                                                        className="hidden" 
-                                                        accept="image/*" 
-                                                        onChange={(e) => handleImageUpload(e, q.id)}
-                                                        disabled={isUploading}
-                                                    />
-                                                </label>
-                                            </div>
-                                            
-                                            {q.imageUrl && (
-                                                <div className="mt-3 relative w-full h-48 bg-black/50 rounded border border-gray-700 overflow-hidden flex items-center justify-center">
-                                                    <img 
-                                                        src={q.imageUrl} 
-                                                        alt="Preview" 
-                                                        className="max-h-full max-w-full object-contain"
-                                                        onError={(e) => {
-                                                            (e.target as HTMLImageElement).style.opacity = '0.3';
-                                                        }}
-                                                    />
-                                                    <div className="absolute top-2 right-2">
-                                                        <button 
-                                                            onClick={() => updateQuestion(q.id, { imageUrl: '' })}
-                                                            className="bg-red-900/80 text-white p-1 rounded hover:bg-red-600 transition-colors"
-                                                            title="Remove Image"
-                                                        >
-                                                            <XCircle className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
+                                      {/* QUESTION TEXT + IMAGE BUTTON ROW */}
+                                      <div className="flex gap-4">
+                                          <div className="flex-1 space-y-2">
+                                              <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
+                                          </div>
+                                          
+                                          {/* IMAGE TRIGGER BOX (Fixed Width matches Time Input approx) */}
+                                          <div className="w-32 shrink-0 flex flex-col gap-1">
+                                              <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block opacity-0">IMG</label> {/* Spacer Label */}
+                                              {q.imageUrl ? (
+                                                  <div 
+                                                      onClick={() => openImagePicker(q.id)}
+                                                      className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all"
+                                                  >
+                                                      <img src={q.imageUrl} className="w-full h-full object-cover" alt="Q" />
+                                                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                          <ImageIcon className="w-6 h-6 text-white" />
+                                                      </div>
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); updateQuestion(q.id, { imageUrl: '' }); }}
+                                                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                                                      >
+                                                          <XCircle className="w-3 h-3" />
+                                                      </button>
+                                                  </div>
+                                              ) : (
+                                                  <button 
+                                                      onClick={() => openImagePicker(q.id)}
+                                                      className="h-full min-h-[80px] w-full border border-dashed border-gray-700 bg-black/20 rounded flex flex-col items-center justify-center text-gray-500 hover:text-cyan-400 hover:border-cyan-500/50 hover:bg-cyan-900/10 transition-all gap-1"
+                                                  >
+                                                      <ImageIcon className="w-6 h-6" />
+                                                      <span className="text-[9px] font-mono font-bold uppercase">AÑADIR IMG</span>
+                                                  </button>
+                                              )}
+                                          </div>
                                       </div>
 
                                       {/* OPTIONS AREA */}
@@ -786,34 +774,23 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   )}
                                               </div>
                                           )}
-
-                                          {/* ... (Other types remain unchanged for brevity, but they are here) ... */}
                                       </div>
-                                      
-                                      {/* VISUAL FOOTER FOR CORRECT ANSWER */}
-                                      {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE) && (
-                                        <div className="mt-4 pt-4 border-t border-gray-800 flex items-start gap-2 text-xs font-mono">
-                                            <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${hasExposedCorrect ? 'text-green-500' : 'text-red-500'}`} />
-                                            <div>
-                                                <span className={`${hasExposedCorrect ? 'text-green-500' : 'text-red-500'} font-bold uppercase mr-2`}>{t.q_correct_answer}:</span>
-                                                <span className="text-gray-300">
-                                                    {hasExposedCorrect ? correctTexts : <span className="text-red-500 italic">Correct answer not exposed (Public View)</span>}
-                                                </span>
-                                            </div>
-                                        </div>
-                                      )}
 
-                                      <CyberTextArea label={t.q_feedback_label} value={q.feedback || ''} onChange={(e) => updateQuestion(q.id, { feedback: e.target.value })} className="min-h-[60px] text-sm" placeholder="Explanation..." />
+                                      {/* FEEDBACK & FOOTER ACTIONS */}
+                                      <div className="space-y-4">
+                                          <CyberTextArea label={t.q_feedback_label} value={q.feedback || ''} onChange={(e) => updateQuestion(q.id, { feedback: e.target.value })} className="min-h-[60px] text-sm" placeholder="Explanation..." />
+                                          
+                                          <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
+                                              <CyberButton variant="secondary" onClick={() => duplicateQuestion(q.id)} className="text-xs h-9">
+                                                  <CopyPlus className="w-4 h-4 mr-2" /> DUPLICAR
+                                              </CyberButton>
+                                              <CyberButton onClick={addQuestion} className="text-xs h-9 bg-green-700 hover:bg-green-600 border-none">
+                                                  <Plus className="w-4 h-4 mr-2" /> AÑADIR NUEVA
+                                              </CyberButton>
+                                          </div>
+                                      </div>
                                   </div>
                               )}
-                              
-                              {/* COLLAPSED VIEW: Correct Answer Hint */}
-                              {!isExpanded && correctTexts && (
-                                  <div className="mt-2 px-1 text-[10px] text-green-500/70 font-mono truncate flex items-center gap-1">
-                                      <Check className="w-3 h-3" /> {correctTexts}
-                                  </div>
-                              )}
-                              
                             </CyberCard>
                           </div>
                         );

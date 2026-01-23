@@ -631,7 +631,8 @@ const NeuralApp: React.FC = () => {
         language={language} 
         setLanguage={setLanguage} 
         onHelp={() => handleSafeExit('help')} 
-        onMyQuizzes={() => handleSafeExit('my_quizzes')} 
+        onMyQuizzes={() => handleSafeExit('my_quizzes')}
+        onHome={() => handleSafeExit('home')}
       />
       
       {showMissingAnswersModal && renderMissingAnswersModal()}
