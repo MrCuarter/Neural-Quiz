@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { QuizEditor } from './components/QuizEditor';
@@ -15,7 +16,7 @@ import { PublicQuizLanding } from './components/PublicQuizLanding';
 import { CommunityPage } from './components/CommunityPage'; // NEW IMPORT
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2 } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
@@ -96,6 +97,10 @@ const NeuralApp: React.FC = () => {
   const [generationStatus, setGenerationStatus] = useState(''); 
   const [dragActive, setDragActive] = useState(false);
   const contextFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Progress Bar State
+  const [genProgress, setGenProgress] = useState(0);
+  const [isGenSuccess, setIsGenSuccess] = useState(false);
 
   // Conversion State
   const [convertTab, setConvertTab] = useState<'upload' | 'paste' | 'url'>('upload');
@@ -323,11 +328,33 @@ const NeuralApp: React.FC = () => {
       toast.warning(t.alert_topic);
       return;
     }
+    
     setIsGenerating(true);
+    setGenProgress(0);
+    setIsGenSuccess(false);
+    
+    // Initial funny message
     setGenerationStatus(getRandomMessage('start', language)); 
-    const genInterval = setInterval(() => {
+    
+    // FUN FEATURE: Rotate funny messages every 3 seconds
+    const funnyMessageInterval = setInterval(() => {
         setGenerationStatus(getRandomMessage('generate_ai', language));
-    }, 4000);
+    }, 3000);
+
+    // PROGRESS LOGIC: Count * 2 seconds duration
+    const qCount = parseInt(String(genParams.count)) || 5;
+    const estimatedDurationMs = qCount * 2000;
+    const tickIntervalMs = 100;
+    const ticks = estimatedDurationMs / tickIntervalMs;
+    const incrementPerTick = 90 / ticks; // Target 90%
+
+    const progressTimer = setInterval(() => {
+        setGenProgress(prev => {
+            // Slow down drastically after 90%
+            if (prev >= 90) return prev + 0.05 < 99 ? prev + 0.05 : 99;
+            return prev + incrementPerTick;
+        });
+    }, tickIntervalMs);
 
     try {
       const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
@@ -341,6 +368,12 @@ const NeuralApp: React.FC = () => {
       
       const generatedQs = aiResult.questions; // Extracted from wrapper
       
+      // FINISH PROGRESS INSTANTLY
+      clearInterval(progressTimer);
+      setGenProgress(100);
+      
+      // Stop funny messages, switch to serious anti-spoiler
+      clearInterval(funnyMessageInterval);
       setGenerationStatus("Buscando imágenes (Anti-Spoiler)...");
 
       // --- INTEGRATION: AUTO IMAGE SEARCH WITH FALLBACK ---
@@ -378,14 +411,28 @@ const NeuralApp: React.FC = () => {
         questions: enhancedQuestions, 
         tags: aiResult.tags || ['AI Generated', targetPlatform] 
       });
-      toast.success("Quiz Generated Successfully!");
-      setView('create_manual'); 
+      
+      // SUCCESS STATE
+      setIsGenSuccess(true);
+      
+      // DELAY 1 SECOND THEN MOVE
+      setTimeout(() => {
+          toast.success("Quiz Generated Successfully!");
+          setView('create_manual');
+          window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll top
+          // Reset states after transition
+          setIsGenSuccess(false);
+          setGenProgress(0);
+      }, 1000);
+
     } catch (e: any) {
       console.error(e);
       toast.error(`${t.alert_fail} (${e.message})`);
+      clearInterval(progressTimer);
+      setGenProgress(0);
     } finally {
+      clearInterval(funnyMessageInterval); 
       setIsGenerating(false);
-      clearInterval(genInterval);
     }
   };
 
@@ -867,9 +914,34 @@ const NeuralApp: React.FC = () => {
                     </div>
 
                     {/* GENERATE BTN */}
-                    <CyberButton onClick={handleCreateAI} isLoading={isGenerating} className="w-full h-16 text-xl font-cyber tracking-widest mt-8">
-                        {isGenerating ? generationStatus : t.initiate_gen}
+                    <CyberButton 
+                        onClick={handleCreateAI} 
+                        isLoading={isGenerating} 
+                        className={`w-full h-16 text-xl font-cyber tracking-widest mt-8 transition-colors duration-500 ${isGenSuccess ? 'bg-green-600 hover:bg-green-500 border-green-400' : ''}`}
+                    >
+                        {isGenSuccess ? <><CheckCircle2 className="w-6 h-6 mr-2 animate-bounce" /> ¡PROCESO FINALIZADO!</> : t.initiate_gen}
                     </CyberButton>
+
+                    {/* PROGRESS & STATUS */}
+                    {isGenerating && (
+                        <div className="mt-4 space-y-3">
+                            {/* Smart Progress Bar */}
+                            <div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800 relative">
+                                <div 
+                                    className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(6,182,212,0.6)]"
+                                    style={{ width: `${genProgress}%` }}
+                                />
+                            </div>
+                            
+                            {/* Funny Status Message */}
+                            <div className="text-center">
+                                <p className="font-mono text-sm md:text-base text-cyan-300 animate-pulse">
+                                    <span className="opacity-50 mr-2">[{Math.floor(genProgress)}%]</span>
+                                    {generationStatus}
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                 </CyberCard>
             </div>
