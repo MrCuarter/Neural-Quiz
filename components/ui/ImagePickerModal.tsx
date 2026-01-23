@@ -1,15 +1,15 @@
 
 import React, { useState, useRef } from 'react';
 import { CyberButton, CyberCard, CyberInput } from './CyberUI';
-import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, CheckCircle2 } from 'lucide-react';
+import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import { uploadImageToCloudinary } from '../../services/cloudinaryService';
-import { searchStockImages } from '../../services/imageService';
+import { searchStockImages, triggerDownload, ImageResult } from '../../services/imageService';
 import { getSafeImageUrl } from '../../services/imageProxyService';
 
 interface ImagePickerModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSelect: (url: string) => void;
+    onSelect: (result: ImageResult) => void;
 }
 
 export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onClose, onSelect }) => {
@@ -19,7 +19,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
     
     // Stock Search State
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchResults, setSearchResults] = useState<ImageResult[]>([]);
     
     // URL State
     const [urlInput, setUrlInput] = useState('');
@@ -36,7 +36,11 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
         setLoading(true);
         try {
             const url = await uploadImageToCloudinary(file);
-            onSelect(url);
+            onSelect({
+                url,
+                alt: file.name,
+                attribution: null // User upload
+            });
             onClose();
         } catch (e) {
             alert("Error al subir imagen.");
@@ -58,9 +62,23 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
         }
     };
 
+    const handleStockSelect = (img: ImageResult) => {
+        // 1. Trigger the download event (Unsplash Compliance)
+        if (img.attribution?.downloadLocation) {
+            triggerDownload(img.attribution.downloadLocation);
+        }
+        // 2. Pass data back
+        onSelect(img);
+        onClose();
+    };
+
     const handleUrlConfirm = () => {
         if (urlPreview) {
-            onSelect(urlPreview);
+            onSelect({
+                url: urlPreview,
+                alt: "Linked Image",
+                attribution: null // External URL, unknown rights
+            });
             onClose();
         }
     };
@@ -143,22 +161,26 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                         {searchResults.map((img, i) => (
                                             <button 
                                                 key={i} 
-                                                onClick={() => { onSelect(img.url); onClose(); }}
-                                                className="aspect-video relative group overflow-hidden rounded border border-gray-800 hover:border-cyan-500 transition-all"
+                                                onClick={() => handleStockSelect(img)}
+                                                className="aspect-video relative group overflow-hidden rounded border border-gray-800 hover:border-cyan-500 transition-all w-full text-left"
                                             >
-                                                <img src={img.url} alt={img.credit?.source || "Stock"} className="w-full h-full object-cover" />
+                                                <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
                                                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                                     <CheckCircle2 className="w-8 h-8 text-cyan-400" />
                                                 </div>
-                                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-white p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {img.credit?.source}
-                                                </div>
+                                                {/* Attribution Badge on Hover */}
+                                                {img.attribution && (
+                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm text-[9px] text-gray-300 p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between">
+                                                        <span>{img.attribution.sourceName}</span>
+                                                        <span>{img.attribution.authorName}</span>
+                                                    </div>
+                                                )}
                                             </button>
                                         ))}
                                     </div>
                                 ) : (
                                     <div className="text-center py-20 text-gray-500 text-xs font-mono">
-                                        Introduce un término para buscar imágenes libres de derechos.
+                                        Introduce un término para buscar imágenes libres de derechos (Unsplash, Pexels, Pixabay).
                                     </div>
                                 )}
                             </div>

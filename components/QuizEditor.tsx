@@ -7,11 +7,12 @@ import { generateQuizQuestions, enhanceQuestion } from '../services/geminiServic
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
 import { toggleQuizVisibility, updateCloningPermission } from '../services/shareService'; 
-import { publishQuiz } from '../services/communityService'; // NEW
+import { publishQuiz } from '../services/communityService'; 
 import { uploadImageToCloudinary } from '../services/cloudinaryService'; 
 import { useToast } from './ui/Toast';
-import { PublishModal } from './PublishModal'; // NEW
-import { ImagePickerModal } from './ui/ImagePickerModal'; // NEW
+import { PublishModal } from './PublishModal'; 
+import { ImagePickerModal } from './ui/ImagePickerModal';
+import { ImageResult } from '../services/imageService';
 import * as XLSX from 'xlsx';
 
 interface QuizEditorProps {
@@ -123,9 +124,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       setShowImagePicker(true);
   };
 
-  const handleImageSelected = (url: string) => {
+  const handleImageSelected = (result: ImageResult) => {
       if (pickingImageForId) {
-          updateQuestion(pickingImageForId, { imageUrl: url });
+          // Construct the ImageCredit object if attribution exists
+          const credit = result.attribution ? {
+              name: result.attribution.authorName,
+              link: result.attribution.authorUrl,
+              source: result.attribution.sourceName as 'Unsplash' | 'Pexels' | 'Pixabay'
+          } : undefined;
+
+          updateQuestion(pickingImageForId, { 
+              imageUrl: result.url,
+              imageCredit: credit
+          });
           toast.success("Imagen actualizada");
       }
       setPickingImageForId(null);

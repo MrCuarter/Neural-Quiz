@@ -1,216 +1,237 @@
 
 import { getSafeImageUrl } from "./imageProxyService";
 import { FALLBACK_IMAGES } from "../constants/fallbackImages";
-import { ImageCredit } from "../types";
 
-// --- 1. CONFIGURACIÓN Y DEBUG ---
-
-// Lectura directa de variables de entorno (Estándar Vite)
-const API_KEYS = {
-    // @ts-ignore
-    PIXABAY: import.meta.env.VITE_PIXABAY_API_KEY || "",
-    // @ts-ignore
-    PEXELS: import.meta.env.VITE_PEXELS_API_KEY || "",
-    // @ts-ignore
-    UNSPLASH: import.meta.env.VITE_UNSPLASH_ACCESS_KEY || ""
+// Helper to safely get environment variables
+const getEnv = (key: string): string => {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+            // @ts-ignore
+            return import.meta.env[key];
+        }
+    } catch (e) {}
+    
+    try {
+        if (typeof process !== 'undefined' && process.env && process.env[key]) {
+            return process.env[key] || "";
+        }
+    } catch (e) {}
+    
+    return "";
 };
 
-// Log de diagnóstico inmediato (No muestra las claves reales por seguridad)
-console.log("📸 [ImageService] Inicializando servicios de imagen:", {
-    PIXABAY: API_KEYS.PIXABAY ? "✅ LOADED" : "❌ MISSING",
-    PEXELS: API_KEYS.PEXELS ? "✅ LOADED" : "❌ MISSING",
-    UNSPLASH: API_KEYS.UNSPLASH ? "✅ LOADED" : "❌ MISSING"
-});
+// --- CONFIGURATION ---
+const KEYS = {
+    UNSPLASH: getEnv("VITE_UNSPLASH_ACCESS_KEY"),
+    PEXELS: getEnv("VITE_PEXELS_API_KEY"),
+    PIXABAY: getEnv("VITE_PIXABAY_API_KEY")
+};
 
+// --- UNIFIED DATA STRUCTURE ---
 export interface ImageResult {
-    url: string;
-    credit?: ImageCredit;
+    url: string;       // Hotlink URL (Original or Large)
+    alt: string;       // Alt text or description
+    attribution: {
+        sourceName: 'Unsplash' | 'Pexels' | 'Pixabay' | 'NeuralQuiz';
+        authorName: string;
+        authorUrl: string;
+        downloadLocation: string | null; // Vital for Unsplash API compliance
+    } | null;
 }
 
-// --- 2. FUNCIONES AUXILIARES ---
-
 /**
- * UNSPLASH: Requiere "Trigger download" según sus términos de uso API.
+ * TRIGGER DOWNLOAD (FIRE-AND-FORGET)
+ * Critical for Unsplash Production Compliance.
+ * Execute this when the user *selects* the image to use it.
  */
-const trackUnsplashDownload = async (downloadLocation: string) => {
-    if (!API_KEYS.UNSPLASH || !downloadLocation) return;
+export const triggerDownload = async (downloadLocation?: string | null) => {
+    if (!downloadLocation) return;
+    
+    // Check if we have a key before attempting to hit the API
+    if (downloadLocation.includes('api.unsplash.com') && !KEYS.UNSPLASH) {
+        return; // Cannot trigger without key
+    }
+
+    let url = downloadLocation;
+    if (url.includes('api.unsplash.com') && KEYS.UNSPLASH) {
+        url += `${url.includes('?') ? '&' : '?'}client_id=${KEYS.UNSPLASH}`;
+    }
+
     try {
-        await fetch(`${downloadLocation}&client_id=${API_KEYS.UNSPLASH}`);
+        console.log(`[ImageService] 📡 Triggering download event: ${url}`);
+        await fetch(url, { mode: 'no-cors' }); // Fire and forget
     } catch (e) {
-        console.warn("[ImageService] Unsplash tracking failed", e);
+        console.warn("[ImageService] Download trigger failed silently", e);
     }
 };
 
-const getFallback = (category: string): ImageResult => {
-    const rawUrl = FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
-    return {
-        url: getSafeImageUrl(rawUrl) || rawUrl,
-        credit: undefined
-    };
+// --- PROVIDER SEARCH FUNCTIONS ---
+
+const searchUnsplash = async (query: string): Promise<ImageResult[]> => {
+    // 🛡️ SHIELD: Return empty if no key, preventing invalid fetch
+    if (!KEYS.UNSPLASH) {
+        console.warn("⚠️ [ImageService] Missing Unsplash Key. Skipping.");
+        return [];
+    }
+
+    try {
+        const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape&client_id=${KEYS.UNSPLASH}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        
+        const data = await res.json();
+        return (data.results || []).map((photo: any) => ({
+            url: photo.urls.regular, // Hotlinking allowed by Unsplash
+            alt: photo.alt_description || "Unsplash Image",
+            attribution: {
+                sourceName: 'Unsplash',
+                authorName: photo.user.name || "Unknown",
+                // UTM params required by Unsplash API Guidelines
+                authorUrl: `${photo.user.links.html}?utm_source=NeuralQuiz&utm_medium=referral`, 
+                downloadLocation: photo.links.download_location
+            }
+        }));
+    } catch (e) {
+        console.warn("[ImageService] Unsplash Error:", e);
+        return [];
+    }
 };
 
-// --- 3. BÚSQUEDA PRINCIPAL (SINGLE RESULT - Para IA/Automático) ---
-// Estrategia: Pixabay -> Pexels -> Unsplash -> Fallback Local
+const searchPexels = async (query: string): Promise<ImageResult[]> => {
+    // 🛡️ SHIELD
+    if (!KEYS.PEXELS) {
+        console.warn("⚠️ [ImageService] Missing Pexels Key. Skipping.");
+        return [];
+    }
 
+    try {
+        const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape&size=medium`;
+        const res = await fetch(url, { headers: { Authorization: KEYS.PEXELS } });
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+
+        const data = await res.json();
+        return (data.photos || []).map((photo: any) => ({
+            url: photo.src.large2x || photo.src.large, // Pexels hotlinking
+            alt: photo.alt || "Pexels Image",
+            attribution: {
+                sourceName: 'Pexels',
+                authorName: photo.photographer || "Unknown",
+                authorUrl: photo.photographer_url || "https://www.pexels.com",
+                downloadLocation: null
+            }
+        }));
+    } catch (e) {
+        console.warn("[ImageService] Pexels Error:", e);
+        return [];
+    }
+};
+
+const searchPixabay = async (query: string): Promise<ImageResult[]> => {
+    // 🛡️ SHIELD
+    if (!KEYS.PIXABAY) {
+        console.warn("⚠️ [ImageService] Missing Pixabay Key. Skipping.");
+        return [];
+    }
+
+    try {
+        const url = `https://pixabay.com/api/?key=${KEYS.PIXABAY}&q=${encodeURIComponent(query)}&image_type=photo&safesearch=true&orientation=horizontal&per_page=20`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+
+        const data = await res.json();
+        return (data.hits || []).map((hit: any) => ({
+            url: hit.webformatURL, // Pixabay hotlinking
+            alt: hit.tags || "Pixabay Image",
+            attribution: {
+                sourceName: 'Pixabay',
+                authorName: hit.user || "Unknown",
+                authorUrl: hit.pageURL || "https://pixabay.com",
+                downloadLocation: null
+            }
+        }));
+    } catch (e) {
+        console.warn("[ImageService] Pixabay Error:", e);
+        return [];
+    }
+};
+
+// --- AGGREGATED SEARCH (For UI) ---
+
+/**
+ * Searches multiple providers in parallel and aggregates results.
+ * Robustness: One provider failing will NOT stop the others.
+ */
+export const searchStockImages = async (query: string): Promise<ImageResult[]> => {
+    if (!query.trim()) return [];
+    
+    // Run all enabled providers in parallel
+    const promises = [
+        searchPixabay(query),
+        searchPexels(query),
+        searchUnsplash(query)
+    ];
+
+    const results = await Promise.allSettled(promises);
+    
+    // Flatten successful results
+    const combined: ImageResult[] = results
+        .filter(r => r.status === 'fulfilled')
+        // @ts-ignore
+        .flatMap(r => r.value);
+
+    return combined;
+};
+
+// --- SINGLE SEARCH (Waterfall Logic for AI) ---
+
+/**
+ * Tries providers in order: Pixabay -> Pexels -> Unsplash -> Local Fallback.
+ * Returns the first valid single result found.
+ */
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult | null> => {
     const query = rawQuery ? rawQuery.trim() : "";
     if (!query) return getFallback(fallbackCategory);
 
-    console.log(`[ImageService] 🔍 Buscando imagen única para: "${query}"`);
+    console.log(`[ImageService] 🌊 Waterfall Search: "${query}"`);
 
-    // --- PASO 1: PIXABAY ---
-    if (API_KEYS.PIXABAY) {
-        try {
-            const url = `https://pixabay.com/api/?key=${API_KEYS.PIXABAY}&q=${encodeURIComponent(query)}&image_type=photo&safesearch=true&orientation=horizontal&per_page=3`;
-            const res = await fetch(url);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.hits && data.hits.length > 0) {
-                    const hit = data.hits[0]; // Tomamos el primero
-                    console.log("[ImageService] ✅ Encontrado en Pixabay");
-                    return {
-                        url: getSafeImageUrl(hit.webformatURL) || hit.webformatURL,
-                        credit: { name: hit.user, link: hit.pageURL, source: 'Pixabay' }
-                    };
-                }
-            } else {
-                console.warn(`[ImageService] Pixabay Error: ${res.status}`);
+    // 1. Try Pixabay
+    if (KEYS.PIXABAY) {
+        const pixabayResults = await searchPixabay(query);
+        if (pixabayResults.length > 0) return pixabayResults[0];
+    }
+
+    // 2. Try Pexels
+    if (KEYS.PEXELS) {
+        const pexelsResults = await searchPexels(query);
+        if (pexelsResults.length > 0) return pexelsResults[0];
+    }
+
+    // 3. Try Unsplash (Best quality, strictly rate limited)
+    if (KEYS.UNSPLASH) {
+        const unsplashResults = await searchUnsplash(query);
+        if (unsplashResults.length > 0) {
+            // Important: Trigger download immediately for AI auto-selection
+            if (unsplashResults[0].attribution?.downloadLocation) {
+                triggerDownload(unsplashResults[0].attribution.downloadLocation);
             }
-        } catch (e) {
-            console.warn("[ImageService] Error consultando Pixabay:", e);
+            return unsplashResults[0];
         }
     }
 
-    // --- PASO 2: PEXELS (Fallback) ---
-    if (API_KEYS.PEXELS) {
-        try {
-            console.log("[ImageService] 🔄 Intentando Pexels...");
-            const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&size=medium`;
-            const res = await fetch(url, { headers: { Authorization: API_KEYS.PEXELS } });
-            
-            if (res.ok) {
-                const data = await res.json();
-                if (data.photos && data.photos.length > 0) {
-                    const photo = data.photos[0];
-                    console.log("[ImageService] ✅ Encontrado en Pexels");
-                    return {
-                        url: getSafeImageUrl(photo.src.medium) || photo.src.medium,
-                        credit: { name: photo.photographer, link: photo.photographer_url, source: 'Pexels' }
-                    };
-                }
-            }
-        } catch (e) {
-            console.warn("[ImageService] Error consultando Pexels:", e);
-        }
-    }
-
-    // --- PASO 3: UNSPLASH (Fallback Final) ---
-    if (API_KEYS.UNSPLASH) {
-        try {
-            console.log("[ImageService] 🔄 Intentando Unsplash...");
-            const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&client_id=${API_KEYS.UNSPLASH}`;
-            const res = await fetch(url);
-            
-            if (res.ok) {
-                const data = await res.json();
-                if (data.results && data.results.length > 0) {
-                    const photo = data.results[0];
-                    trackUnsplashDownload(photo.links.download_location);
-                    console.log("[ImageService] ✅ Encontrado en Unsplash");
-                    return {
-                        url: getSafeImageUrl(photo.urls.regular) || photo.urls.regular,
-                        credit: {
-                            name: photo.user.name,
-                            link: `${photo.user.links.html}?utm_source=NeuralQuiz`,
-                            source: 'Unsplash'
-                        }
-                    };
-                }
-            }
-        } catch (e) {
-            console.warn("[ImageService] Error consultando Unsplash:", e);
-        }
-    }
-
-    // --- PASO 4: FALLBACK LOCAL ---
-    console.log("[ImageService] ⚠️ No se encontraron imágenes en APIs. Usando fallback local.");
+    // 4. Fallback
+    console.log("[ImageService] 🏳️ All providers failed (or keys missing). Using Fallback.");
     return getFallback(fallbackCategory);
 };
 
-// --- 4. BÚSQUEDA DE STOCK (MULTIPLE RESULTS - Para el Modal) ---
-// Misma lógica de cascada: Si Pixabay falla o da 0, salta al siguiente.
-
-export const searchStockImages = async (query: string): Promise<ImageResult[]> => {
-    if (!query) return [];
-    console.log(`[ImageService] 🔍 Stock Search para: "${query}"`);
-
-    // --- PASO 1: PIXABAY ---
-    if (API_KEYS.PIXABAY) {
-        try {
-            const url = `https://pixabay.com/api/?key=${API_KEYS.PIXABAY}&q=${encodeURIComponent(query)}&image_type=photo&safesearch=true&per_page=20`;
-            const res = await fetch(url);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.hits && data.hits.length > 0) {
-                    console.log(`[ImageService] Pixabay retornó ${data.hits.length} resultados.`);
-                    return data.hits.map((hit: any) => ({
-                        url: getSafeImageUrl(hit.webformatURL) || hit.webformatURL,
-                        credit: { name: hit.user, link: hit.pageURL, source: 'Pixabay' }
-                    }));
-                }
-            }
-        } catch (e) {
-            console.error("[ImageService] Pixabay Exception:", e);
-        }
-    }
-
-    // --- PASO 2: PEXELS ---
-    if (API_KEYS.PEXELS) {
-        try {
-            console.log("[ImageService] Saltando a Pexels...");
-            const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape&size=medium`;
-            const res = await fetch(url, { headers: { Authorization: API_KEYS.PEXELS } });
-            
-            if (res.ok) {
-                const data = await res.json();
-                if (data.photos && data.photos.length > 0) {
-                    console.log(`[ImageService] Pexels retornó ${data.photos.length} resultados.`);
-                    return data.photos.map((photo: any) => ({
-                        url: getSafeImageUrl(photo.src.medium) || photo.src.medium,
-                        credit: { name: photo.photographer, link: photo.photographer_url, source: 'Pexels' }
-                    }));
-                }
-            }
-        } catch (e) {
-            console.error("[ImageService] Pexels Exception:", e);
-        }
-    }
-
-    // --- PASO 3: UNSPLASH ---
-    if (API_KEYS.UNSPLASH) {
-        try {
-            console.log("[ImageService] Saltando a Unsplash...");
-            const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape&client_id=${API_KEYS.UNSPLASH}`;
-            const res = await fetch(url);
-            
-            if (res.ok) {
-                const data = await res.json();
-                if (data.results && data.results.length > 0) {
-                    console.log(`[ImageService] Unsplash retornó ${data.results.length} resultados.`);
-                    return data.results.map((photo: any) => ({
-                        url: getSafeImageUrl(photo.urls.regular) || photo.urls.regular,
-                        credit: {
-                            name: photo.user.name,
-                            link: `${photo.user.links.html}?utm_source=NeuralQuiz`,
-                            source: 'Unsplash'
-                        }
-                    }));
-                }
-            }
-        } catch (e) {
-            console.error("[ImageService] Unsplash Exception:", e);
-        }
-    }
-
-    return [];
+const getFallback = (category: string): ImageResult => {
+    const rawUrl = FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+    // Proxied URL for safety/formatting
+    const safeUrl = getSafeImageUrl(rawUrl) || rawUrl;
+    
+    return {
+        url: safeUrl,
+        alt: "Neural Fallback Image",
+        attribution: null // No attribution needed for owned assets
+    };
 };

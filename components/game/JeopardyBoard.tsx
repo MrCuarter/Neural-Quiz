@@ -831,11 +831,15 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                                     {/* LEGAL ATTRIBUTION OVERLAY */}
                                     {activeCell.q.imageCredit && (
                                         <div className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-sm text-[8px] md:text-[9px] text-white px-2 py-1 rounded border border-white/20 flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity">
-                                            <span>📷 {activeCell.q.imageCredit.name}</span>
-                                            <span className="opacity-50">|</span>
-                                            <a href={activeCell.q.imageCredit.link} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-0.5 text-cyan-200">
-                                                {activeCell.q.imageCredit.source} <ExternalLink className="w-2 h-2" />
-                                            </a>
+                                            <span>Foto de {activeCell.q.imageCredit?.name || "Autor desconocido"} en {activeCell.q.imageCredit?.source || "Web"}</span>
+                                            {activeCell.q.imageCredit?.link && (
+                                                <>
+                                                    <span className="opacity-50">|</span>
+                                                    <a href={activeCell.q.imageCredit.link} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-0.5 text-cyan-200">
+                                                        <ExternalLink className="w-2 h-2" />
+                                                    </a>
+                                                </>
+                                            )}
                                         </div>
                                     )}
                                 </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { QuizEditor } from './components/QuizEditor';
@@ -359,7 +358,14 @@ const NeuralApp: React.FC = () => {
               
               if (imageResult) {
                   qObj.imageUrl = imageResult.url;
-                  qObj.imageCredit = imageResult.credit; 
+                  // Correct mapping from ImageResult to ImageCredit
+                  if (imageResult.attribution) {
+                      qObj.imageCredit = {
+                          name: imageResult.attribution.authorName,
+                          link: imageResult.attribution.authorUrl,
+                          source: imageResult.attribution.sourceName as 'Unsplash' | 'Pexels' | 'Pixabay'
+                      };
+                  }
               }
           }
           
