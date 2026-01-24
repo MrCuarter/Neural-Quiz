@@ -36,8 +36,7 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey: activeKey });
 };
 
-// ... Request Queue and Retry Logic omitted for brevity, assume same ...
-// Re-implementing minimal queue/retry for completeness if needed or rely on existing structure
+// Request Queue and Retry Logic
 class RequestQueue {
   private queue: (() => Promise<void>)[] = [];
   private isProcessing = false;
@@ -135,10 +134,11 @@ interface GenParams {
   urls?: string[]; 
   language?: string;
   includeFeedback?: boolean;
-  tone?: string; // NEW PARAMETER
+  tone?: string;
 }
 
-const MODEL_NAME = "gemini-3-flash-preview"; 
+// *** CRITICAL: HARDCODED STABLE MODEL NAME FOR HIGH QUOTA ***
+const MODEL_NAME = "gemini-1.5-flash"; 
 
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
@@ -179,18 +179,17 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
   });
 };
 
-// ... keep parseRawTextToQuiz, enhanceQuestion, generateQuizCategories, adaptQuestionsToPlatform as they were ...
-// Re-exporting them for compatibility
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: any): Promise<any[]> => {
-    // Basic implementation placeholder to maintain file integrity
-    const ai = getAI();
-    const prompt = `Extract questions from: ${rawText.substring(0, 5000)}. Language: ${language}.`;
-    const response = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents: prompt,
-        config: { responseMimeType: "application/json", responseSchema: quizRootSchema }
+    return withRetry(async () => {
+        const ai = getAI();
+        const prompt = `Extract questions from: ${rawText.substring(0, 5000)}. Language: ${language}.`;
+        const response = await ai.models.generateContent({
+            model: MODEL_NAME,
+            contents: prompt,
+            config: { responseMimeType: "application/json", responseSchema: quizRootSchema }
+        });
+        return JSON.parse(response.text || "{}").questions || [];
     });
-    return JSON.parse(response.text || "{}").questions || [];
 };
 
 export const enhanceQuestion = async (q: Question, context: string, language: string): Promise<Question> => {
