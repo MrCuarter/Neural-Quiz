@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
@@ -13,6 +13,7 @@ import { useToast } from './ui/Toast';
 import { PublishModal } from './PublishModal'; 
 import { ImagePickerModal } from './ui/ImagePickerModal';
 import { ImageResult } from '../services/imageService';
+import { getUserQuizzes, saveQuizToFirestore } from '../services/firebaseService';
 import * as XLSX from 'xlsx';
 
 interface QuizEditorProps {
@@ -49,6 +50,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   
+  // Add to Existing State
+  const [showAddToExisting, setShowAddToExisting] = useState(false);
+  const [userQuizzes, setUserQuizzes] = useState<Quiz[]>([]);
+  const [selectedTargetQuizId, setSelectedTargetQuizId] = useState<string>('');
+  const [isAddingToExisting, setIsAddingToExisting] = useState(false);
+
   // Tags State
   const [newTag, setNewTag] = useState('');
 
@@ -67,7 +74,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   // --- PAGINATION LOGIC ---
   const totalPages = Math.ceil(quiz.questions.length / ITEMS_PER_PAGE);
   
-  // Ensure current page is valid
   useEffect(() => {
       if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
       if (currentPage < 1) setCurrentPage(1);
@@ -83,15 +89,63 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       setCurrentPage(targetPage);
       const q = quiz.questions[index];
       setExpandedQuestionId(q.id);
-      
-      // Scroll into view after a slight delay to allow render
       setTimeout(() => {
           const el = cardRefs.current[q.id];
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
   };
 
-  // --- PUBLISH LOGIC (NEW) ---
+  // --- ADD TO EXISTING LOGIC ---
+  const handleOpenAddToExisting = async () => {
+      if (!user) {
+          toast.warning("Inicia sesión para usar esta función.");
+          return;
+      }
+      setShowAddToExisting(true);
+      try {
+          const q = await getUserQuizzes(user.uid);
+          setUserQuizzes(q);
+      } catch (e) {
+          toast.error("Error cargando quizzes");
+      }
+  };
+
+  const confirmAddToExisting = async () => {
+      if (!selectedTargetQuizId) return;
+      setIsAddingToExisting(true);
+      try {
+          const targetQuiz = userQuizzes.find(q => q.id === selectedTargetQuizId);
+          if (!targetQuiz) throw new Error("Quiz not found");
+
+          // Regenerate IDs for current questions to avoid conflicts
+          const newQuestions = quiz.questions.map(q => ({
+              ...q,
+              id: uuid(),
+              options: q.options.map(o => ({...o, id: uuid()})),
+              correctOptionId: "", // Logic to remap correct IDs needed if strict
+              // Simplified: Just keep text structure mostly, deep ID remap complex here
+          }));
+          
+          // Better logic: Just use current questions as is but ensure IDs are unique compared to target
+          // Since UUIDs are random, collision probability is low.
+          
+          const updatedQuiz: Quiz = {
+              ...targetQuiz,
+              questions: [...targetQuiz.questions, ...quiz.questions],
+              updatedAt: new Date()
+          };
+
+          await saveQuizToFirestore(updatedQuiz, user.uid);
+          toast.success("Preguntas añadidas correctamente.");
+          setShowAddToExisting(false);
+      } catch (e) {
+          toast.error("Error al guardar.");
+      } finally {
+          setIsAddingToExisting(false);
+      }
+  };
+
+  // --- PUBLISH LOGIC ---
   const handleOpenPublish = () => {
       if (quiz.questions.length < 1) {
           toast.warning("Añade preguntas antes de publicar.");
@@ -103,12 +157,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const handleConfirmPublish = async (tags: string[]) => {
       setIsPublishing(true);
       try {
-          // Update local state tags too
           setQuiz(prev => ({ ...prev, tags }));
-          
-          // Publish to Community
           await publishQuiz(quiz, tags);
-          
           toast.success("¡Quiz publicado en la Comunidad!");
           setShowPublishModal(false);
       } catch (e: any) {
@@ -118,7 +168,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }
   };
 
-  // --- IMAGE PICKER HANDLERS ---
+  // --- IMAGE PICKER ---
   const openImagePicker = (qId: string) => {
       setPickingImageForId(qId);
       setShowImagePicker(true);
@@ -126,7 +176,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
   const handleImageSelected = (result: ImageResult) => {
       if (pickingImageForId) {
-          // Construct the ImageCredit object if attribution exists
           const credit = result.attribution ? {
               name: result.attribution.authorName,
               link: result.attribution.authorUrl,
@@ -144,7 +193,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   // --- CRUD OPERATIONS ---
-
   const addQuestion = () => {
     const newQ: Question = {
       id: uuid(),
@@ -160,17 +208,15 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       timeLimit: 20,
       questionType: QUESTION_TYPES.MULTIPLE_CHOICE
     };
-    // Initialize correct option
     newQ.correctOptionId = newQ.options[0].id; 
     newQ.correctOptionIds = [newQ.options[0].id];
     
     setQuiz(prev => {
         const newQs = [...prev.questions, newQ];
-        // Jump to the new page if necessary
         setTimeout(() => setCurrentPage(Math.ceil(newQs.length / ITEMS_PER_PAGE)), 50);
         return { ...prev, questions: newQs };
     });
-    setExpandedQuestionId(newQ.id); // Auto-expand new, collapse others
+    setExpandedQuestionId(newQ.id);
   };
 
   const duplicateQuestion = (qId: string) => {
@@ -178,7 +224,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       if (!original) return;
 
       const newOptions = original.options.map(o => ({...o, id: uuid()}));
-      // Map old correct IDs to new IDs based on index
       const newCorrectIds = (original.correctOptionIds || []).map(oldId => {
           const idx = original.options.findIndex(o => o.id === oldId);
           return idx !== -1 ? newOptions[idx].id : null;
@@ -448,6 +493,54 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           onSelect={handleImageSelected}
       />
 
+      {/* --- ADD TO EXISTING MODAL --- */}
+      {showAddToExisting && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+              <CyberCard className="w-full max-w-lg border-purple-500/50">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-cyber font-bold text-white text-lg">AÑADIR A QUIZ EXISTENTE</h3>
+                      <button onClick={() => setShowAddToExisting(false)}><XCircle className="w-5 h-5 text-gray-500"/></button>
+                  </div>
+                  <div className="space-y-4">
+                      <p className="text-sm text-gray-400">Selecciona el quiz al que quieres añadir las preguntas actuales ({quiz.questions.length}):</p>
+                      <div className="max-h-60 overflow-y-auto custom-scrollbar border border-gray-800 rounded bg-black/40 p-2 space-y-2">
+                          {userQuizzes.map(q => (
+                              <button 
+                                  key={q.id}
+                                  onClick={() => setSelectedTargetQuizId(q.id!)}
+                                  className={`w-full text-left p-3 rounded border transition-all ${selectedTargetQuizId === q.id ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'}`}
+                              >
+                                  <div className="font-bold text-sm">{q.title}</div>
+                                  <div className="text-xs opacity-70">{q.questions.length} preguntas existinges</div>
+                              </button>
+                          ))}
+                      </div>
+                      <CyberButton onClick={confirmAddToExisting} isLoading={isAddingToExisting} disabled={!selectedTargetQuizId} className="w-full">
+                          CONFIRMAR Y FUSIONAR
+                      </CyberButton>
+                  </div>
+              </CyberCard>
+          </div>
+      )}
+
+      {/* --- POST-GENERATION ACTION BAR --- */}
+      {quiz.questions.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-black/40 border border-gray-800 rounded-xl">
+              <CyberButton onClick={() => onPlay(quiz)} variant="neural" className="h-12 text-sm font-bold bg-yellow-600 hover:bg-yellow-500 border-yellow-400 text-black">
+                  <Gamepad2 className="w-5 h-5 mr-2" /> ¡JUGAR!
+              </CyberButton>
+              <CyberButton onClick={() => onSave(false)} isLoading={isSaving} className="h-12 text-sm">
+                  <Save className="w-5 h-5 mr-2" /> GUARDAR
+              </CyberButton>
+              <CyberButton onClick={handleOpenAddToExisting} variant="secondary" className="h-12 text-sm">
+                  <FilePlus className="w-5 h-5 mr-2" /> AÑADIR A QUIZ
+              </CyberButton>
+              <CyberButton onClick={onExport} variant="secondary" className="h-12 text-sm">
+                  <Download className="w-5 h-5 mr-2" /> EXPORTAR
+              </CyberButton>
+          </div>
+      )}
+
       {/* --- HEADER ACTIONS --- */}
       <div className="flex flex-col gap-4 border-b border-gray-800 pb-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -482,33 +575,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
               </div>
 
               <div className="flex items-center gap-2 w-full md:w-auto shrink-0 flex-wrap">
-                  {/* PUBLISH BUTTON */}
                   <CyberButton onClick={handleOpenPublish} variant="secondary" className="flex-1 md:flex-none text-xs h-10 px-4 bg-purple-900/20 border-purple-500/50 text-purple-200 hover:text-white hover:bg-purple-900/40">
                       <Globe className="w-4 h-4 mr-2" /> PUBLICAR
                   </CyberButton>
-
-                  {user ? (
-                      <>
-                          {quiz.id ? (
-                              <>
-                                  <CyberButton onClick={() => onSave(false)} isLoading={isSaving} className="flex-1 md:flex-none text-xs h-10 px-4">
-                                      <Save className="w-4 h-4 mr-1" /> ACTUALIZAR
-                                  </CyberButton>
-                                  <CyberButton variant="secondary" onClick={() => onSave(true)} isLoading={isSaving} className="flex-1 md:flex-none text-xs h-10 px-4">
-                                      <Copy className="w-4 h-4 mr-1" /> COPIAR
-                                  </CyberButton>
-                              </>
-                          ) : (
-                              <CyberButton variant="neural" onClick={() => onSave(false)} isLoading={isSaving} className="flex-1 md:flex-none h-10">
-                                  <Save className="w-4 h-4 mr-2" /> GUARDAR
-                              </CyberButton>
-                          )}
-                      </>
-                  ) : (
-                      <div className="text-xs text-gray-500 font-mono italic px-2">
-                          Login para guardar
-                      </div>
-                  )}
               </div>
           </div>
       </div>
@@ -524,18 +593,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           <div className="flex items-center gap-4 w-full md:w-auto">
              <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
              <CyberButton onClick={() => setShowAiModal(!showAiModal)} variant="secondary" className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Bot className="w-4 h-4" /> {t.add_gen_ai}</CyberButton>
-             
-             {quiz.questions.length > 3 && (
-                 <CyberButton 
-                    onClick={() => onPlay(quiz)} 
-                    variant="neural" 
-                    className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9 bg-yellow-600 hover:bg-yellow-500 border-yellow-400 text-black font-bold shadow-[0_0_10px_rgba(234,179,8,0.4)]"
-                 >
-                    <Gamepad2 className="w-4 h-4" /> ¡JUGAR!
-                 </CyberButton>
-             )}
-
-             {quiz.questions.length > 0 && <CyberButton variant="ghost" onClick={onExport} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9 border border-gray-700 bg-black/40"><Download className="w-4 h-4" /> {t.go_export}</CyberButton>}
           </div>
       </div>
 
@@ -622,7 +679,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                         const isValid = validateQuestion(q);
                         const isExpanded = expandedQuestionId === q.id;
                         const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
-                        const needsEnhance = (!isValid && q.options.length < 2) || (q.options.length > 0 && !q.correctOptionId);
                         const isEnhancing = enhancingId === q.id;
 
                         // --- CORRECT ANSWER LOGIC ---
@@ -715,15 +771,15 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                               <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
                                           </div>
                                           
-                                          {/* IMAGE TRIGGER BOX (Fixed Width matches Time Input approx) */}
+                                          {/* IMAGE TRIGGER BOX */}
                                           <div className="w-32 shrink-0 flex flex-col gap-1">
-                                              <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block opacity-0">IMG</label> {/* Spacer Label */}
+                                              <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block opacity-0">IMG</label> 
                                               {q.imageUrl ? (
                                                   <div 
                                                       onClick={() => openImagePicker(q.id)}
-                                                      className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all"
+                                                      className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all flex items-center justify-center"
                                                   >
-                                                      <img src={q.imageUrl} className="w-full h-full object-cover" alt="Q" />
+                                                      <img src={q.imageUrl} className="w-full h-full object-contain max-h-[120px]" alt="Q" />
                                                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                           <ImageIcon className="w-6 h-6 text-white" />
                                                       </div>
@@ -834,23 +890,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                             >
                                 NEXT <ChevronRight className="w-4 h-4" />
                             </CyberButton>
-                        </div>
-                    )}
-
-                    {/* PLAY NOW CTA (BOTTOM) */}
-                    {quiz.questions.length > 3 && (
-                        <div className="mt-12 p-8 border-2 border-yellow-500/50 rounded-xl bg-yellow-950/10 text-center relative overflow-hidden group">
-                            <div className="absolute inset-0 bg-yellow-500/5 group-hover:bg-yellow-500/10 transition-colors"></div>
-                            <div className="relative z-10 flex flex-col items-center gap-4">
-                                <h3 className="text-2xl font-cyber text-yellow-400">¿QUIERES PROBARLO EN VIVO?</h3>
-                                <p className="text-gray-400 font-mono text-sm max-w-md">Lanza una partida ahora mismo con estos datos. No requiere guardar ni iniciar sesión.</p>
-                                <CyberButton 
-                                    onClick={() => onPlay(quiz)} 
-                                    className="h-14 px-8 text-lg font-black bg-gradient-to-r from-yellow-600 to-orange-600 border-none shadow-[0_0_20px_rgba(234,179,8,0.4)] hover:scale-105 transition-transform"
-                                >
-                                    <Gamepad2 className="w-6 h-6 mr-3" /> ¡JUGAR AHORA!
-                                </CyberButton>
-                            </div>
                         </div>
                     )}
                 </>

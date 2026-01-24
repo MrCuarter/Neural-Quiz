@@ -9,7 +9,7 @@ interface HeaderProps {
   setLanguage: (lang: Language) => void;
   onHelp: () => void;
   onMyQuizzes: () => void;
-  onHome: () => void; // New prop for Hub navigation
+  onHome: () => void; 
 }
 
 export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes, onHome }) => {
@@ -45,7 +45,6 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
     { code: 'en', flag: '🇬🇧', label: 'EN' },
   ];
 
-  // Translation Helper with Fallback
   const t = translations[language] || translations['en'] || translations['es'] || {};
 
   return (
@@ -54,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
         
         {/* SECCIÓN IZQUIERDA: LOGO GRÁFICO + TEXTO */}
         <div className="flex items-center gap-6">
-            <button onClick={onHome} className="flex items-center gap-3 cursor-pointer group decoration-0 bg-transparent border-none p-0">
+            <button onClick={onHome} className="flex items-center gap-3 cursor-pointer group decoration-0 bg-transparent border-none p-0 outline-none">
                  <img 
                     src="https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png" 
                     alt="Neural Quiz Logo" 
@@ -69,7 +68,6 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
         {/* SECCIÓN DERECHA: ACCIONES */}
         <div className="flex items-center gap-3">
              
-             {/* WEB PRINCIPAL LINK */}
              <a 
                 href="https://mistercuarter.es" 
                 target="_blank" 
@@ -80,7 +78,6 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">WEB MR. CUARTER</span>
              </a>
 
-             {/* LOGIN/USER BUTTON */}
              {!isLoadingAuth && (
                  user ? (
                     <div className="flex items-center gap-3">
@@ -114,10 +111,8 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                  )
              )}
 
-             {/* Separator */}
              <div className="h-4 w-px bg-gray-800 mx-1 hidden sm:block"></div>
 
-             {/* Help Button */}
              <button 
                 onClick={onHelp}
                 className="p-2 text-gray-400 hover:text-pink-400 transition-colors"
@@ -126,7 +121,6 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                 <HelpCircle className="w-5 h-5" />
              </button>
 
-             {/* Language Selector */}
              <div className="flex bg-gray-900 border border-gray-800 rounded-sm p-0.5">
                 {languages.map((lang) => (
                     <button

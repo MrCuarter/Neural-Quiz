@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Quiz, GameTeam, GameMode, JeopardyConfig, DistributionMode } from '../../types';
 import { getUserQuizzes } from '../../services/firebaseService';
 import { generateQuizCategories } from '../../services/geminiService';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberCheckbox } from '../ui/CyberUI';
-import { ArrowLeft, Gamepad2, Users, Play, Loader2, Search, Trophy, Map, Zap, Clock, Settings, Monitor, Lock, Shield, PenTool, BrainCircuit, Grid3X3, Dice5, List, CheckSquare, Layers, Type, Wand2 } from 'lucide-react';
+import { ArrowLeft, Gamepad2, Users, Play, Loader2, Search, Trophy, Map, Zap, Clock, Settings, Monitor, Lock, Shield, PenTool, BrainCircuit, Grid3X3, Dice5, List, CheckSquare, Layers, Type, Wand2, Smile } from 'lucide-react';
 import { DEMO_QUIZZES } from '../../data/demoQuizzes';
 
 interface GameLobbyProps {
@@ -12,11 +12,14 @@ interface GameLobbyProps {
     onBack: () => void;
     onStartGame: (quiz: Quiz, teams: GameTeam[], mode: GameMode, config: JeopardyConfig) => void;
     t: any;
-    preSelectedQuiz?: Quiz | null; // NEW PROP
+    preSelectedQuiz?: Quiz | null;
     language?: string;
 }
 
 type LobbyPhase = 'SELECTION' | 'CONFIG';
+
+const EMOJIS = ['🚀', '🦁', '⭐', '🔥', '💎', '🍀', '⚡', '🧠', '👾', '🐉', '🍕', '🎸', '⚽', '🦄', '💀', '🤖'];
+const COLORS = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-orange-500', 'bg-lime-500', 'bg-teal-500'];
 
 export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame, t, preSelectedQuiz, language }) => {
     // --- STATE ---
@@ -31,7 +34,10 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     // Config State
     const [selectedMode, setSelectedMode] = useState<GameMode>('JEOPARDY');
     const [teamCount, setTeamCount] = useState(2);
-    const [teamNames, setTeamNames] = useState<string[]>(["Equipo Rojo", "Equipo Azul"]);
+    const [teamData, setTeamData] = useState<{name: string, color: string, emoji: string}[]>([
+        { name: "Equipo Rojo", color: COLORS[0], emoji: EMOJIS[0] },
+        { name: "Equipo Azul", color: COLORS[1], emoji: EMOJIS[1] }
+    ]);
     
     // Detailed Config
     const [config, setConfig] = useState<JeopardyConfig>({
@@ -48,6 +54,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     });
 
     const [isGeneratingCats, setIsGeneratingCats] = useState(false);
+    const [questionsExpanded, setQuestionsExpanded] = useState(false);
 
     // HANDLE PRE-SELECTED QUIZ (FROM EDITOR)
     useEffect(() => {
@@ -61,27 +68,17 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     // Initial Question Selection & Categories Logic
     useEffect(() => {
         if (selectedQuiz) {
-            // Auto-select questions
             const slotsNeeded = getSlotsNeeded(config.distributionMode, config.rows, config.cols);
             const initialIds = selectedQuiz.questions.slice(0, slotsNeeded).map(q => q.id);
             
-            // Adjust Categories Array Size
             setConfig(prev => {
                 const currentCats = [...prev.categories];
-                // Resize array
                 if (currentCats.length < config.cols) {
-                    // Fill missing
                     for(let i=currentCats.length; i<config.cols; i++) currentCats.push(`Cat ${i+1}`);
                 } else {
-                    // Trim
                     currentCats.length = config.cols;
                 }
-                
-                return { 
-                    ...prev, 
-                    selectedQuestionIds: initialIds,
-                    categories: currentCats
-                };
+                return { ...prev, selectedQuestionIds: initialIds, categories: currentCats };
             });
         }
     }, [selectedQuiz, config.distributionMode, config.rows, config.cols]); 
@@ -110,10 +107,18 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     const updateTeamCount = (count: number) => {
         const c = Math.max(2, Math.min(8, count));
         setTeamCount(c);
-        setTeamNames(prev => {
+        setTeamData(prev => {
             const next = [...prev];
             if (c > prev.length) {
-                for(let i=prev.length; i<c; i++) next.push(`Equipo ${i+1}`);
+                for(let i=prev.length; i<c; i++) {
+                    const color = COLORS[i % COLORS.length];
+                    const name = color.replace('bg-', 'Equipo ').replace('-500', '');
+                    next.push({ 
+                        name: name.charAt(0).toUpperCase() + name.slice(1), 
+                        color: color, 
+                        emoji: EMOJIS[i % EMOJIS.length] 
+                    });
+                }
             } else {
                 next.length = c;
             }
@@ -121,33 +126,23 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
         });
     };
 
-    const handleNameChange = (idx: number, name: string) => {
-        const next = [...teamNames];
-        next[idx] = name;
-        setTeamNames(next);
-    };
-
-    const handleCategoryChange = (idx: number, val: string) => {
-        const newCats = [...config.categories];
-        newCats[idx] = val;
-        setConfig(prev => ({ ...prev, categories: newCats }));
+    const updateTeamProp = (idx: number, field: string, val: string) => {
+        const next = [...teamData];
+        // @ts-ignore
+        next[idx][field] = val;
+        setTeamData(next);
     };
 
     const handleGenerateCategories = async () => {
         if (!selectedQuiz) return;
         setIsGeneratingCats(true);
         try {
-            // Get text of selected questions to give context
             const qTexts = selectedQuiz.questions
                 .filter(q => config.selectedQuestionIds.includes(q.id))
-                .slice(0, 15) // Limit context
+                .slice(0, 15)
                 .map(q => q.text);
-                
             const newCats = await generateQuizCategories(qTexts, config.cols);
-            
-            // Fill if partial response
             while(newCats.length < config.cols) newCats.push(`Cat ${newCats.length+1}`);
-            
             setConfig(prev => ({ ...prev, categories: newCats }));
         } catch (e) {
             alert("Error generando categorías.");
@@ -165,30 +160,23 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     };
 
     const getSlotsNeeded = (mode: DistributionMode, rows: number, cols: number) => {
-        if (mode === 'RIGGED') return cols; // 1 Question per column
-        if (mode === 'SPLIT') return cols * 2; // 2 Questions per column
-        return rows * cols; // Standard 1 per cell
+        if (mode === 'RIGGED') return cols; 
+        if (mode === 'SPLIT') return cols * 2; 
+        return rows * cols; 
     };
 
     const handleLaunch = () => {
         if (!selectedQuiz) return;
-        
-        const colors = [
-            'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
-            'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-orange-500'
-        ];
-
-        const teams: GameTeam[] = teamNames.map((name, i) => ({
+        const teams: GameTeam[] = teamData.map((t, i) => ({
             id: `team-${i}`,
-            name,
+            name: t.name,
             score: 0,
             inventory: [],
             usedInventory: [],
             shielded: false,
             multiplier: 1,
-            avatarColor: colors[i % colors.length]
+            avatarColor: t.color
         }));
-
         onStartGame(selectedQuiz, teams, selectedMode, config);
     };
 
@@ -197,9 +185,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     const selectedCount = config.selectedQuestionIds.length;
 
     // --- RENDER PHASE 1: SELECTION ---
-    const renderSelectionPhase = () => (
+    if (phase === 'SELECTION') return (
         <div className="max-w-5xl mx-auto w-full flex flex-col gap-6 animate-in slide-in-from-right-8">
-            {/* SEARCH & CREATE ACTIONS */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                 <div className="relative w-full md:w-96">
                     <input 
@@ -222,7 +209,6 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full min-h-[50vh]">
-                {/* COLUMN 1: DEMOS */}
                 <CyberCard className="flex flex-col h-full border-yellow-900/30 bg-black/40">
                     <div className="flex items-center gap-2 mb-4 border-b border-gray-800 pb-2">
                         <Zap className="w-5 h-5 text-yellow-400" />
@@ -230,31 +216,22 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
                     </div>
                     <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px] custom-scrollbar pr-2">
                         {DEMO_QUIZZES.map(q => (
-                            <button 
-                                key={q.id} 
-                                onClick={() => handleQuizSelect(q)}
-                                className="w-full text-left p-4 rounded border border-gray-800 bg-gray-900/50 hover:bg-yellow-900/20 hover:border-yellow-500/50 transition-all group relative overflow-hidden"
-                            >
+                            <button key={q.id} onClick={() => handleQuizSelect(q)} className="w-full text-left p-4 rounded border border-gray-800 bg-gray-900/50 hover:bg-yellow-900/20 hover:border-yellow-500/50 transition-all group relative overflow-hidden">
                                 <div className="absolute inset-0 bg-yellow-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                                 <div className="relative z-10">
                                     <h4 className="font-bold text-sm text-white group-hover:text-yellow-300">{q.title}</h4>
-                                    <p className="text-[10px] text-gray-500 mt-1">{q.description}</p>
-                                    <div className="mt-2 flex gap-2">
-                                        <span className="text-[9px] bg-black px-1.5 py-0.5 rounded text-gray-400 border border-gray-700">{q.questions.length} Qs</span>
-                                    </div>
+                                    <div className="mt-2 flex gap-2"><span className="text-[9px] bg-black px-1.5 py-0.5 rounded text-gray-400 border border-gray-700">{q.questions.length} Qs</span></div>
                                 </div>
                             </button>
                         ))}
                     </div>
                 </CyberCard>
 
-                {/* COLUMN 2: MY LIBRARY */}
                 <CyberCard className="flex flex-col h-full border-cyan-900/30 bg-black/40">
                     <div className="flex items-center gap-2 mb-4 border-b border-gray-800 pb-2">
                         <Users className="w-5 h-5 text-cyan-400" />
                         <h3 className="font-cyber font-bold text-cyan-100">MI LIBRERÍA</h3>
                     </div>
-                    
                     <div className="flex-1 space-y-3 overflow-y-auto max-h-[400px] custom-scrollbar pr-2">
                         {!user ? (
                             <div className="flex flex-col items-center justify-center h-full text-center p-6 border-2 border-dashed border-gray-800 rounded">
@@ -267,11 +244,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
                             <div className="text-center py-10 text-xs text-gray-500">No se encontraron quizzes.</div>
                         ) : (
                             filteredUserQuizzes.map(q => (
-                                <button 
-                                    key={q.id} 
-                                    onClick={() => handleQuizSelect(q)}
-                                    className="w-full text-left p-4 rounded border border-gray-800 bg-gray-900/50 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all group relative overflow-hidden"
-                                >
+                                <button key={q.id} onClick={() => handleQuizSelect(q)} className="w-full text-left p-4 rounded border border-gray-800 bg-gray-900/50 hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all group relative overflow-hidden">
                                     <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                                     <div className="relative z-10">
                                         <h4 className="font-bold text-sm text-white group-hover:text-cyan-300">{q.title}</h4>
@@ -289,261 +262,135 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
         </div>
     );
 
-    // --- RENDER PHASE 2: CONFIGURATION ---
-    const renderConfigPhase = () => (
-        <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-right-8">
+    // --- RENDER PHASE 2: CONFIGURATION (VERTICAL BLOCKS) ---
+    return (
+        <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-8 pb-20">
             
-            {/* COLUMN 1: GAMEPLAY SETTINGS */}
-            <div className="space-y-6">
-                <CyberCard className="border-purple-500/30">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-cyber font-bold text-white flex items-center gap-2">
-                            <Settings className="w-5 h-5 text-purple-400" /> AJUSTES PARTIDA
-                        </h3>
-                        {/* Only allow changing quiz if we are NOT in pre-selected mode, or simply reload if they want to exit */}
-                        {!preSelectedQuiz && <button onClick={() => setPhase('SELECTION')} className="text-xs text-gray-500 hover:text-white underline">Cambiar Quiz</button>}
-                    </div>
+            {/* BLOCK 1: GAME SETTINGS */}
+            <CyberCard className="border-purple-500/30">
+                <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+                    <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
+                        <Settings className="w-5 h-5 text-purple-400" /> 1. AJUSTES DE PARTIDA
+                    </h3>
+                    {!preSelectedQuiz && <button onClick={() => setPhase('SELECTION')} className="text-xs text-gray-500 hover:text-white underline">Cambiar Quiz</button>}
+                </div>
 
-                    <div className="space-y-6">
-                        {/* MODE */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => setSelectedMode('JEOPARDY')} className={`p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'JEOPARDY' ? 'bg-purple-900/30 border-purple-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2 block">MODO DE JUEGO</label>
+                        <div className="flex gap-3">
+                            <button onClick={() => setSelectedMode('JEOPARDY')} className={`flex-1 p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'JEOPARDY' ? 'bg-purple-900/30 border-purple-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
                                 <Trophy className={`w-5 h-5 ${selectedMode === 'JEOPARDY' ? 'text-purple-400' : 'text-gray-500'}`} />
                                 <span className="font-bold text-[10px]">JEOPARDY</span>
                             </button>
-                            <button onClick={() => setSelectedMode('HEX_CONQUEST')} className={`p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'HEX_CONQUEST' ? 'bg-yellow-900/30 border-yellow-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
+                            <button onClick={() => setSelectedMode('HEX_CONQUEST')} className={`flex-1 p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'HEX_CONQUEST' ? 'bg-yellow-900/30 border-yellow-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
                                 <Map className={`w-5 h-5 ${selectedMode === 'HEX_CONQUEST' ? 'text-yellow-400' : 'text-gray-500'}`} />
                                 <span className="font-bold text-[10px]">HEX MAP</span>
                             </button>
                         </div>
-
-                        {/* GRID & DISTRIBUTION */}
-                        {selectedMode === 'JEOPARDY' && (
-                            <>
-                                <div className="space-y-2 bg-black/20 p-3 rounded border border-gray-800">
-                                    <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-                                        <Grid3X3 className="w-4 h-4" /> Tamaño Tablero
-                                    </label>
-                                    <div className="flex gap-2">
-                                        {[3, 5, 6].map(c => (
-                                            <button 
-                                                key={c}
-                                                onClick={() => setConfig({...config, cols: c, rows: c === 3 ? 3 : 5})}
-                                                className={`flex-1 py-1 text-xs font-bold rounded border ${config.cols === c ? 'bg-cyan-900/50 border-cyan-500 text-cyan-100' : 'border-gray-700 text-gray-500'}`}
-                                            >
-                                                {c}x{c===3?3:5}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 bg-black/20 p-3 rounded border border-gray-800">
-                                    <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-                                        <Layers className="w-4 h-4" /> Distribución
-                                    </label>
-                                    <div className="flex flex-col gap-2">
-                                        <button 
-                                            onClick={() => setConfig({...config, distributionMode: 'STANDARD'})}
-                                            className={`text-left px-3 py-2 text-xs rounded border flex justify-between ${config.distributionMode === 'STANDARD' ? 'bg-cyan-900/50 border-cyan-500 text-white' : 'border-gray-700 text-gray-500'}`}
-                                        >
-                                            <span>Estándar</span>
-                                            <span className="opacity-50">1 Pregunta / Casilla</span>
-                                        </button>
-                                        <button 
-                                            onClick={() => setConfig({...config, distributionMode: 'SPLIT'})}
-                                            className={`text-left px-3 py-2 text-xs rounded border flex justify-between ${config.distributionMode === 'SPLIT' ? 'bg-cyan-900/50 border-cyan-500 text-white' : 'border-gray-700 text-gray-500'}`}
-                                        >
-                                            <span>Dividido (Split)</span>
-                                            <span className="opacity-50">2 Preguntas / Columna</span>
-                                        </button>
-                                        <button 
-                                            onClick={() => setConfig({...config, distributionMode: 'RIGGED'})}
-                                            className={`text-left px-3 py-2 text-xs rounded border flex justify-between ${config.distributionMode === 'RIGGED' ? 'bg-cyan-900/50 border-cyan-500 text-white' : 'border-gray-700 text-gray-500'}`}
-                                        >
-                                            <span>Trucado (Rigged)</span>
-                                            <span className="opacity-50">1 Pregunta / Columna</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-                        {/* RULES */}
-                        <div className="space-y-3 bg-black/40 p-4 rounded border border-gray-800">
-                            <label className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2 block flex items-center gap-2"><Dice5 className="w-4 h-4"/> Reglas</label>
-                            
-                            <CyberCheckbox 
-                                label="Items / Power-Ups" 
-                                checked={config.usePowerUps} 
-                                onChange={(c) => setConfig({...config, usePowerUps: c})} 
-                            />
-                            
-                            <CyberCheckbox 
-                                label="Eventos Aleatorios" 
-                                checked={config.randomEvents} 
-                                onChange={(c) => setConfig({...config, randomEvents: c})} 
-                            />
-
-                            <CyberCheckbox 
-                                label="Permitir Puntos Negativos" 
-                                checked={config.allowNegativePoints} 
-                                onChange={(c) => setConfig({...config, allowNegativePoints: c})} 
-                                warning={config.allowNegativePoints}
-                            />
-                            
-                            <CyberCheckbox 
-                                label="Catch-Up (Ayuda perdedor)" 
-                                checked={config.catchUpLogic} 
-                                onChange={(c) => setConfig({...config, catchUpLogic: c})} 
-                            />
-                        </div>
-                    </div>
-                </CyberCard>
-            </div>
-
-            {/* COLUMN 2: CATEGORIES & QUESTIONS */}
-            <div className="space-y-6 lg:h-[600px] flex flex-col">
-                <CyberCard className="border-cyan-500/30 flex-1 flex flex-col overflow-hidden">
-                    
-                    {/* CATEGORY INPUTS */}
-                    {selectedMode === 'JEOPARDY' && (
-                        <div className="mb-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-cyber font-bold text-white flex items-center gap-2">
-                                    <Type className="w-5 h-5 text-purple-400" /> CATEGORÍAS
-                                </h3>
-                                <button 
-                                    onClick={handleGenerateCategories}
-                                    disabled={isGeneratingCats}
-                                    className="text-[10px] bg-purple-900/50 text-purple-200 px-2 py-1 rounded flex items-center gap-1 border border-purple-500/30 hover:bg-purple-800 transition-colors"
-                                >
-                                    <Wand2 className={`w-3 h-3 ${isGeneratingCats ? 'animate-spin' : ''}`} /> GENERAR IA
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto custom-scrollbar p-1">
-                                {config.categories.map((cat, idx) => (
-                                    <input 
-                                        key={idx}
-                                        value={cat}
-                                        onChange={(e) => handleCategoryChange(idx, e.target.value)}
-                                        className="bg-black/40 border border-gray-700 text-xs text-white p-2 rounded focus:border-cyan-500 outline-none"
-                                        placeholder={`Columna ${idx + 1}`}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="border-t border-gray-800 my-2"></div>
-
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-cyber font-bold text-white flex items-center gap-2">
-                            <List className="w-5 h-5 text-cyan-400" /> PREGUNTAS
-                        </h3>
-                        <span className={`text-xs font-mono font-bold px-2 py-1 rounded ${selectedCount === slotsNeeded ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400'}`}>
-                            {selectedCount} / {slotsNeeded} Requeridas
-                        </span>
-                    </div>
-                    
-                    <p className="text-[10px] text-gray-500 mb-4 font-mono">
-                        {config.distributionMode === 'STANDARD' ? 'Modo Estándar: Se necesita 1 pregunta por casilla.' : 
-                         config.distributionMode === 'SPLIT' ? 'Modo Dividido: Filas 1-3 usan una pregunta, Filas 4-5 otra.' :
-                         'Modo Trucado: La misma pregunta se repite en toda la columna.'}
-                         Si faltan preguntas, se rellenarán con COMODÍN.
-                    </p>
-
-                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1 pr-1">
-                        {selectedQuiz?.questions.map((q, idx) => {
-                            const isSelected = config.selectedQuestionIds.includes(q.id);
-                            return (
-                                <div 
-                                    key={q.id} 
-                                    onClick={() => toggleQuestionSelection(q.id)}
-                                    className={`flex items-start gap-3 p-2 rounded border cursor-pointer transition-all ${isSelected ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-black/20 border-transparent opacity-60 hover:opacity-100'}`}
-                                >
-                                    <div className={`mt-0.5 ${isSelected ? 'text-cyan-400' : 'text-gray-600'}`}>
-                                        {isSelected ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 border border-gray-600 rounded" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className={`text-xs font-mono truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>{idx+1}. {q.text}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </CyberCard>
-            </div>
-
-            {/* COLUMN 3: TEAMS & LAUNCH */}
-            <div className="space-y-6 flex flex-col h-full">
-                <CyberCard className="border-green-500/30 flex-1 flex flex-col">
-                    <h3 className="font-cyber font-bold text-white flex items-center gap-2 mb-4">
-                        <Users className="w-5 h-5 text-green-400" /> EQUIPOS
-                    </h3>
-                    
-                    <div className="flex items-center gap-4 mb-4 bg-black/40 p-2 rounded">
-                        <button onClick={() => updateTeamCount(teamCount - 1)} className="w-8 h-8 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700 text-white font-bold">-</button>
-                        <span className="flex-1 text-center font-mono font-bold text-xl">{teamCount} Equipos</span>
-                        <button onClick={() => updateTeamCount(teamCount + 1)} className="w-8 h-8 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700 text-white font-bold">+</button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 max-h-[300px] mb-6">
-                        {teamNames.map((name, i) => (
-                            <div key={i} className="flex items-center gap-3 bg-black/20 p-2 rounded border border-gray-800">
-                                <div className={`w-3 h-3 rounded-full ${['bg-red-500','bg-blue-500','bg-green-500','bg-yellow-500','bg-purple-500','bg-pink-500','bg-cyan-500','bg-orange-500'][i%8]}`}></div>
-                                <input 
-                                    value={name} 
-                                    onChange={(e) => handleNameChange(i, e.target.value)}
-                                    className="bg-transparent text-sm text-gray-300 w-full focus:outline-none font-mono"
-                                    placeholder={`Nombre Equipo ${i+1}`}
-                                />
-                            </div>
-                        ))}
-                    </div>
-
-                    <button 
-                        onClick={handleLaunch} 
-                        className="w-full py-4 rounded-xl font-black font-cyber tracking-widest text-xl flex items-center justify-center gap-3 transition-all duration-300 shadow-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-green-500/20 hover:scale-[1.02]"
-                    >
-                        <Play className="w-6 h-6 fill-current" /> START GAME
-                    </button>
-                </CyberCard>
-            </div>
-        </div>
-    );
-
-    return (
-        <div className="min-h-screen bg-[#050505] text-white flex flex-col relative w-full pt-8 pb-20 px-4">
-            {/* BACKGROUND */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-black to-black -z-10 pointer-events-none"></div>
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 -z-10 mix-blend-overlay"></div>
-
-            {/* HEADER */}
-            <div className="max-w-7xl mx-auto w-full flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-                <button onClick={onBack} className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors uppercase font-mono font-bold tracking-widest text-sm group">
-                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    EXIT ARCADE
-                </button>
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-cyan-500 text-black rounded font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]">
-                        <Gamepad2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h2 className="text-2xl font-black font-cyber tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">
-                            NEURAL ARCADE
-                        </h2>
-                        <div className="flex gap-2">
-                            <span className={`w-2 h-2 rounded-full ${phase === 'SELECTION' ? 'bg-cyan-500' : 'bg-purple-500'} animate-pulse`}></span>
-                            <span className="text-[10px] text-gray-500 font-mono tracking-widest uppercase">
-                                {phase === 'SELECTION' ? 'SELECCIÓN DE QUIZ' : 'CONFIGURACIÓN DE SALA'}
-                            </span>
+                    <div className="space-y-3">
+                        <label className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2 block">REGLAS</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <CyberCheckbox label="Power-Ups" checked={config.usePowerUps} onChange={(c) => setConfig({...config, usePowerUps: c})} />
+                            <CyberCheckbox label="Eventos Random" checked={config.randomEvents} onChange={(c) => setConfig({...config, randomEvents: c})} />
+                            <CyberCheckbox label="Negativos" checked={config.allowNegativePoints} onChange={(c) => setConfig({...config, allowNegativePoints: c})} warning={config.allowNegativePoints} />
+                            <CyberCheckbox label="Catch-Up" checked={config.catchUpLogic} onChange={(c) => setConfig({...config, catchUpLogic: c})} />
                         </div>
                     </div>
                 </div>
-            </div>
+            </CyberCard>
 
-            {/* PHASE RENDERER */}
-            {phase === 'SELECTION' ? renderSelectionPhase() : renderConfigPhase()}
+            {/* BLOCK 2: QUESTIONS & CATEGORIES */}
+            <CyberCard className="border-cyan-500/30">
+                <div className="flex items-center justify-between mb-4 cursor-pointer" onClick={() => setQuestionsExpanded(!questionsExpanded)}>
+                    <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
+                        <List className="w-5 h-5 text-cyan-400" /> 2. PREGUNTAS Y CATEGORÍAS
+                    </h3>
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                        {selectedCount} / {slotsNeeded} Seleccionadas
+                        {questionsExpanded ? <ArrowLeft className="w-4 h-4 -rotate-90"/> : <ArrowLeft className="w-4 h-4 rotate-90"/>}
+                    </div>
+                </div>
+
+                {questionsExpanded && (
+                    <div className="animate-in slide-in-from-top-2 space-y-4">
+                        {selectedMode === 'JEOPARDY' && (
+                            <div className="bg-black/20 p-3 rounded border border-gray-800">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-mono text-purple-400">CATEGORÍAS DEL TABLERO ({config.cols})</span>
+                                    <button onClick={handleGenerateCategories} disabled={isGeneratingCats} className="text-[10px] bg-purple-900/50 text-purple-200 px-2 py-1 rounded flex items-center gap-1 border border-purple-500/30">
+                                        <Wand2 className={`w-3 h-3 ${isGeneratingCats ? 'animate-spin' : ''}`} /> GENERAR IA
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                                    {config.categories.map((cat, idx) => (
+                                        <input key={idx} value={cat} onChange={(e) => {const n=[...config.categories]; n[idx]=e.target.value; setConfig({...config, categories: n})}} className="bg-black/40 border border-gray-700 text-xs text-white p-2 rounded focus:border-cyan-500 outline-none w-full" placeholder={`Col ${idx+1}`} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="max-h-60 overflow-y-auto custom-scrollbar border border-gray-800 rounded bg-black/20 p-2 space-y-1">
+                            {selectedQuiz?.questions.map((q, idx) => {
+                                const isSelected = config.selectedQuestionIds.includes(q.id);
+                                return (
+                                    <div key={q.id} onClick={() => toggleQuestionSelection(q.id)} className={`flex items-start gap-3 p-2 rounded border cursor-pointer transition-all ${isSelected ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-black/20 border-transparent opacity-60 hover:opacity-100'}`}>
+                                        <div className={`mt-0.5 ${isSelected ? 'text-cyan-400' : 'text-gray-600'}`}>{isSelected ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 border border-gray-600 rounded" />}</div>
+                                        <p className={`text-xs font-mono truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>{idx+1}. {q.text}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </CyberCard>
+
+            {/* BLOCK 3: TEAMS */}
+            <CyberCard className="border-green-500/30">
+                <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+                    <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
+                        <Users className="w-5 h-5 text-green-400" /> 3. EQUIPOS
+                    </h3>
+                    <div className="flex items-center gap-2 bg-black/40 p-1 rounded">
+                        <button onClick={() => updateTeamCount(teamCount - 1)} className="w-6 h-6 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700">-</button>
+                        <span className="w-8 text-center font-mono font-bold text-sm">{teamCount}</span>
+                        <button onClick={() => updateTeamCount(teamCount + 1)} className="w-6 h-6 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700">+</button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    {teamData.map((team, i) => (
+                        <div key={i} className={`p-3 rounded border border-gray-700 bg-black/40 flex flex-col gap-2 relative group overflow-hidden`}>
+                            <div className={`absolute top-0 left-0 w-full h-1 ${team.color}`}></div>
+                            
+                            <div className="flex items-center gap-2">
+                                <input value={team.name} onChange={(e) => updateTeamProp(i, 'name', e.target.value)} className="bg-transparent text-sm font-bold text-white w-full focus:outline-none border-b border-transparent focus:border-white" />
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                                <select 
+                                    value={team.emoji} 
+                                    onChange={(e) => updateTeamProp(i, 'emoji', e.target.value)}
+                                    className="bg-gray-800 border border-gray-600 rounded text-lg w-12 h-8 text-center appearance-none cursor-pointer hover:bg-gray-700"
+                                >
+                                    {EMOJIS.map(e => <option key={e} value={e}>{e}</option>)}
+                                </select>
+                                <div className={`w-4 h-4 rounded-full ${team.color} shadow-sm ring-2 ring-white/10`}></div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CyberCard>
+
+            {/* LAUNCH BUTTON */}
+            <button 
+                onClick={handleLaunch} 
+                className="w-full py-5 rounded-xl font-black font-cyber tracking-widest text-2xl flex items-center justify-center gap-4 transition-all duration-300 shadow-[0_0_30px_rgba(34,197,94,0.3)] bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white hover:scale-[1.02]"
+            >
+                <Play className="w-8 h-8 fill-current" /> START GAME
+            </button>
         </div>
     );
 };

@@ -43,14 +43,12 @@ export interface ImageResult {
 /**
  * TRIGGER DOWNLOAD (FIRE-AND-FORGET)
  * Critical for Unsplash Production Compliance.
- * Execute this when the user *selects* the image to use it.
  */
 export const triggerDownload = async (downloadLocation?: string | null) => {
     if (!downloadLocation) return;
     
-    // Check if we have a key before attempting to hit the API
     if (downloadLocation.includes('api.unsplash.com') && !KEYS.UNSPLASH) {
-        return; // Cannot trigger without key
+        return; 
     }
 
     let url = downloadLocation;
@@ -59,8 +57,7 @@ export const triggerDownload = async (downloadLocation?: string | null) => {
     }
 
     try {
-        console.log(`[ImageService] 📡 Triggering download event: ${url}`);
-        await fetch(url, { mode: 'no-cors' }); // Fire and forget
+        await fetch(url, { mode: 'no-cors' }); 
     } catch (e) {
         console.warn("[ImageService] Download trigger failed silently", e);
     }
@@ -69,11 +66,7 @@ export const triggerDownload = async (downloadLocation?: string | null) => {
 // --- PROVIDER SEARCH FUNCTIONS ---
 
 const searchUnsplash = async (query: string): Promise<ImageResult[]> => {
-    // 🛡️ SHIELD: Return empty if no key, preventing invalid fetch
-    if (!KEYS.UNSPLASH) {
-        console.warn("⚠️ [ImageService] Missing Unsplash Key. Skipping.");
-        return [];
-    }
+    if (!KEYS.UNSPLASH) return [];
 
     try {
         const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape&client_id=${KEYS.UNSPLASH}`;
@@ -82,12 +75,11 @@ const searchUnsplash = async (query: string): Promise<ImageResult[]> => {
         
         const data = await res.json();
         return (data.results || []).map((photo: any) => ({
-            url: photo.urls.regular, // Hotlinking allowed by Unsplash
+            url: photo.urls.regular,
             alt: photo.alt_description || "Unsplash Image",
             attribution: {
                 sourceName: 'Unsplash',
                 authorName: photo.user.name || "Unknown",
-                // UTM params required by Unsplash API Guidelines
                 authorUrl: `${photo.user.links.html}?utm_source=NeuralQuiz&utm_medium=referral`, 
                 downloadLocation: photo.links.download_location
             }
@@ -99,11 +91,7 @@ const searchUnsplash = async (query: string): Promise<ImageResult[]> => {
 };
 
 const searchPexels = async (query: string): Promise<ImageResult[]> => {
-    // 🛡️ SHIELD
-    if (!KEYS.PEXELS) {
-        console.warn("⚠️ [ImageService] Missing Pexels Key. Skipping.");
-        return [];
-    }
+    if (!KEYS.PEXELS) return [];
 
     try {
         const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape&size=medium`;
@@ -112,7 +100,7 @@ const searchPexels = async (query: string): Promise<ImageResult[]> => {
 
         const data = await res.json();
         return (data.photos || []).map((photo: any) => ({
-            url: photo.src.large2x || photo.src.large, // Pexels hotlinking
+            url: photo.src.large2x || photo.src.large,
             alt: photo.alt || "Pexels Image",
             attribution: {
                 sourceName: 'Pexels',
@@ -128,11 +116,7 @@ const searchPexels = async (query: string): Promise<ImageResult[]> => {
 };
 
 const searchPixabay = async (query: string): Promise<ImageResult[]> => {
-    // 🛡️ SHIELD
-    if (!KEYS.PIXABAY) {
-        console.warn("⚠️ [ImageService] Missing Pixabay Key. Skipping.");
-        return [];
-    }
+    if (!KEYS.PIXABAY) return [];
 
     try {
         const url = `https://pixabay.com/api/?key=${KEYS.PIXABAY}&q=${encodeURIComponent(query)}&image_type=photo&safesearch=true&orientation=horizontal&per_page=20`;
@@ -141,7 +125,7 @@ const searchPixabay = async (query: string): Promise<ImageResult[]> => {
 
         const data = await res.json();
         return (data.hits || []).map((hit: any) => ({
-            url: hit.webformatURL, // Pixabay hotlinking
+            url: hit.webformatURL,
             alt: hit.tags || "Pixabay Image",
             attribution: {
                 sourceName: 'Pixabay',
@@ -157,37 +141,28 @@ const searchPixabay = async (query: string): Promise<ImageResult[]> => {
 };
 
 // --- AGGREGATED SEARCH (For UI) ---
-
-/**
- * Searches multiple providers in parallel and aggregates results.
- * Robustness: One provider failing will NOT stop the others.
- */
 export const searchStockImages = async (query: string): Promise<ImageResult[]> => {
     if (!query.trim()) return [];
     
-    // Run all enabled providers in parallel
-    const promises = [
-        searchPixabay(query),
+    // UI gets results from all, but prioritizes display order
+    const [unsplash, pexels, pixabay] = await Promise.allSettled([
+        searchUnsplash(query),
         searchPexels(query),
-        searchUnsplash(query)
-    ];
+        searchPixabay(query)
+    ]);
 
-    const results = await Promise.allSettled(promises);
-    
-    // Flatten successful results
-    const combined: ImageResult[] = results
-        .filter(r => r.status === 'fulfilled')
-        // @ts-ignore
-        .flatMap(r => r.value);
+    const results: ImageResult[] = [];
+    if (unsplash.status === 'fulfilled') results.push(...unsplash.value);
+    if (pexels.status === 'fulfilled') results.push(...pexels.value);
+    if (pixabay.status === 'fulfilled') results.push(...pixabay.value);
 
-    return combined;
+    return results;
 };
 
 // --- SINGLE SEARCH (Waterfall Logic for AI) ---
 
 /**
- * Tries providers in order: Pixabay -> Pexels -> Unsplash -> Local Fallback.
- * Returns the first valid single result found.
+ * STRICT PRIORITY: Unsplash -> Pexels -> Pixabay -> Fallback
  */
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult | null> => {
     const query = rawQuery ? rawQuery.trim() : "";
@@ -195,23 +170,10 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
 
     console.log(`[ImageService] 🌊 Waterfall Search: "${query}"`);
 
-    // 1. Try Pixabay
-    if (KEYS.PIXABAY) {
-        const pixabayResults = await searchPixabay(query);
-        if (pixabayResults.length > 0) return pixabayResults[0];
-    }
-
-    // 2. Try Pexels
-    if (KEYS.PEXELS) {
-        const pexelsResults = await searchPexels(query);
-        if (pexelsResults.length > 0) return pexelsResults[0];
-    }
-
-    // 3. Try Unsplash (Best quality, strictly rate limited)
+    // 1. Unsplash (Highest Quality)
     if (KEYS.UNSPLASH) {
         const unsplashResults = await searchUnsplash(query);
         if (unsplashResults.length > 0) {
-            // Important: Trigger download immediately for AI auto-selection
             if (unsplashResults[0].attribution?.downloadLocation) {
                 triggerDownload(unsplashResults[0].attribution.downloadLocation);
             }
@@ -219,19 +181,30 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
         }
     }
 
+    // 2. Pexels (Middle Tier)
+    if (KEYS.PEXELS) {
+        const pexelsResults = await searchPexels(query);
+        if (pexelsResults.length > 0) return pexelsResults[0];
+    }
+
+    // 3. Pixabay (Broadest Coverage)
+    if (KEYS.PIXABAY) {
+        const pixabayResults = await searchPixabay(query);
+        if (pixabayResults.length > 0) return pixabayResults[0];
+    }
+
     // 4. Fallback
-    console.log("[ImageService] 🏳️ All providers failed (or keys missing). Using Fallback.");
+    console.log("[ImageService] 🏳️ All providers failed. Using Fallback.");
     return getFallback(fallbackCategory);
 };
 
 const getFallback = (category: string): ImageResult => {
     const rawUrl = FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
-    // Proxied URL for safety/formatting
     const safeUrl = getSafeImageUrl(rawUrl) || rawUrl;
     
     return {
         url: safeUrl,
         alt: "Neural Fallback Image",
-        attribution: null // No attribution needed for owned assets
+        attribution: null
     };
 };

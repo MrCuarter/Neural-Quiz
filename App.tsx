@@ -60,6 +60,11 @@ const DEFAULT_GAME_CONFIG: JeopardyConfig = {
     categories: []
 };
 
+// --- STEPPER COMPONENT ---
+const Stepper: React.FC = () => {
+    return null; // Placeholder as per requirements
+};
+
 // --- MAIN APP COMPONENT (Inner) ---
 const NeuralApp: React.FC = () => {
   const [view, setView] = useState<ViewState>('home');
@@ -85,13 +90,15 @@ const NeuralApp: React.FC = () => {
     age: string;
     context: string;
     urls: string; 
+    tone: string; // NEW PARAMETER
   }>({
     topic: '',
     count: 5,
     types: [QUESTION_TYPES.MULTIPLE_CHOICE], 
     age: 'Universal',
     context: '',
-    urls: ''
+    urls: '',
+    tone: 'Divertido'
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState(''); 
@@ -259,7 +266,6 @@ const NeuralApp: React.FC = () => {
 
   // --- GAME LAUNCHERS ---
   const launchPublicGame = (q: Quiz, mode: GameMode) => {
-      // Default setup for public launch (quick play)
       const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500'];
       const defaultTeams: GameTeam[] = [
           { id: 't1', name: 'Equipo Rojo', score: 0, inventory: [], usedInventory: [], shielded: false, multiplier: 1, avatarColor: colors[0] },
@@ -333,24 +339,20 @@ const NeuralApp: React.FC = () => {
     setGenProgress(0);
     setIsGenSuccess(false);
     
-    // Initial funny message
     setGenerationStatus(getRandomMessage('start', language)); 
     
-    // FUN FEATURE: Rotate funny messages every 3 seconds
     const funnyMessageInterval = setInterval(() => {
         setGenerationStatus(getRandomMessage('generate_ai', language));
     }, 3000);
 
-    // PROGRESS LOGIC: Count * 2 seconds duration
     const qCount = parseInt(String(genParams.count)) || 5;
     const estimatedDurationMs = qCount * 2000;
     const tickIntervalMs = 100;
     const ticks = estimatedDurationMs / tickIntervalMs;
-    const incrementPerTick = 90 / ticks; // Target 90%
+    const incrementPerTick = 90 / ticks;
 
     const progressTimer = setInterval(() => {
         setGenProgress(prev => {
-            // Slow down drastically after 90%
             if (prev >= 90) return prev + 0.05 < 99 ? prev + 0.05 : 99;
             return prev + incrementPerTick;
         });
@@ -363,20 +365,25 @@ const NeuralApp: React.FC = () => {
       const includeFeedback = PLATFORMS_WITH_FEEDBACK.includes(targetPlatform as ExportFormat);
       
       const aiResult = await generateQuizQuestions({
-        topic: genParams.topic, count: Number(genParams.count) || 5, types: genParams.types, age: genParams.age, context: genParams.context, urls: urlList, language: selectedLang, includeFeedback
+        topic: genParams.topic, 
+        count: Number(genParams.count) || 5, 
+        types: genParams.types, 
+        age: genParams.age, 
+        context: genParams.context, 
+        urls: urlList, 
+        language: selectedLang, 
+        includeFeedback,
+        tone: genParams.tone // Pass Tone
       });
       
-      const generatedQs = aiResult.questions; // Extracted from wrapper
+      const generatedQs = aiResult.questions;
       
-      // FINISH PROGRESS INSTANTLY
       clearInterval(progressTimer);
       setGenProgress(100);
       
-      // Stop funny messages, switch to serious anti-spoiler
       clearInterval(funnyMessageInterval);
       setGenerationStatus("Buscando imágenes (Anti-Spoiler)...");
 
-      // --- INTEGRATION: AUTO IMAGE SEARCH WITH FALLBACK ---
       const enhancedQuestions = await Promise.all(generatedQs.map(async (gq: any) => {
           const qObj = {
               ...gq,
@@ -391,7 +398,6 @@ const NeuralApp: React.FC = () => {
               
               if (imageResult) {
                   qObj.imageUrl = imageResult.url;
-                  // Correct mapping from ImageResult to ImageCredit
                   if (imageResult.attribution) {
                       qObj.imageCredit = {
                           name: imageResult.attribution.authorName,
@@ -401,7 +407,6 @@ const NeuralApp: React.FC = () => {
                   }
               }
           }
-          
           return qObj;
       }));
 
@@ -412,15 +417,12 @@ const NeuralApp: React.FC = () => {
         tags: aiResult.tags || ['AI Generated', targetPlatform] 
       });
       
-      // SUCCESS STATE
       setIsGenSuccess(true);
       
-      // DELAY 1 SECOND THEN MOVE
       setTimeout(() => {
           toast.success("Quiz Generated Successfully!");
           setView('create_manual');
-          window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll top
-          // Reset states after transition
+          window.scrollTo({ top: 0, behavior: 'smooth' });
           setIsGenSuccess(false);
           setGenProgress(0);
       }, 1000);
@@ -436,6 +438,7 @@ const NeuralApp: React.FC = () => {
     }
   };
 
+  // ... (Conversion functions unchanged) ...
   const clearAnalysisInterval = () => {
       if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
@@ -532,133 +535,147 @@ const NeuralApp: React.FC = () => {
       setView('create_manual');
   };
 
-  const processFileForConversion = async (file: File) => {
-    setAnalysisProgress(0);
-    try {
-      if (file.type.startsWith('image/')) {
-         const reader = new FileReader();
-         reader.readAsDataURL(file);
-         reader.onload = async () => {
-             const base64String = (reader.result as string).split(',')[1];
-             const imageInput: ImageInput = { data: base64String, mimeType: file.type };
-             await performAnalysis("Image Content", file.name, false, [], imageInput);
-         };
-         reader.onerror = (error) => { throw new Error("Failed to read image file."); }
-         return; 
+  // --- CONVERSION HANDLERS ---
+  const handleFileProcessing = async (file: File) => {
+      if (!file) return;
+      const fileName = file.name;
+      const fileType = file.type;
+
+      try {
+          if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  const data = e.target?.result;
+                  if (fileName.endsWith('.csv')) {
+                      // Attempt structured parse first for CSV
+                      const wb = XLSX.read(data, { type: 'binary' });
+                      const detectedQuestions = detectAndParseStructure(wb);
+                      if (detectedQuestions && detectedQuestions.length > 0) {
+                          performAnalysis("", fileName, true, detectedQuestions);
+                      } else {
+                          // Fallback to text analysis
+                          performAnalysis(data as string, fileName);
+                      }
+                  } else {
+                      const wb = XLSX.read(data, { type: 'binary' });
+                      const detectedQuestions = detectAndParseStructure(wb);
+                      if (detectedQuestions && detectedQuestions.length > 0) {
+                          performAnalysis("", fileName, true, detectedQuestions);
+                      } else {
+                          toast.error(t.alert_no_valid_csv);
+                      }
+                  }
+              };
+              if (fileName.endsWith('.csv')) reader.readAsText(file);
+              else reader.readAsBinaryString(file);
+              return;
+          }
+
+          if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+              const text = await extractTextFromPDF(file);
+              performAnalysis(text, fileName);
+              return;
+          }
+
+          if (fileType.startsWith('image/')) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  const base64 = e.target?.result as string;
+                  const base64Data = base64.split(',')[1];
+                  performAnalysis("Extract questions from this image", fileName, false, [], {
+                      data: base64Data,
+                      mimeType: fileType
+                  });
+              };
+              reader.readAsDataURL(file);
+              return;
+          }
+
+          if (fileType.startsWith('text/') || fileName.endsWith('.json') || fileName.endsWith('.md') || fileName.endsWith('.txt')) {
+              const text = await file.text();
+              performAnalysis(text, fileName);
+              return;
+          }
+
+          toast.error(t.alert_read_error || "Unsupported file type");
+
+      } catch (e: any) {
+          console.error(e);
+          toast.error(`${t.alert_read_error}: ${e.message}`);
       }
-      if (file.name.match(/\.(xlsx|xls|csv)$/i)) {
-        const arrayBuffer = await file.arrayBuffer();
-        const data = new Uint8Array(arrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const strictQuestions = detectAndParseStructure(workbook);
-        if (strictQuestions && strictQuestions.length > 0) {
-            await performAnalysis("", file.name.split('.')[0], true, strictQuestions);
-        } else {
-             let contentToAnalyze = "";
-             workbook.SheetNames.forEach(name => { contentToAnalyze += `\n--- SHEET: ${name} ---\n`; contentToAnalyze += XLSX.utils.sheet_to_csv(workbook.Sheets[name]); });
-             await performAnalysis(contentToAnalyze, file.name.split('.')[0]);
-        }
-      } 
-      else if (file.name.toLowerCase().endsWith('.pdf')) {
-         const pdfText = await extractTextFromPDF(file);
-         await performAnalysis(pdfText, file.name);
-      } 
-      else {
-         const content = await file.text();
-         await performAnalysis(content, file.name.split('.')[0]);
-      }
-    } catch (e: any) {
-      toast.error(`${t.alert_read_error}: ${e.message}`);
-      clearAnalysisInterval();
-    } finally {
-        if (fileInputRef.current) fileInputRef.current.value = "";
-    }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) await processFileForConversion(file);
+  const handleConvertDrag = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.type === 'dragenter' || e.type === 'dragover') {
+          setDragActive(true);
+      } else if (e.type === 'dragleave') {
+          setDragActive(false);
+      }
   };
 
-  const handleConvertDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') { setDragActive(true); } else if (e.type === 'dragleave') { setDragActive(false); } };
-  const handleConvertDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); const file = e.dataTransfer.files?.[0]; if (file) processFileForConversion(file); };
+  const handleConvertDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFileProcessing(e.dataTransfer.files[0]);
+      }
+  };
 
-  const handlePasteAnalysis = async () => {
-      if (!textToConvert.trim()) { toast.warning(t.alert_paste_first); return; }
-      const cleaned = textToConvert.replace(/Page \d+ of \d+/g, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, " "); 
-      await performAnalysis(cleaned, "Pasted Content");
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+          handleFileProcessing(e.target.files[0]);
+      }
+  };
+
+  const handlePasteAnalysis = () => {
+      if (!textToConvert.trim()) {
+          toast.warning(t.alert_paste_first);
+          return;
+      }
+      performAnalysis(textToConvert, "Pasted Text");
   };
 
   const handleUrlAnalysis = async () => {
-    if (!urlToConvert.trim()) { toast.warning(t.alert_valid_url); return; }
-    setView('convert_analysis');
-    setAnalysisStatus(language === 'es' ? "Iniciando escaneo de red neural..." : "Initiating neural network scan...");
-    setAnalysisProgress(5);
-    try {
-        const structuredResult = await analyzeUrl(urlToConvert);
-        if (structuredResult) {
-            const { quiz: quizData, report } = structuredResult;
-            setAnalysisProgress(80);
-            if (report.blockedByBot) { 
-                setAnalysisStatus("ERROR: Bloqueo Anti-Bot detectado.");
-                toast.error("WAF Block: The website blocked the scanner."); 
-            }
-            const missingAnswers = quizData.questions.some(q => q.needsEnhanceAI);
-            if (missingAnswers) {
-                setTempQuestions(quizData.questions);
-                setTempQuizInfo({ title: quizData.title, desc: `Imported from ${report.platform} (Restricted/Private)` });
-                setAnalysisStatus(getRandomMessage('error', language)); 
-                setTimeout(() => setShowMissingAnswersModal(true), 1000);
-            } else {
-                setAnalysisProgress(100);
-                setAnalysisStatus(getRandomMessage('success', language));
-                setQuiz({ ...quizData, tags: [report.platform, 'Imported'] });
-                setTimeout(() => setView('create_manual'), 1000);
-            }
-        } else {
-            setAnalysisStatus(language === 'es' ? "Estructura desconocida. Intentando IA..." : "Unknown structure. Attempting AI...");
-            const content = await fetchUrlContent(urlToConvert);
-            await performAnalysis(content, urlToConvert);
-        }
-    } catch (e: any) {
-        console.error(e);
-        setAnalysisStatus(getRandomMessage('error', language));
-        toast.error("URL Analysis Failed. Is the link public?");
-        setTimeout(() => { setView('convert_upload'); }, 4000);
-    }
-  };
+      if (!urlToConvert.trim()) {
+          toast.warning(t.alert_valid_url);
+          return;
+      }
+      
+      const url = urlToConvert.trim();
+      setView('convert_analysis');
+      setAnalysisProgress(10);
+      setAnalysisStatus("Analyzing URL...");
 
-  // Stepper
-  const Stepper = () => {
-    let step = 1;
-    if (['home', 'create_menu', 'convert_upload', 'help', 'privacy', 'terms', 'my_quizzes', 'game_lobby', 'game_board', 'game_hex', 'community'].includes(view)) step = 1;
-    if (view === 'create_ai' || view === 'convert_analysis') step = 2;
-    if (view === 'create_manual') step = 3;
-    if (view === 'convert_result') step = 4;
-    
-    // Hide stepper during game or aux views
-    if (['home', 'help', 'privacy', 'terms', 'game_board', 'game_hex', 'public_view'].includes(view)) return null;
-    
-    // Custom label if in game flow
-    const isGameFlow = view === 'game_lobby';
-    
-    const steps = [ { num: 1, label: isGameFlow ? 'LOBBY' : 'SETUP' }, { num: 2, label: isGameFlow ? 'PLAY' : 'GENERATE' }, { num: 3, label: 'EDIT' }, { num: 4, label: 'EXPORT' } ];
-    
-    return (
-        <div className="flex justify-center mb-8 font-mono text-xs tracking-wider">
-            <div className="flex items-center gap-2">
-                {steps.map((s, idx) => (
-                    <div key={s.num} className="flex items-center">
-                        <div className={`flex flex-col items-center gap-1 ${step >= s.num ? 'text-cyan-400' : 'text-gray-600'}`}>
-                            <div className={`w-6 h-6 rounded-full border flex items-center justify-center ${step >= s.num ? 'border-cyan-400 bg-cyan-950/30' : 'border-gray-700'}`}> {s.num} </div>
-                            <span>{s.label}</span>
-                        </div>
-                        {idx < steps.length - 1 && ( <div className={`w-12 h-[1px] mx-2 ${step > s.num ? 'bg-cyan-500' : 'bg-gray-800'}`} /> )}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+      try {
+          const structuredResult = await analyzeUrl(url);
+          
+          if (structuredResult) {
+              setAnalysisProgress(100);
+              setQuiz(structuredResult.quiz);
+              
+              if (structuredResult.report.missing.options || structuredResult.report.missing.correct) {
+                   setTempQuestions(structuredResult.quiz.questions);
+                   setTempQuizInfo({ title: structuredResult.quiz.title, desc: structuredResult.quiz.description });
+                   setTimeout(() => setShowMissingAnswersModal(true), 1000);
+              } else {
+                   toast.success("Quiz imported successfully!");
+                   setTimeout(() => setView('create_manual'), 1000);
+              }
+              return;
+          }
+
+          setAnalysisStatus("Fetching content for AI analysis...");
+          const content = await fetchUrlContent(url);
+          await performAnalysis(content, "URL Import");
+
+      } catch (e: any) {
+          console.error(e);
+          toast.error(`URL Analysis failed: ${e.message}`);
+          setView('convert_upload');
+      }
   };
 
   const renderMissingAnswersModal = () => (
@@ -704,7 +721,6 @@ const NeuralApp: React.FC = () => {
               </h1>
               <p className="text-gray-400 max-w-2xl mx-auto text-lg md:text-xl font-light">{t.home_subtitle_main}</p>
               
-              {/* NEW: COMMUNITY BUTTON */}
               <div className="pt-4 flex justify-center">
                   <button 
                       onClick={() => setView('community')}
@@ -743,7 +759,6 @@ const NeuralApp: React.FC = () => {
                 </div>
               </CyberCard>
 
-              {/* NEW: Arcade Card */}
               <CyberCard className="group hover:border-yellow-500/50 hover:bg-yellow-950/10 transition-all duration-300 cursor-pointer h-full" onClick={() => { setGameQuiz(null); setView('game_lobby'); }}>
                 <div className="flex flex-col h-full space-y-4">
                   <div className="p-4 bg-yellow-950/30 rounded-full w-fit group-hover:scale-110 transition-transform duration-300 border border-yellow-500/30">
@@ -790,7 +805,6 @@ const NeuralApp: React.FC = () => {
 
         {view === 'create_ai' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
-                {/* Header Back */}
                 <div className="flex items-center gap-4">
                      <button onClick={() => setView('create_menu')} className="group flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors uppercase font-mono font-bold tracking-widest text-sm">
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
@@ -798,7 +812,6 @@ const NeuralApp: React.FC = () => {
                     </button>
                 </div>
 
-                {/* Title Tag */}
                 <div className="inline-block border border-cyan-500/30 bg-cyan-900/10 px-4 py-1">
                     <span className="text-cyan-400 font-mono text-sm tracking-widest uppercase">CONFIGURACIÓN NEURAL</span>
                 </div>
@@ -823,7 +836,7 @@ const NeuralApp: React.FC = () => {
 
                     <div className="h-px bg-gray-800 w-full" />
 
-                    {/* TOPIC & COUNT */}
+                    {/* TOPIC, COUNT & TONE */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                             <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">TEMA / ASUNTO</label>
@@ -846,15 +859,31 @@ const NeuralApp: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* AGE */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">EDAD / NIVEL</label>
-                        <CyberSelect 
-                            options={['Universal', 'Primary (6-12)', 'Secondary (12-16)', 'High School (16-18)', 'University', 'Professional'].map(v => ({ value: v, label: v }))}
-                            value={genParams.age} 
-                            onChange={(e) => setGenParams({...genParams, age: e.target.value})}
-                            className="h-12"
-                        />
+                    {/* AGE & TONE */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">EDAD / NIVEL</label>
+                            <CyberSelect 
+                                options={['Universal', 'Primary (6-12)', 'Secondary (12-16)', 'High School (16-18)', 'University', 'Professional'].map(v => ({ value: v, label: v }))}
+                                value={genParams.age} 
+                                onChange={(e) => setGenParams({...genParams, age: e.target.value})}
+                                className="h-12"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">TONO</label>
+                            <CyberSelect 
+                                options={[
+                                    { value: 'Divertido', label: '🎉 Divertido / Casual' },
+                                    { value: 'Infantil', label: '🧸 Infantil / Amable' },
+                                    { value: 'Académico', label: '🎓 Académico / Serio' },
+                                    { value: 'Sarcástico', label: '😏 Sarcástico / Ingenioso' }
+                                ]}
+                                value={genParams.tone} 
+                                onChange={(e) => setGenParams({...genParams, tone: e.target.value})}
+                                className="h-12 border-purple-500/50 text-purple-200"
+                            />
+                        </div>
                     </div>
 
                     <div className="h-px bg-gray-800 w-full" />
@@ -885,7 +914,6 @@ const NeuralApp: React.FC = () => {
                             <h3 className="font-mono font-bold text-lg">MATERIAL DE CONTEXTO (OPCIONAL)</h3>
                         </div>
                         
-                        {/* Drag Area */}
                         <div 
                             className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer hover:bg-white/5 ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700'}`}
                             onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
@@ -897,7 +925,6 @@ const NeuralApp: React.FC = () => {
                             <input type="file" ref={contextFileInputRef} className="hidden" accept=".pdf,.txt,.md,.json,.csv" onChange={handleContextFileInput} multiple />
                         </div>
 
-                        {/* Text Area */}
                         <CyberTextArea 
                             value={genParams.context} 
                             onChange={(e) => setGenParams({...genParams, context: e.target.value})} 
@@ -905,7 +932,6 @@ const NeuralApp: React.FC = () => {
                             className="h-32 font-mono text-sm"
                         />
                         
-                        {/* URLs */}
                          <CyberInput 
                             placeholder="O pega URLs de referencia..." 
                             value={genParams.urls} 
@@ -913,7 +939,6 @@ const NeuralApp: React.FC = () => {
                         />
                     </div>
 
-                    {/* GENERATE BTN */}
                     <CyberButton 
                         onClick={handleCreateAI} 
                         isLoading={isGenerating} 
@@ -922,10 +947,8 @@ const NeuralApp: React.FC = () => {
                         {isGenSuccess ? <><CheckCircle2 className="w-6 h-6 mr-2 animate-bounce" /> ¡PROCESO FINALIZADO!</> : t.initiate_gen}
                     </CyberButton>
 
-                    {/* PROGRESS & STATUS */}
                     {isGenerating && (
                         <div className="mt-4 space-y-3">
-                            {/* Smart Progress Bar */}
                             <div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800 relative">
                                 <div 
                                     className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(6,182,212,0.6)]"
@@ -933,7 +956,6 @@ const NeuralApp: React.FC = () => {
                                 />
                             </div>
                             
-                            {/* Funny Status Message */}
                             <div className="text-center">
                                 <p className="font-mono text-sm md:text-base text-cyan-300 animate-pulse">
                                     <span className="opacity-50 mr-2">[{Math.floor(genProgress)}%]</span>
@@ -971,7 +993,6 @@ const NeuralApp: React.FC = () => {
             </>
         )}
 
-        {/* --- CONVERSION FLOW --- */}
         {view === 'convert_upload' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
                 <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
@@ -1048,7 +1069,6 @@ const NeuralApp: React.FC = () => {
             </div>
         )}
 
-        {/* --- GAME VIEWS --- */}
         {view === 'game_lobby' && (
             <GameLobby 
                 user={user} 
@@ -1062,7 +1082,7 @@ const NeuralApp: React.FC = () => {
                 }}
                 t={t}
                 preSelectedQuiz={gameQuiz}
-                language={language} // PASS LANGUAGE
+                language={language} 
             />
         )}
 
