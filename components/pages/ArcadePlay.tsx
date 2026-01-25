@@ -32,6 +32,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
 
     // --- GAME ENGINE STATE ---
     const [currentQIndex, setCurrentQIndex] = useState(0);
+    const [showNextButton, setShowNextButton] = useState(false); // Added missing state
     
     // Timers
     const [timeLeft, setTimeLeft] = useState(20); // Local (Classic)
