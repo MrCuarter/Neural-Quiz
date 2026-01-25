@@ -16,7 +16,6 @@ interface JeopardyBoardProps {
     gameConfig: JeopardyConfig; 
 }
 
-// ... (KEEP CONSTANTS RANDOM_EVENTS, ITEMS, ScoreDelta UNCHANGED) ...
 interface BoardCell {
     id: string;
     q: Question | null;
@@ -73,7 +72,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
     const { quiz: loadedQuiz, loading, error } = useGameQuizLoader(quizId || propQuiz?.id, propQuiz);
     const activeQuiz = loadedQuiz || propQuiz;
 
-    // --- STATE --- (Keep logic same as previous, just updating render)
+    // --- STATE ---
     const [phase, setPhase] = useState<string>('CONFIG');
     const [teams, setTeams] = useState<GameTeam[]>(initialTeams);
     const [showInstructions, setShowInstructions] = useState(false);
@@ -92,8 +91,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
     const [isSpinning, setIsSpinning] = useState(false);
     const [selectedItem, setSelectedItem] = useState<{ teamIdx: number, itemIdx: number } | null>(null);
 
-    // ... (Keep useEffects and Handlers mostly identical, focus on RENDER updates) ...
-    // Copying core logic for completeness
+    // --- EFFECTS ---
     useEffect(() => {
         let interval: any = null;
         if (phase === 'QUESTION' && !showAnswer && !isTimeUp) {
@@ -156,6 +154,7 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         generateGrid();
     }, [activeQuiz, loading, error]); 
 
+    // --- GAMEPLAY LOGIC ---
     const updateTeamScore = (teamIdx: number, delta: number) => {
         const newTeams = [...teams];
         const team = newTeams[teamIdx];
@@ -175,14 +174,21 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
         const cell = grid.find(c => c.id === cellId);
         if (!cell || cell.answered || cell.locked) return;
         setActiveCell(cell);
-        if (cell.isWildcard) { setPhase('WILDCARD_REVEAL'); return; }
+        
+        // IMMEDIATE PHASE SWITCH
+        if (cell.isWildcard) { 
+            setPhase('WILDCARD_REVEAL'); 
+            return; 
+        }
+        
         setTimeLeft(gameConfig.timer);
         setIsTimeUp(false);
         setShowAnswer(false);
         const initialAnswers: Record<string, any> = {};
         teams.forEach(t => initialAnswers[t.id] = 'NONE');
         setTeamAnswers(initialAnswers);
-        if (gameConfig.randomEvents && Math.random() > 0.5) {
+        
+        if (gameConfig.randomEvents && Math.random() > 0.5) { // 50% chance of event
             const evt = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
             setActiveEvent(evt);
             setPhase('EVENT_REVEAL');
@@ -412,6 +418,52 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                 </div>
             </div>
 
+            {/* EVENT REVEAL MODAL */}
+            {phase === 'EVENT_REVEAL' && activeEvent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur animate-in zoom-in-95">
+                    <CyberCard className="w-full max-w-lg border-purple-500/50 text-center space-y-6 p-8">
+                        <div className="mx-auto p-4 bg-purple-900/30 rounded-full w-fit border border-purple-500 animate-pulse">
+                            {activeEvent.icon}
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-cyber text-purple-400 mb-2">{activeEvent.name}</h2>
+                            <p className="text-gray-300 text-lg">{activeEvent.desc}</p>
+                        </div>
+                        <CyberButton onClick={resolveEvent} className="w-full h-12 text-lg">
+                            CONTINUAR
+                        </CyberButton>
+                    </CyberCard>
+                </div>
+            )}
+
+            {/* WILDCARD REVEAL MODAL */}
+            {phase === 'WILDCARD_REVEAL' && activeCell && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur animate-in zoom-in-95">
+                    <CyberCard className="w-full max-w-lg border-yellow-500/50 text-center space-y-6 p-8">
+                        <div className="mx-auto p-4 bg-yellow-900/30 rounded-full w-fit border border-yellow-500 animate-bounce">
+                            <Gem className="w-16 h-16 text-yellow-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-cyber text-yellow-400 mb-2">¡COMODÍN ENCONTRADO!</h2>
+                            <p className="text-gray-300">Esta casilla otorga <span className="text-yellow-400 font-bold">{activeCell.points} puntos</span> gratis.</p>
+                            <p className="text-sm text-gray-500 mt-2">Selecciona qué equipo se lleva el botín:</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {teams.map((team, i) => (
+                                <button 
+                                    key={team.id}
+                                    onClick={() => claimWildcard(i)}
+                                    className={`p-3 rounded border border-gray-700 bg-gray-900 hover:border-yellow-500 hover:bg-yellow-900/20 transition-all font-bold text-white flex items-center justify-center gap-2`}
+                                >
+                                    <div className={`w-3 h-3 rounded-full ${team.avatarColor}`}></div>
+                                    {team.name}
+                                </button>
+                            ))}
+                        </div>
+                    </CyberCard>
+                </div>
+            )}
+
             {/* QUESTION MODAL */}
             {(phase === 'QUESTION' || phase === 'SCORING') && activeCell && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur animate-in slide-in-from-bottom-10">
@@ -437,10 +489,10 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                                     <img src={activeCell.q.imageUrl} className="max-h-[40vh] mx-auto rounded border border-gray-700 shadow-xl" alt="Q" />
                                     {/* UNSPLASH COMPLIANT ATTRIBUTION */}
                                     {activeCell.q.imageCredit && (
-                                        <div className="absolute bottom-1 right-1 bg-black/60 text-[10px] text-white px-2 py-1 rounded backdrop-blur-sm border border-white/10 shadow-lg">
+                                        <div className="absolute bottom-1 right-1 bg-black/60 text-[10px] text-white px-2 py-1 rounded backdrop-blur-sm border border-white/10 shadow-lg z-20 pointer-events-auto">
                                             {activeCell.q.imageCredit.source === 'Unsplash' ? (
                                                 <>
-                                                    Photo by <a href={activeCell.q.imageCredit.link} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-white/50 hover:text-cyan-400 hover:decoration-cyan-400">{activeCell.q.imageCredit.name}</a> on <a href="https://unsplash.com/?utm_source=NeuralQuiz&utm_medium=referral" target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-white/50 hover:text-cyan-400 hover:decoration-cyan-400">Unsplash</a>
+                                                    Photo by <a href={`${activeCell.q.imageCredit.link}?utm_source=NeuralQuiz&utm_medium=referral`} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-white/50 hover:text-cyan-400 hover:decoration-cyan-400">{activeCell.q.imageCredit.name}</a> on <a href="https://unsplash.com/?utm_source=NeuralQuiz&utm_medium=referral" target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-white/50 hover:text-cyan-400 hover:decoration-cyan-400">Unsplash</a>
                                                 </>
                                             ) : (
                                                 <span>Image by {activeCell.q.imageCredit.name} ({activeCell.q.imageCredit.source})</span>
