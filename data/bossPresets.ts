@@ -1,15 +1,17 @@
 
-// DEFINICIÓN LOCAL DE TIPOS PARA EVITAR ERRORES DE RUTA (SOLUCIÓN BYPASS)
-export interface BossImageConfig {
+// --- HOSTINGER BUILD FIX: LOCAL TYPES DEFINITION ---
+// Este archivo define sus propios tipos para evitar errores de resolución de rutas (../types) en entornos Linux estrictos.
+
+interface LocalBossImageConfig {
     idle: string;   
     damage?: string; 
     defeat: string; 
     win: string;    
 }
 
-export interface BossSettings {
+interface LocalBossSettings {
     bossName: string;
-    images: BossImageConfig;
+    images: LocalBossImageConfig;
     health: {
         bossHP: number;
         playerHP: number;
@@ -26,7 +28,8 @@ export interface BossSettings {
     };
 }
 
-export const PRESET_BOSSES: Record<string, BossSettings> = {
+// Usamos los tipos locales para asegurar que este archivo sea 100% independiente
+export const PRESET_BOSSES: Record<string, LocalBossSettings> = {
     CYBORG_PRIME: {
         bossName: "Cyborg Prime",
         images: {
@@ -35,7 +38,7 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
             defeat: "https://i.postimg.cc/C1f98jdB/Cyborg-Lose.png",
             win: "https://i.postimg.cc/sXZbWp1Z/Cyborg-Win.png"
         },
-        // @ts-ignore - Propiedad extra para UI
+        // @ts-ignore
         badgeUrl: "https://i.postimg.cc/RFn2tcq3/Cyborg-Badge.png",
         health: { bossHP: 1000, playerHP: 100 },
         difficulty: 'medium',
@@ -54,7 +57,7 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
             defeat: "https://i.postimg.cc/HLq9Xy3z/Vampire-Lose.png",
             win: "https://i.postimg.cc/MKd4h3z1/Vampire-Win.png"
         },
-        // @ts-ignore - Propiedad extra para UI
+        // @ts-ignore
         badgeUrl: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png",
         health: { bossHP: 1500, playerHP: 80 }, 
         difficulty: 'hard',
@@ -73,7 +76,7 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
             defeat: "https://i.postimg.cc/PrN0x4qS/Glitch-Lose.png",
             win: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png"
         },
-        // @ts-ignore - Propiedad extra para UI
+        // @ts-ignore
         badgeUrl: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
         health: { bossHP: 800, playerHP: 120 }, 
         difficulty: 'medium',
