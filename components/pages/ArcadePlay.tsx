@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
-import { Evaluation, Question, EvaluationAttempt } from '../../types';
-import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, User, Rocket, Monitor, Clock, CheckCircle2, XCircle, Trophy, Star, RotateCcw, Timer, Flame, CloudUpload } from 'lucide-react';
+import { Evaluation, Question, EvaluationAttempt, QUESTION_TYPES } from '../../types';
+import { CyberButton, CyberCard, CyberInput } from '../ui/CyberUI';
+import { Loader2, AlertTriangle, User, Rocket, Monitor, Clock, CheckCircle2, XCircle, Trophy, Star, RotateCcw, Timer, Flame, CloudUpload, CheckSquare, Square, Type, Check } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
 
 interface ArcadePlayProps {
@@ -12,9 +13,23 @@ interface ArcadePlayProps {
 
 type GameState = 'LOBBY' | 'PLAYING' | 'FINISHED';
 
-// Utility for shuffling
+// --- UTILS ---
+
 const shuffleArray = <T,>(array: T[]): T[] => {
     return [...array].sort(() => Math.random() - 0.5);
+};
+
+const cleanQuestionText = (text: string): string => {
+    if (!text) return "";
+    // Elimina patrones comunes de opciones pegadas al final como "a) ... b) ..." o "1. ... 2. ..."
+    // Busca salto de línea o espacio seguido de letra/numero + paréntesis/punto al final del string
+    return text.replace(/(\n|\s)+(?:[a-d1-4][\.\)]|[•\-])\s+.*$/is, "").trim();
+};
+
+const normalizeText = (text: string): string => {
+    return text.trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Eliminar tildes
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ""); // Eliminar puntuación
 };
 
 export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
@@ -32,20 +47,26 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
 
     // --- GAME ENGINE STATE ---
     const [currentQIndex, setCurrentQIndex] = useState(0);
-    const [showNextButton, setShowNextButton] = useState(false);
     
     // Timers
-    const [timeLeft, setTimeLeft] = useState(20); // Local (Classic)
-    const [globalTimeLeft, setGlobalTimeLeft] = useState(0); // Global (Time Attack)
+    const [timeLeft, setTimeLeft] = useState(20);
+    const [globalTimeLeft, setGlobalTimeLeft] = useState(0);
     
     // Stats Tracking
     const startTimeRef = useRef<number>(0);
     const [correctCount, setCorrectCount] = useState(0);
     
+    // --- ANSWER STATE (NEW) ---
     const [isAnswered, setIsAnswered] = useState(false);
-    const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     
+    // For Single Choice
+    const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+    // For Multi Select
+    const [selectedMultiIds, setSelectedMultiIds] = useState<string[]>([]);
+    // For Short Answer
+    const [textAnswer, setTextAnswer] = useState("");
+
     // Redemption & Retry Logic
     const [incorrectQuestions, setIncorrectQuestions] = useState<Question[]>([]); 
     const [retryQueue, setRetryQueue] = useState<Question[]>([]); 
@@ -92,7 +113,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         loadEvaluation();
     }, [evaluationId]);
 
-    // --- 2. SUBMISSION LOGIC (Effect) ---
+    // --- 2. SUBMISSION LOGIC ---
     useEffect(() => {
         const submitScore = async () => {
             if (gameState === 'FINISHED' && !isRedemptionRound && !hasSubmitted && !isSubmitting && evaluation) {
@@ -100,8 +121,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 try {
                     const endTime = Date.now();
                     const totalDurationSeconds = Math.floor((endTime - startTimeRef.current) / 1000);
-                    
-                    // Cap duration if strange values (e.g. paused tab)
                     const saneDuration = Math.min(totalDurationSeconds, 3600); 
                     
                     const totalQs = evaluation.config.questionCount;
@@ -125,7 +144,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                     setHasSubmitted(true);
                 } catch (e) {
                     console.error("Submission failed", e);
-                    // Optionally set an error state here to show retry button
                 } finally {
                     setIsSubmitting(false);
                 }
@@ -154,8 +172,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         }
     };
 
-    // --- 2. TIMER LOGIC ---
-    
+    // --- 3. TIMERS ---
     // A. Local Timer
     useEffect(() => {
         if (gameState === 'PLAYING' && !isRedemptionRound && evaluation?.config.gameMode === 'classic' && !isAnswered && timeLeft > 0) {
@@ -179,7 +196,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 });
             }, 1000);
         }
-
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }, [gameState, isAnswered, timeLeft, evaluation?.config.gameMode, isRedemptionRound]);
 
@@ -199,12 +215,12 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         return () => { if (globalTimerRef.current) clearInterval(globalTimerRef.current); };
     }, [gameState, evaluation?.config.gameMode, isRedemptionRound]);
 
-    // --- 3. GAME ACTIONS ---
+    // --- 4. GAME ACTIONS & VALIDATION ---
 
     const handleJoin = () => {
         if (!nickname.trim()) return;
         setGameState('PLAYING');
-        startTimeRef.current = Date.now(); // Start tracking real time
+        startTimeRef.current = Date.now();
         startQuestion(0);
     };
 
@@ -217,24 +233,86 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
             setTimeLeft(timeLimit);
         }
         
+        // Reset Validation State
         setIsAnswered(false);
-        setSelectedOptionId(null);
         setIsCorrect(null);
-        setShowNextButton(false);
+        
+        // Reset Inputs
+        setSelectedOptionId(null);
+        setSelectedMultiIds([]);
+        setTextAnswer("");
     };
 
-    const handleAnswer = (optionId: string) => {
-        if (isAnswered) return;
+    // UNIFIED VALIDATOR
+    const validateAnswer = (
+        type: 'SINGLE' | 'MULTI' | 'TEXT', 
+        payload: string | string[]
+    ): boolean => {
+        const currentQ = playableQuestions[currentQIndex];
+        const correctIds = currentQ.correctOptionIds || [currentQ.correctOptionId];
+
+        if (type === 'SINGLE') {
+            // Case C: Single ID match
+            return correctIds.includes(payload as string);
+        } 
         
+        if (type === 'MULTI') {
+            // Case B: Set comparison (All correct must be selected, no incorrect)
+            const userSet = new Set(payload as string[]);
+            const correctSet = new Set(correctIds);
+            
+            if (userSet.size !== correctSet.size) return false;
+            for (let id of userSet) if (!correctSet.has(id)) return false;
+            return true;
+        }
+
+        if (type === 'TEXT') {
+            // Case A: Fuzzy text match against ALL valid options
+            // In Fill Gap, usually option[0] is primary, others are valid too.
+            const userText = normalizeText(payload as string);
+            return currentQ.options.some(opt => normalizeText(opt.text) === userText);
+        }
+
+        return false;
+    };
+
+    const submitAnswer = (type: 'SINGLE' | 'MULTI' | 'TEXT') => {
+        if (isAnswered) return;
         if (timerRef.current) clearInterval(timerRef.current);
         
         setIsAnswered(true);
-        setSelectedOptionId(optionId);
+        let result = false;
 
+        if (type === 'SINGLE') result = validateAnswer('SINGLE', selectedOptionId!);
+        if (type === 'MULTI') result = validateAnswer('MULTI', selectedMultiIds);
+        if (type === 'TEXT') result = validateAnswer('TEXT', textAnswer);
+
+        setIsCorrect(result);
+        handleResult(result);
+    };
+
+    // Helper for Immediate Single Choice Click
+    const handleSingleClick = (optId: string) => {
+        if (isAnswered) return;
+        setSelectedOptionId(optId);
+        // Direct call to skip separate submit step for speed
+        if (timerRef.current) clearInterval(timerRef.current);
+        setIsAnswered(true);
+        
+        const result = validateAnswer('SINGLE', optId);
+        setIsCorrect(result);
+        handleResult(result);
+    };
+
+    const handleMultiToggle = (optId: string) => {
+        if (isAnswered) return;
+        setSelectedMultiIds(prev => 
+            prev.includes(optId) ? prev.filter(id => id !== optId) : [...prev, optId]
+        );
+    };
+
+    const handleResult = (correct: boolean) => {
         const currentQ = playableQuestions[currentQIndex];
-        const correctIds = currentQ.correctOptionIds || [currentQ.correctOptionId];
-        const correct = correctIds.includes(optionId);
-        setIsCorrect(correct);
 
         if (correct) {
             let points = 100;
@@ -314,7 +392,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         startQuestion(0);
     };
 
-    // --- 4. RENDER HELPERS ---
+    // --- 5. RENDER HELPERS ---
 
     if (loading) {
         return (
@@ -341,11 +419,16 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const totalQs = playableQuestions.length;
     const progressPercent = ((currentQIndex + 1) / totalQs) * 100;
     
+    // Determine Logic Type
+    const isMultiSelect = currentQ?.questionType === QUESTION_TYPES.MULTI_SELECT || (currentQ?.correctOptionIds && currentQ.correctOptionIds.length > 1);
+    const isShortAnswer = currentQ?.questionType === QUESTION_TYPES.FILL_GAP || currentQ?.questionType === QUESTION_TYPES.OPEN_ENDED;
+    const isSingleChoice = !isMultiSelect && !isShortAnswer;
+
+    // Timer Display
     const isTimeAttack = evaluation.config.gameMode === 'time_attack' && !isRedemptionRound;
     const displayTime = isTimeAttack ? globalTimeLeft : timeLeft;
     const maxDisplayTime = isTimeAttack ? evaluation.config.timeLimit! : (currentQ?.timeLimit || 20);
     const timerPercent = (displayTime / maxDisplayTime) * 100;
-    
     let timerColor = "bg-green-500";
     if (timerPercent < 50) timerColor = "bg-yellow-500";
     if (timerPercent < 20) timerColor = "bg-red-500";
@@ -443,6 +526,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                     <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto">
                         <div className="w-full max-w-4xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             
+                            {/* --- MEDIA & QUESTION --- */}
                             {currentQ.imageUrl && (
                                 <div className="flex justify-center mb-4">
                                     <img src={currentQ.imageUrl} alt="Question Media" className="max-h-48 md:max-h-64 rounded-lg border-2 border-gray-700 shadow-2xl object-contain bg-black" />
@@ -452,51 +536,135 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                             <div className="bg-black/60 border border-gray-700 p-6 md:p-8 rounded-xl text-center backdrop-blur-sm shadow-xl relative">
                                 {isRedemptionRound && <div className="absolute -top-3 -right-3 bg-red-600 text-white px-2 py-1 rounded text-xs font-bold animate-pulse">REDEMPTION</div>}
                                 <h2 className="text-2xl md:text-4xl font-bold font-cyber text-white leading-tight">
-                                    {currentQ.text}
+                                    {cleanQuestionText(currentQ.text)}
                                 </h2>
+                                {isMultiSelect && <p className="text-purple-400 text-xs font-mono mt-2 uppercase tracking-widest animate-pulse">[ SELECCIÓN MÚLTIPLE: ELIGE TODAS LAS CORRECTAS ]</p>}
+                                {isShortAnswer && <p className="text-yellow-400 text-xs font-mono mt-2 uppercase tracking-widest animate-pulse">[ ESCRIBE TU RESPUESTA EXACTA ]</p>}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                {currentQ.options.map((opt, idx) => {
-                                    const isSelected = selectedOptionId === opt.id;
-                                    const correctIds = currentQ.correctOptionIds || [currentQ.correctOptionId];
-                                    const isActuallyCorrect = correctIds.includes(opt.id);
-                                    
-                                    let btnClass = "bg-gray-800/80 border-gray-600 hover:bg-gray-700 hover:border-cyan-500 text-gray-200"; 
-                                    
-                                    if (isAnswered) {
-                                        if (isSelected && isCorrect) {
-                                            btnClass = "bg-green-600 border-green-400 text-white animate-pulse shadow-[0_0_20px_rgba(34,197,94,0.5)]"; 
-                                        } else if (isSelected && !isCorrect) {
-                                            btnClass = "bg-red-600 border-red-400 text-white animate-shake"; 
-                                        } else if (!isSelected && isActuallyCorrect) {
-                                            btnClass = "bg-green-900/30 border-green-500/50 text-green-200 opacity-70"; 
-                                        } else {
-                                            btnClass = "bg-gray-900 border-gray-800 text-gray-600 opacity-50"; 
+                            {/* --- INTERACTION AREA --- */}
+                            
+                            {/* CASE A: SHORT ANSWER */}
+                            {isShortAnswer && (
+                                <div className="max-w-xl mx-auto w-full space-y-4">
+                                    <input 
+                                        type="text" 
+                                        value={textAnswer}
+                                        onChange={(e) => setTextAnswer(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && !isAnswered && submitAnswer('TEXT')}
+                                        disabled={isAnswered}
+                                        placeholder="Escribe aquí..."
+                                        className={`w-full bg-black/50 border-2 rounded-lg p-6 text-2xl text-center text-white font-mono outline-none transition-all
+                                            ${isAnswered 
+                                                ? (isCorrect ? 'border-green-500 bg-green-950/30' : 'border-red-500 bg-red-950/30') 
+                                                : 'border-cyan-700 focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(6,182,212,0.3)]'}
+                                        `}
+                                        autoFocus
+                                    />
+                                    <button 
+                                        onClick={() => submitAnswer('TEXT')}
+                                        disabled={isAnswered || !textAnswer.trim()}
+                                        className={`w-full py-4 rounded font-black font-cyber text-xl tracking-widest flex items-center justify-center gap-2 transition-all ${isAnswered ? 'opacity-0' : 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:scale-[1.02] text-white shadow-lg'}`}
+                                    >
+                                        <Check className="w-6 h-6" /> VALIDAR
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* CASE B: MULTI SELECT */}
+                            {isMultiSelect && (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {currentQ.options.map((opt) => {
+                                            const isSelected = selectedMultiIds.includes(opt.id);
+                                            const correctIds = currentQ.correctOptionIds || [];
+                                            const isActuallyCorrect = correctIds.includes(opt.id);
+
+                                            let btnClass = "bg-gray-800/80 border-gray-600 hover:bg-gray-700 hover:border-purple-500 text-gray-200"; 
+                                            
+                                            if (isAnswered) {
+                                                if (isSelected && isActuallyCorrect) btnClass = "bg-green-600 border-green-400 text-white"; // Correct Pick
+                                                else if (isSelected && !isActuallyCorrect) btnClass = "bg-red-600 border-red-400 text-white"; // Wrong Pick
+                                                else if (!isSelected && isActuallyCorrect) btnClass = "bg-green-900/30 border-green-500/50 text-green-200 opacity-70"; // Missed
+                                                else btnClass = "bg-gray-900 border-gray-800 text-gray-600 opacity-50"; // Neutral
+                                            } else if (isSelected) {
+                                                btnClass = "bg-purple-900/50 border-purple-400 text-white shadow-[0_0_10px_rgba(168,85,247,0.4)]";
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={opt.id}
+                                                    onClick={() => handleMultiToggle(opt.id)}
+                                                    disabled={isAnswered}
+                                                    className={`
+                                                        relative p-6 rounded-xl border-2 text-lg md:text-xl font-bold transition-all duration-200 transform flex items-center justify-between
+                                                        ${!isAnswered ? 'active:scale-95' : 'cursor-default'}
+                                                        ${btnClass}
+                                                    `}
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        {isSelected ? <CheckSquare className="w-6 h-6" /> : <Square className="w-6 h-6" />}
+                                                        <span className="text-left">{opt.text}</span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <button 
+                                        onClick={() => submitAnswer('MULTI')}
+                                        disabled={isAnswered || selectedMultiIds.length === 0}
+                                        className={`mx-auto px-12 py-4 rounded-full font-black font-cyber text-xl tracking-widest flex items-center justify-center gap-2 transition-all ${isAnswered ? 'opacity-0' : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 text-white shadow-xl'}`}
+                                    >
+                                        <Check className="w-6 h-6" /> CONFIRMAR SELECCIÓN
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* CASE C: SINGLE CHOICE (INSTANT) */}
+                            {isSingleChoice && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                    {currentQ.options.map((opt) => {
+                                        const isSelected = selectedOptionId === opt.id;
+                                        const correctIds = currentQ.correctOptionIds || [currentQ.correctOptionId];
+                                        const isActuallyCorrect = correctIds.includes(opt.id);
+                                        
+                                        let btnClass = "bg-gray-800/80 border-gray-600 hover:bg-gray-700 hover:border-cyan-500 text-gray-200"; 
+                                        
+                                        if (isAnswered) {
+                                            if (isSelected && isCorrect) {
+                                                btnClass = "bg-green-600 border-green-400 text-white animate-pulse shadow-[0_0_20px_rgba(34,197,94,0.5)]"; 
+                                            } else if (isSelected && !isCorrect) {
+                                                btnClass = "bg-red-600 border-red-400 text-white animate-shake"; 
+                                            } else if (!isSelected && isActuallyCorrect) {
+                                                btnClass = "bg-green-900/30 border-green-500/50 text-green-200 opacity-70"; 
+                                            } else {
+                                                btnClass = "bg-gray-900 border-gray-800 text-gray-600 opacity-50"; 
+                                            }
                                         }
-                                    }
 
-                                    return (
-                                        <button
-                                            key={opt.id}
-                                            onClick={() => handleAnswer(opt.id)}
-                                            disabled={isAnswered}
-                                            className={`
-                                                relative p-6 rounded-xl border-2 text-lg md:text-xl font-bold transition-all duration-200 transform
-                                                flex items-center justify-between group
-                                                ${!isAnswered ? 'active:scale-95' : 'cursor-default'}
-                                                ${btnClass}
-                                            `}
-                                        >
-                                            <span className="flex-1 text-left">{opt.text}</span>
-                                            {isAnswered && isSelected && isCorrect && <CheckCircle2 className="w-8 h-8 text-white" />}
-                                            {isAnswered && isSelected && !isCorrect && <XCircle className="w-8 h-8 text-white" />}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                                        return (
+                                            <button
+                                                key={opt.id}
+                                                onClick={() => handleSingleClick(opt.id)}
+                                                disabled={isAnswered}
+                                                className={`
+                                                    relative p-6 rounded-xl border-2 text-lg md:text-xl font-bold transition-all duration-200 transform
+                                                    flex items-center justify-between group
+                                                    ${!isAnswered ? 'active:scale-95' : 'cursor-default'}
+                                                    ${btnClass}
+                                                `}
+                                            >
+                                                <span className="flex-1 text-left">{opt.text}</span>
+                                                {isAnswered && isSelected && isCorrect && <CheckCircle2 className="w-8 h-8 text-white" />}
+                                                {isAnswered && isSelected && !isCorrect && <XCircle className="w-8 h-8 text-white" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
 
-                            <div className="h-8 flex justify-center items-center">
+                            {/* Timer / Status Feedback */}
+                            <div className="h-8 flex justify-center items-center mt-4">
                                 {!isAnswered ? (
                                     <div className={`flex items-center gap-2 font-mono font-bold text-xl ${displayTime <= 5 ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>
                                         <Clock className="w-5 h-5" /> {displayTime}s
@@ -514,11 +682,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 </div>
             )}
 
-            {/* --- FINISHED VIEW (LEADERBOARD) --- */}
+            {/* --- FINISHED VIEW --- */}
             {gameState === 'FINISHED' && (
                 <div className="flex-1 flex flex-col items-center justify-center p-4 animate-in slide-in-from-bottom duration-700 z-10 text-center overflow-y-auto">
                     
-                    {/* Header */}
                     <div className="mb-6">
                         <div className="relative inline-block">
                             <div className="absolute inset-0 bg-yellow-500/20 blur-[60px] rounded-full"></div>
@@ -529,7 +696,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                         </h1>
                     </div>
 
-                    {/* Submission State */}
                     {isSubmitting ? (
                         <div className="flex flex-col items-center gap-4 text-cyan-400 animate-pulse">
                             <CloudUpload className="w-12 h-12" />
@@ -538,13 +704,11 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                     ) : (
                         <div className="w-full max-w-2xl space-y-6 flex flex-col items-center">
                             
-                            {/* LEADERBOARD COMPONENT */}
                             <Leaderboard 
                                 evaluationId={evaluationId} 
                                 currentAttemptId={savedAttemptId} 
                             />
 
-                            {/* YOUR SCORE CARD */}
                             <CyberCard className="w-full bg-gray-900/50 border-gray-700 p-4">
                                 <div className="flex justify-between items-center text-sm font-mono text-gray-400 mb-2">
                                     <span>TU PUNTUACIÓN</span>
@@ -558,7 +722,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                                 )}
                             </CyberCard>
 
-                            {/* REDEMPTION & EXIT */}
                             <div className="w-full space-y-3">
                                 {!isRedemptionRound && incorrectQuestions.length > 0 && (
                                     <button 

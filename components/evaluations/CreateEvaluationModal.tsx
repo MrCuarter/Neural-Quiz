@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Quiz, Evaluation, EvaluationConfig } from '../../types';
+import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
 import { createEvaluation } from '../../services/firebaseService';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberTextArea, CyberSelect } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Timer, List } from 'lucide-react';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Timer, List, Skull, Heart, Sword, User } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
 interface CreateEvaluationModalProps {
@@ -24,18 +24,38 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     
-    // New: Game Mode Config
-    const [gameMode, setGameMode] = useState<'classic' | 'time_attack'>('classic');
+    // Game Mode Config
+    const [gameMode, setGameMode] = useState<'classic' | 'time_attack' | 'final_boss'>('classic');
     const [questionCount, setQuestionCount] = useState(0);
     const [timeLimit, setTimeLimit] = useState(180); // Default 3 mins for Time Attack
     const [countWarning, setCountWarning] = useState(false);
 
-    // Mechanics
+    // --- BOSS SETTINGS STATE ---
+    const [bossName, setBossName] = useState("Dr. Caos");
+    const [bossDifficulty, setBossDifficulty] = useState<'easy' | 'medium' | 'hard' | 'legend'>('medium');
+    const [bossHP, setBossHP] = useState(1000);
+    const [playerHP, setPlayerHP] = useState(100);
+    
+    // Boss Images
+    const [imgIdle, setImgIdle] = useState("https://media.tenor.com/images/9c5b570e30129759c5c7603375525389/tenor.gif");
+    const [imgDamage, setImgDamage] = useState("");
+    const [imgDefeat, setImgDefeat] = useState("https://media1.tenor.com/m/2y1o5Vp64nQAAAAC/explosion-boom.gif");
+    const [imgWin, setImgWin] = useState("https://media1.tenor.com/m/7ydrF7q8C84AAAAC/game-over-glitch.gif");
+
+    // Boss Messages
+    const [msgBossWin, setMsgBossWin] = useState("¡Jajaja! ¡Te falta estudiar más, mortal!");
+    const [msgPlayerWin, setMsgPlayerWin] = useState("¡Imposible! ¡Me has derrotado!");
+    const [msgPerfect, setMsgPerfect] = useState("¡Nivel Legendario! Ni un solo rasguño.");
+    
+    // Boss Mechanics
+    const [finishHim, setFinishHim] = useState(true);
+
+    // Mechanics (General)
     const [speedPoints, setSpeedPoints] = useState(true);
-    const [powerUps, setPowerUps] = useState(false); // Default false for evaluation
+    const [powerUps, setPowerUps] = useState(false);
     const [showRanking, setShowRanking] = useState(true);
 
-    // Feedback
+    // Feedback (General)
     const [msgHigh, setMsgHigh] = useState("¡Impresionante! Eres un maestro.");
     const [msgMed, setMsgMed] = useState("¡Buen trabajo! Vas por buen camino.");
     const [msgLow, setMsgLow] = useState("Sigue practicando, ¡tú puedes!");
@@ -68,6 +88,25 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         }
     };
 
+    // Apply Difficulty Presets
+    const applyDifficultyPreset = (diff: 'easy' | 'medium' | 'hard' | 'legend') => {
+        setBossDifficulty(diff);
+        switch(diff) {
+            case 'easy':
+                setBossHP(500); setPlayerHP(200);
+                break;
+            case 'medium':
+                setBossHP(1000); setPlayerHP(100);
+                break;
+            case 'hard':
+                setBossHP(2000); setPlayerHP(50);
+                break;
+            case 'legend':
+                setBossHP(5000); setPlayerHP(1); // One hit kill
+                break;
+        }
+    };
+
     const handleSave = async () => {
         if (!user || !quiz) return;
         if (!title.trim()) {
@@ -79,6 +118,19 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         try {
             // Normalize count if exceeds max
             const finalCount = Math.min(Math.max(1, questionCount), quiz.questions.length);
+
+            // Construct Boss Settings if applicable
+            let bossSettings: BossSettings | undefined = undefined;
+            if (gameMode === 'final_boss') {
+                bossSettings = {
+                    bossName,
+                    difficulty: bossDifficulty,
+                    health: { bossHP, playerHP },
+                    images: { idle: imgIdle, damage: imgDamage, defeat: imgDefeat, win: imgWin },
+                    messages: { bossWins: msgBossWin, playerWins: msgPlayerWin, perfectWin: msgPerfect },
+                    mechanics: { enablePowerUps: powerUps, finishHimMove: finishHim }
+                };
+            }
 
             const config: EvaluationConfig = {
                 gameMode,
@@ -93,7 +145,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                     low: msgLow
                 },
                 startDate: new Date(startDate).toISOString(),
-                endDate: endDate ? new Date(endDate).toISOString() : undefined
+                endDate: endDate ? new Date(endDate).toISOString() : undefined,
+                bossSettings
             };
 
             const evaluationData: Omit<Evaluation, 'id' | 'createdAt'> = {
@@ -135,12 +188,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-            <CyberCard className="w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[90vh] overflow-hidden relative shadow-[0_0_50px_rgba(6,182,212,0.2)]">
+            <CyberCard className={`w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[90vh] overflow-hidden relative shadow-[0_0_50px_rgba(6,182,212,0.2)] ${gameMode === 'final_boss' ? 'border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.2)]' : ''}`}>
                 
                 {/* Header */}
                 <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-4 shrink-0">
-                    <div className="flex items-center gap-3 text-cyan-400">
-                        <Rocket className="w-6 h-6" />
+                    <div className={`flex items-center gap-3 ${gameMode === 'final_boss' ? 'text-red-500' : 'text-cyan-400'}`}>
+                        {gameMode === 'final_boss' ? <Skull className="w-6 h-6 animate-pulse" /> : <Rocket className="w-6 h-6" />}
                         <div>
                             <h2 className="font-cyber font-bold text-lg leading-none">LANZAR EVALUACIÓN ARCADE</h2>
                             <p className="text-[10px] text-gray-400 font-mono mt-1">CREA UNA SESIÓN ASÍNCRONA PARA TUS ALUMNOS</p>
@@ -195,8 +248,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                     <Zap className="w-4 h-4 text-purple-400" /> MODO Y REGLAS
                                 </h3>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="md:col-span-3">
                                         <label className="text-xs font-mono text-gray-500 uppercase tracking-widest block mb-2">MODO DE JUEGO</label>
                                         <div className="flex gap-2">
                                             <button 
@@ -208,15 +261,22 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                             </button>
                                             <button 
                                                 onClick={() => setGameMode('time_attack')}
-                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'time_attack' ? 'bg-red-900/40 border-red-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
+                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'time_attack' ? 'bg-blue-900/40 border-blue-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
                                             >
                                                 <div className="font-bold text-sm">TIME ATTACK</div>
                                                 <div className="text-[10px] opacity-70">Contrarreloj</div>
                                             </button>
+                                            <button 
+                                                onClick={() => setGameMode('final_boss')}
+                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'final_boss' ? 'bg-red-900/40 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
+                                            >
+                                                <div className="font-bold text-sm flex items-center justify-center gap-1"><Skull className="w-3 h-3"/> FINAL BOSS</div>
+                                                <div className="text-[10px] opacity-70">RPG Battle</div>
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div className="md:col-span-3 space-y-4">
                                         <div className="flex gap-4">
                                             <div className="flex-1">
                                                 <CyberInput 
@@ -246,6 +306,70 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* BOSS CONFIGURATION PANEL */}
+                                {gameMode === 'final_boss' && (
+                                    <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 border border-red-500/30 bg-red-950/10 p-4 rounded-lg">
+                                        <div className="flex items-center gap-2 text-red-400 border-b border-red-500/30 pb-2 mb-2">
+                                            <Skull className="w-5 h-5" />
+                                            <h4 className="font-cyber font-bold text-sm">CONFIGURACIÓN DEL JEFE</h4>
+                                        </div>
+
+                                        {/* Identity & Difficulty */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <CyberInput label="NOMBRE DEL BOSS" value={bossName} onChange={(e) => setBossName(e.target.value)} />
+                                            <div className="flex flex-col gap-1 w-full">
+                                                <label className="text-xs font-mono text-red-400/80 uppercase tracking-widest">DIFICULTAD (PRESETS)</label>
+                                                <select 
+                                                    value={bossDifficulty} 
+                                                    onChange={(e) => applyDifficultyPreset(e.target.value as any)}
+                                                    className="bg-black/40 border border-red-500/50 text-red-100 p-3 rounded text-sm focus:border-red-400 outline-none"
+                                                >
+                                                    <option value="easy">RECLUTA (Fácil)</option>
+                                                    <option value="medium">GUERRERO (Normal)</option>
+                                                    <option value="hard">PESADILLA (Difícil)</option>
+                                                    <option value="legend">LEYENDA (Imposible)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Health Stats */}
+                                        <div className="grid grid-cols-2 gap-4 bg-black/20 p-2 rounded">
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-[10px] font-mono text-red-400 uppercase flex items-center gap-1"><Shield className="w-3 h-3"/> VIDA JEFE</label>
+                                                <input type="number" value={bossHP} onChange={(e) => setBossHP(parseInt(e.target.value))} className="bg-transparent border-b border-red-500 text-2xl font-black text-white w-full focus:outline-none text-center" />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-[10px] font-mono text-green-400 uppercase flex items-center gap-1"><Heart className="w-3 h-3"/> VIDA JUGADOR</label>
+                                                <input type="number" value={playerHP} onChange={(e) => setPlayerHP(parseInt(e.target.value))} className="bg-transparent border-b border-green-500 text-2xl font-black text-white w-full focus:outline-none text-center" />
+                                            </div>
+                                        </div>
+
+                                        {/* Images */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-mono text-gray-500 uppercase">IMÁGENES (URLs)</label>
+                                            <CyberInput label="IDLE (NORMAL)" placeholder="URL del Boss..." value={imgIdle} onChange={(e) => setImgIdle(e.target.value)} className="text-xs" />
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <CyberInput label="DERROTADO" placeholder="URL al morir..." value={imgDefeat} onChange={(e) => setImgDefeat(e.target.value)} className="text-xs" />
+                                                <CyberInput label="VICTORIA" placeholder="URL al ganar..." value={imgWin} onChange={(e) => setImgWin(e.target.value)} className="text-xs" />
+                                            </div>
+                                        </div>
+
+                                        {/* Messages */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-mono text-gray-500 uppercase">MENSAJES DE BATALLA</label>
+                                            <CyberInput label="SI EL BOSS GANA" value={msgBossWin} onChange={(e) => setMsgBossWin(e.target.value)} className="text-xs text-red-200" />
+                                            <CyberInput label="SI EL JUGADOR GANA" value={msgPlayerWin} onChange={(e) => setMsgPlayerWin(e.target.value)} className="text-xs text-green-200" />
+                                        </div>
+
+                                        <CyberCheckbox 
+                                            label="ACTIVAR GOLPE DE GRACIA (Repasar fallos al final)" 
+                                            checked={finishHim} 
+                                            onChange={setFinishHim}
+                                            warning={finishHim}
+                                        />
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-gray-800">
                                     <CyberCheckbox 
@@ -293,8 +417,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                     ) : (
                         // SUCCESS STATE
                         <div className="flex flex-col items-center justify-center py-8 space-y-6 text-center animate-in zoom-in-95 duration-500">
-                            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center border-2 border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
-                                <Rocket className="w-10 h-10 text-green-400" />
+                            <div className={`w-20 h-20 rounded-full flex items-center justify-center border-2 shadow-[0_0_30px_rgba(34,197,94,0.4)] ${gameMode === 'final_boss' ? 'bg-red-500/20 border-red-500' : 'bg-green-500/20 border-green-500'}`}>
+                                {gameMode === 'final_boss' ? <Sword className="w-10 h-10 text-red-400" /> : <Rocket className="w-10 h-10 text-green-400" />}
                             </div>
                             <div>
                                 <h3 className="text-2xl font-cyber font-bold text-white mb-2">¡EVALUACIÓN LANZADA!</h3>

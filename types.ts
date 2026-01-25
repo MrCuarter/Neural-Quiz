@@ -74,11 +74,42 @@ export interface Quiz {
   clones?: number;
 }
 
+// --- BOSS BATTLE CONFIG ---
+export interface BossImageConfig {
+    idle: string;   // Normal state
+    damage?: string; // Taking damage (optional)
+    defeat: string; // Boss HP 0
+    win: string;    // Player HP 0
+}
+
+export interface BossSettings {
+    bossName: string;
+    images: BossImageConfig;
+    health: {
+        bossHP: number;
+        playerHP: number;
+    };
+    difficulty: 'easy' | 'medium' | 'hard' | 'legend';
+    messages: {
+        bossWins: string;
+        playerWins: string;
+        perfectWin: string;
+    };
+    mechanics: {
+        enablePowerUps: boolean;
+        finishHimMove: boolean; // "Golpe de Gracia" (Retry failed questions at the end to kill boss)
+    };
+}
+
 // --- EVALUATION (ARCADE MODE) ---
 export interface EvaluationConfig {
-    gameMode: 'classic' | 'time_attack'; // NEW: Game Mode
-    questionCount: number; // NEW: Limit number of questions
-    timeLimit?: number; // NEW: Global time limit for Time Attack (seconds)
+    gameMode: 'classic' | 'time_attack' | 'final_boss'; // NEW: Added final_boss
+    questionCount: number; 
+    timeLimit?: number; // Global time limit for Time Attack (seconds)
+    
+    // RPG SETTINGS (Only for final_boss)
+    bossSettings?: BossSettings;
+
     allowSpeedPoints: boolean; // More points for faster answers
     allowPowerUps: boolean; // Enable items/jokers
     showRanking: boolean; // Show leaderboard to student
