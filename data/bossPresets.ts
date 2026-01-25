@@ -1,17 +1,18 @@
 
-// --- HOSTINGER BUILD FIX: LOCAL TYPES DEFINITION ---
-// Este archivo define sus propios tipos para evitar errores de resolución de rutas (../types) en entornos Linux estrictos.
+// --- SOLUCIÓN DE COMPILACIÓN: TIPOS LOCALES ---
+// Definimos las interfaces aquí mismo para eliminar la dependencia de "../types"
+// y evitar el error TS2307 en el despliegue.
 
-interface LocalBossImageConfig {
+export interface BossImageConfig {
     idle: string;   
     damage?: string; 
     defeat: string; 
     win: string;    
 }
 
-interface LocalBossSettings {
+export interface BossSettings {
     bossName: string;
-    images: LocalBossImageConfig;
+    images: BossImageConfig;
     health: {
         bossHP: number;
         playerHP: number;
@@ -26,10 +27,11 @@ interface LocalBossSettings {
         enablePowerUps: boolean;
         finishHimMove: boolean; 
     };
+    // Propiedad opcional para la UI
+    badgeUrl?: string;
 }
 
-// Usamos los tipos locales para asegurar que este archivo sea 100% independiente
-export const PRESET_BOSSES: Record<string, LocalBossSettings> = {
+export const PRESET_BOSSES: Record<string, BossSettings> = {
     CYBORG_PRIME: {
         bossName: "Cyborg Prime",
         images: {
@@ -38,7 +40,6 @@ export const PRESET_BOSSES: Record<string, LocalBossSettings> = {
             defeat: "https://i.postimg.cc/C1f98jdB/Cyborg-Lose.png",
             win: "https://i.postimg.cc/sXZbWp1Z/Cyborg-Win.png"
         },
-        // @ts-ignore
         badgeUrl: "https://i.postimg.cc/RFn2tcq3/Cyborg-Badge.png",
         health: { bossHP: 1000, playerHP: 100 },
         difficulty: 'medium',
@@ -57,7 +58,6 @@ export const PRESET_BOSSES: Record<string, LocalBossSettings> = {
             defeat: "https://i.postimg.cc/HLq9Xy3z/Vampire-Lose.png",
             win: "https://i.postimg.cc/MKd4h3z1/Vampire-Win.png"
         },
-        // @ts-ignore
         badgeUrl: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png",
         health: { bossHP: 1500, playerHP: 80 }, 
         difficulty: 'hard',
@@ -76,7 +76,6 @@ export const PRESET_BOSSES: Record<string, LocalBossSettings> = {
             defeat: "https://i.postimg.cc/PrN0x4qS/Glitch-Lose.png",
             win: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png"
         },
-        // @ts-ignore
         badgeUrl: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
         health: { bossHP: 800, playerHP: 120 }, 
         difficulty: 'medium',
