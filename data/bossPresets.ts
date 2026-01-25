@@ -25,13 +25,13 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
         bossName: "Conde Byte",
         images: {
             idle: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png", 
-            damage: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png", // Shake effect applied in CSS
+            damage: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png", 
             defeat: "https://i.postimg.cc/HLq9Xy3z/Vampire-Lose.png",
             win: "https://i.postimg.cc/MKd4h3z1/Vampire-Win.png"
         },
         // @ts-ignore
         badgeUrl: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png",
-        health: { bossHP: 1500, playerHP: 80 }, // Harder boss, less player HP
+        health: { bossHP: 1500, playerHP: 80 }, 
         difficulty: 'hard',
         messages: {
             bossWins: "Tu conocimiento se ha desangrado...",
@@ -50,7 +50,7 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
         },
         // @ts-ignore
         badgeUrl: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
-        health: { bossHP: 800, playerHP: 120 }, // Erratic but easier stats
+        health: { bossHP: 800, playerHP: 120 }, 
         difficulty: 'medium',
         messages: {
             bossWins: "404: SKILL NOT FOUND.",
