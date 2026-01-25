@@ -1,13 +1,12 @@
-
-// --- SOLUCIÓN DE COMPILACIÓN: TIPOS LOCALES ---
-// Definimos las interfaces aquí mismo para eliminar la dependencia de "../types"
-// y evitar el error TS2307 en el despliegue.
+// src/data/bossPresets.ts
+// NOTE: Types defined locally to avoid build path issues on Linux
 
 export interface BossImageConfig {
-    idle: string;   
-    damage?: string; 
-    defeat: string; 
-    win: string;    
+    idle: string;
+    damage?: string;
+    defeat: string;
+    win: string;
+    badge?: string;
 }
 
 export interface BossSettings {
@@ -25,7 +24,7 @@ export interface BossSettings {
     };
     mechanics: {
         enablePowerUps: boolean;
-        finishHimMove: boolean; 
+        finishHimMove: boolean;
     };
     // Propiedad opcional para la UI
     badgeUrl?: string;
