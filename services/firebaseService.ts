@@ -21,7 +21,7 @@ import {
   serverTimestamp 
 } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
-import { Quiz } from "../types";
+import { Quiz, Evaluation } from "../types";
 
 // --- 1. CONFIGURACIÓN DEL PROYECTO 'UNA-PARA-TODAS' ---
 const firebaseConfig = { 
@@ -156,6 +156,29 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
         console.error(">> Datos:", cleanData); 
         console.error(">> Error:", e);
         throw e;
+    }
+};
+
+/**
+ * Create a new Arcade Evaluation
+ */
+export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+        const payload = {
+            ...evaluation,
+            createdAt: serverTimestamp(),
+            isActive: true,
+            participants: 0
+        };
+        
+        // Sanitize to remove undefined
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        
+        const docRef = await addDoc(collection(db, "evaluations"), cleanPayload);
+        return docRef.id;
+    } catch (error: any) {
+        console.error("Error creating evaluation:", error);
+        throw error;
     }
 };
 

@@ -74,6 +74,33 @@ export interface Quiz {
   clones?: number;
 }
 
+// --- EVALUATION (ARCADE MODE) ---
+export interface EvaluationConfig {
+    allowSpeedPoints: boolean; // More points for faster answers
+    allowPowerUps: boolean; // Enable items/jokers
+    showRanking: boolean; // Show leaderboard to student
+    feedbackMessages: {
+        high: string; // > 90%
+        medium: string; // 60-90%
+        low: string; // < 60%
+    };
+    startDate: string; // ISO String
+    endDate?: string; // ISO String (Optional)
+}
+
+export interface Evaluation {
+    id?: string;
+    quizId: string;
+    quizTitle: string; // Denormalized for display
+    hostUserId: string;
+    title: string; // Evaluation specific title (e.g. "Examen Matemáticas 3ºB")
+    config: EvaluationConfig;
+    createdAt: any;
+    isActive: boolean;
+    questions: Question[]; // Snapshot of questions at launch time
+    participants?: number; // Counter
+}
+
 // --- GAME TYPES ---
 export type GameMode = 'JEOPARDY' | 'HEX_CONQUEST';
 

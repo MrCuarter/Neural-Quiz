@@ -3,8 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { Quiz } from '../types';
 import { getUserQuizzes, deleteQuizFromFirestore, saveQuizToFirestore } from '../services/firebaseService';
 import { CyberButton, CyberCard, CyberInput, CyberSelect, CyberCheckbox } from './ui/CyberUI';
-import { ArrowLeft, Edit, Trash2, Calendar, Hash, Search, Filter, Loader2, Sparkles, Merge, CheckSquare } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Calendar, Hash, Search, Filter, Loader2, Sparkles, Merge, CheckSquare, Rocket } from 'lucide-react';
 import { useToast } from './ui/Toast';
+import { CreateEvaluationModal } from './evaluations/CreateEvaluationModal'; // NEW IMPORT
 
 interface MyQuizzesProps {
     user: any;
@@ -20,6 +21,11 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
     const [mergeMode, setMergeMode] = useState(false);
     const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
     const [isMerging, setIsMerging] = useState(false);
+    
+    // Evaluation State
+    const [showEvalModal, setShowEvalModal] = useState(false);
+    const [evalTargetQuiz, setEvalTargetQuiz] = useState<Quiz | null>(null);
+
     const toast = useToast();
 
     useEffect(() => {
@@ -100,6 +106,12 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
         }
     };
 
+    const handleLaunchEvaluation = (quiz: Quiz, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEvalTargetQuiz(quiz);
+        setShowEvalModal(true);
+    };
+
     // FILTERING LOGIC
     const filteredQuizzes = quizzes.filter(q => {
         const term = searchTerm.toLowerCase();
@@ -121,6 +133,16 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
 
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 w-full pb-20 pt-8">
+            
+            {showEvalModal && evalTargetQuiz && (
+                <CreateEvaluationModal 
+                    isOpen={showEvalModal}
+                    onClose={() => setShowEvalModal(false)}
+                    quiz={evalTargetQuiz}
+                    user={user}
+                />
+            )}
+
             <div className="flex items-center justify-between border-b border-gray-800 pb-4">
                 <div className="flex items-center gap-4">
                     <CyberButton variant="ghost" onClick={onBack} className="pl-0 gap-2">
@@ -212,6 +234,7 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
                                             <button 
                                                 onClick={(e) => handleDelete(quiz.id!, e)}
                                                 className="text-gray-600 hover:text-red-500 p-1 rounded hover:bg-red-950/30 transition-colors"
+                                                title="Eliminar"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -243,8 +266,18 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
                                                 <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(quiz.updatedAt).toLocaleDateString()}</span>
                                             </div>
                                             {!mergeMode && (
-                                                <div className="text-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                                                    <Edit className="w-3 h-3" /> EDITAR
+                                                <div className="flex gap-2">
+                                                    {/* NEW LAUNCH BUTTON */}
+                                                    <button
+                                                        onClick={(e) => handleLaunchEvaluation(quiz, e)}
+                                                        className="text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 px-2 py-1 rounded flex items-center gap-1 transition-all shadow-lg hover:shadow-green-500/20"
+                                                        title="Lanzar Evaluación Arcade"
+                                                    >
+                                                        <Rocket className="w-3 h-3" /> LANZAR
+                                                    </button>
+                                                    <div className="text-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                                        <Edit className="w-3 h-3" /> EDITAR
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
