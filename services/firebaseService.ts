@@ -23,26 +23,58 @@ import {
 import { getAnalytics } from "firebase/analytics";
 import { Quiz, Evaluation } from "../types";
 
-// --- 1. CONFIGURACIÓN DEL PROYECTO 'UNA-PARA-TODAS' ---
-// SECURITY UPDATE: Credentials removed from source code.
-// Ensure these VITE_ variables are set in your Hostinger/Vercel environment.
+// --- 0. HELPER PARA CARGA SEGURA DE VARIABLES DE ENTORNO ---
+// Evita el crash "Cannot read properties of undefined" en entornos sin env vars
+const getEnv = (key: string): string => {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            return import.meta.env[key] || "";
+        }
+    } catch (e) {
+        // Silencioso en caso de error de acceso
+    }
+    return "";
+};
+
+// --- 1. CONFIGURACIÓN DEL PROYECTO ---
+const apiKey = getEnv("VITE_API_FIREBASE");
+const authDomain = getEnv("VITE_AUTH_DOMAIN");
+const projectId = getEnv("VITE_PROJECT_ID");
+
+// Detección de entorno sin conexión
+const isOfflineMode = !apiKey || apiKey === "undefined";
+
+if (isOfflineMode) {
+    console.warn(
+        "%c⚠️ [FIREBASE] MODO PREVIEW SIN CONEXIÓN", 
+        "background: #f59e0b; color: #000; padding: 4px; font-weight: bold; border-radius: 4px;"
+    );
+    console.warn("No se detectaron claves de API. La interfaz cargará, pero la autenticación y base de datos no funcionarán.");
+}
+
 const firebaseConfig = { 
-  apiKey: (import.meta as any).env.VITE_API_FIREBASE, 
-  authDomain: (import.meta as any).env.VITE_AUTH_DOMAIN, 
-  projectId: (import.meta as any).env.VITE_PROJECT_ID, 
-  storageBucket: (import.meta as any).env.VITE_STORAGE_BUCKET || "una-para-todas.firebasestorage.app", 
-  messagingSenderId: (import.meta as any).env.VITE_MESSAGING_SENDER_ID || "1005385021667", 
-  appId: (import.meta as any).env.VITE_APP_ID || "1:1005385021667:web:b0c13438ab526d29bcadd6", 
-  measurementId: (import.meta as any).env.VITE_MEASUREMENT_ID || "G-M5VDERWPRJ" 
+  apiKey: apiKey || "DEV_MODE_DUMMY_KEY", 
+  authDomain: authDomain || "dev-mode.firebaseapp.com", 
+  projectId: projectId || "dev-mode-project", 
+  storageBucket: getEnv("VITE_STORAGE_BUCKET") || "una-para-todas.firebasestorage.app", 
+  messagingSenderId: getEnv("VITE_MESSAGING_SENDER_ID") || "1005385021667", 
+  appId: getEnv("VITE_APP_ID") || "1:1005385021667:web:b0c13438ab526d29bcadd6", 
+  measurementId: getEnv("VITE_MEASUREMENT_ID") || "G-M5VDERWPRJ" 
 };
 
 // --- 2. INICIALIZACIÓN ---
 const app = initializeApp(firebaseConfig);
 
-// Inicializar Analytics solo si estamos en un entorno de navegador
+// Inicializar Analytics solo si estamos en un entorno de navegador y hay conexión
 let analytics;
-if (typeof window !== 'undefined') {
-  analytics = getAnalytics(app);
+if (typeof window !== 'undefined' && !isOfflineMode) {
+  try {
+      analytics = getAnalytics(app);
+  } catch (e) {
+      console.warn("Analytics failed to load:", e);
+  }
 }
 
 export const db = getFirestore(app);
@@ -58,11 +90,17 @@ googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 // Exportamos onAuthStateChanged para uso en componentes
 export { onAuthStateChanged };
 
-console.log("🔥 Firebase (NPM) inicializado de forma segura.");
+if (!isOfflineMode) {
+    console.log("🔥 Firebase (NPM) inicializado correctamente.");
+}
 
 // --- 4. FUNCIONES DE AUTENTICACIÓN ---
 
 export const signInWithGoogle = async (): Promise<{ user: any, token: string | null }> => {
+  if (isOfflineMode) {
+      alert("Modo Preview: El inicio de sesión no está disponible sin claves de API.");
+      return { user: null, token: null };
+  }
   try {
     // Usamos el provider configurado arriba
     const result = await signInWithPopup(auth, googleProvider);
@@ -83,6 +121,7 @@ export const signInWithGoogle = async (): Promise<{ user: any, token: string | n
 };
 
 export const logoutFirebase = async () => {
+  if (isOfflineMode) return;
   try {
     await signOut(auth);
   } catch (error) {
@@ -96,6 +135,11 @@ export const logoutFirebase = async () => {
  * Guardar o Actualizar un Quiz
  */
 export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: boolean = false): Promise<string> => {
+    if (isOfflineMode) {
+        console.warn("Save canceled: Offline Mode");
+        throw new Error("No se puede guardar en modo Preview/Offline.");
+    }
+
     // Verificación de usuario
     const currentUser = auth.currentUser;
     const effectiveUid = currentUser?.uid || userId;
@@ -165,6 +209,7 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
  * Create a new Arcade Evaluation
  */
 export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<string> => {
+    if (isOfflineMode) throw new Error("Offline Mode");
     try {
         const payload = {
             ...evaluation,
@@ -188,6 +233,7 @@ export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'crea
  * Get Evaluation by ID (Public Access)
  */
 export const getEvaluation = async (evaluationId: string): Promise<Evaluation> => {
+    if (isOfflineMode) throw new Error("Offline Mode");
     try {
         const docRef = doc(db, "evaluations", evaluationId);
         const snap = await getDoc(docRef);
@@ -207,6 +253,7 @@ export const getEvaluation = async (evaluationId: string): Promise<Evaluation> =
  * Obtener Quizzes del Usuario con Fallback de Índice
  */
 export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
+    if (isOfflineMode) return [];
     try {
         // INTENTO 1: Consulta Óptima con Ordenación
         try {
@@ -264,6 +311,7 @@ const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
  * Borrar Quiz
  */
 export const deleteQuizFromFirestore = async (quizId: string) => {
+    if (isOfflineMode) return;
     try {
         await deleteDoc(doc(db, "quizes", quizId));
     } catch (e) {
