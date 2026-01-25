@@ -13,7 +13,8 @@ import { GameLobby } from './components/game/GameLobby';
 import { JeopardyBoard } from './components/game/JeopardyBoard'; 
 import { HexConquestGame } from './components/game/HexConquestGame'; 
 import { PublicQuizLanding } from './components/PublicQuizLanding'; 
-import { CommunityPage } from './components/CommunityPage'; // NEW IMPORT
+import { CommunityPage } from './components/CommunityPage'; 
+import { ArcadePlay } from './components/pages/ArcadePlay'; // NEW IMPORT
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
 import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2 } from 'lucide-react';
@@ -27,8 +28,8 @@ import { searchImage } from './services/imageService';
 import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
-// Types - Add 'community' to ViewState
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community';
+// Types - Add 'arcade_play' to ViewState
+type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -80,6 +81,7 @@ const NeuralApp: React.FC = () => {
 
   // URL Parsing State
   const [sharedQuizId, setSharedQuizId] = useState<string | null>(null);
+  const [arcadeEvalId, setArcadeEvalId] = useState<string | null>(null); // NEW
 
   // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
@@ -138,15 +140,26 @@ const NeuralApp: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // --- URL HANDLER (SHARE LINK) ---
+  // --- URL HANDLER (SHARE LINK & ARCADE) ---
   useEffect(() => {
-      // Check for shareId in URL query params
+      const path = window.location.pathname;
       const params = new URLSearchParams(window.location.search);
+      
+      // 1. ARCADE PLAY ROUTE (/play/:id)
+      if (path.startsWith('/play/')) {
+          const evalId = path.split('/play/')[1];
+          if (evalId && evalId.length > 0) {
+              setArcadeEvalId(evalId);
+              setView('arcade_play');
+              return; // Stop further checks
+          }
+      }
+
+      // 2. SHARE ID QUERY PARAM (?shareId=...)
       const shareId = params.get('shareId');
       if (shareId) {
           setSharedQuizId(shareId);
           setView('public_view');
-          // Clean URL without refresh
           window.history.replaceState({}, '', window.location.pathname);
       }
   }, []);
@@ -712,6 +725,13 @@ const NeuralApp: React.FC = () => {
           </CyberCard>
       </div>
   );
+
+  // If in Arcade Play Mode, render only that component (full screen experience)
+  if (view === 'arcade_play' && arcadeEvalId) {
+      return (
+          <ArcadePlay evaluationId={arcadeEvalId} />
+      );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#020617] text-white overflow-x-hidden">

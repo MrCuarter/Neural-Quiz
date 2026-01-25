@@ -15,6 +15,7 @@ import {
   deleteDoc, 
   doc, 
   getDocs, 
+  getDoc, // ADDED getDoc
   query, 
   where, 
   orderBy, 
@@ -178,6 +179,25 @@ export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'crea
         return docRef.id;
     } catch (error: any) {
         console.error("Error creating evaluation:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get Evaluation by ID (Public Access)
+ */
+export const getEvaluation = async (evaluationId: string): Promise<Evaluation> => {
+    try {
+        const docRef = doc(db, "evaluations", evaluationId);
+        const snap = await getDoc(docRef);
+        
+        if (snap.exists()) {
+            return { id: snap.id, ...snap.data() } as Evaluation;
+        } else {
+            throw new Error("Evaluation not found");
+        }
+    } catch (error) {
+        console.error("Error fetching evaluation:", error);
         throw error;
     }
 };
