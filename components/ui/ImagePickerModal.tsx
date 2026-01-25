@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { CyberButton, CyberCard, CyberInput } from './CyberUI';
-import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
+import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, CheckCircle2, ExternalLink, Maximize2, Trash2 } from 'lucide-react';
 import { uploadImageToCloudinary } from '../../services/cloudinaryService';
 import { searchStockImages, triggerDownload, ImageResult } from '../../services/imageService';
 import { getSafeImageUrl } from '../../services/imageProxyService';
@@ -26,6 +26,9 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
     const [urlInput, setUrlInput] = useState('');
     const [urlPreview, setUrlPreview] = useState<string | null>(null);
 
+    // Fullscreen Preview State
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Reset or Initialize when opening
@@ -43,7 +46,8 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
             // Reset other states
             setSearchResults([]);
             setSearchQuery('');
-            setActiveTab('upload'); 
+            setActiveTab('upload');
+            setIsFullscreen(false);
         }
     }, [isOpen, initialUrl]);
 
@@ -56,6 +60,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
         setLoading(true);
         try {
             const url = await uploadImageToCloudinary(file);
+            // Auto-select on upload success
             onSelect({
                 url,
                 alt: file.name,
@@ -103,13 +108,29 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
         }
     };
 
+    const handleDeletePreview = () => {
+        setUrlPreview(null);
+        setUrlInput('');
+    };
+
     // --- DRAG & DROP ---
     const handleDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true); else if (e.type === 'dragleave') setDragActive(false); };
     const handleDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files?.[0]) handleUpload(e.dataTransfer.files[0]); };
 
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-            <CyberCard className="w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[85vh] overflow-hidden">
+            
+            {/* FULLSCREEN OVERLAY */}
+            {isFullscreen && urlPreview && (
+                <div className="fixed inset-0 z-[80] bg-black flex items-center justify-center p-4" onClick={() => setIsFullscreen(false)}>
+                    <img src={urlPreview} className="max-w-full max-h-full object-contain" />
+                    <button className="absolute top-4 right-4 text-white hover:text-red-500 bg-black/50 rounded-full p-2" onClick={() => setIsFullscreen(false)}>
+                        <X className="w-8 h-8" />
+                    </button>
+                </div>
+            )}
+
+            <CyberCard className="w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[85vh] overflow-hidden relative">
                 
                 {/* Header */}
                 <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-4 shrink-0">
@@ -120,27 +141,13 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                     <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-6 h-6" /></button>
                 </div>
 
-                {/* CURRENT IMAGE PREVIEW (IF REPLACING) */}
-                {initialUrl && (
-                    <div className="mb-4 bg-black/40 border border-gray-700 rounded p-3 flex items-center gap-4 shrink-0">
-                        <div className="w-20 h-20 bg-gray-900 rounded overflow-hidden border border-gray-600 shrink-0">
-                            <img src={initialUrl} className="w-full h-full object-cover" alt="Current" />
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest mb-1">IMAGEN ACTUAL</p>
-                            <p className="text-xs text-gray-400 truncate max-w-[300px] mb-2">{initialUrl}</p>
-                            <p className="text-xs text-gray-500 italic">Selecciona una nueva opción abajo para reemplazarla.</p>
-                        </div>
-                    </div>
-                )}
-
                 {/* Tabs */}
                 <div className="flex gap-2 mb-4 shrink-0">
                     <button onClick={() => setActiveTab('upload')} className={`flex-1 py-2 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'upload' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
-                        <Upload className="w-4 h-4" /> SUBIR
+                        <Upload className="w-4 h-4" /> SUBIR / ACTUAL
                     </button>
                     <button onClick={() => setActiveTab('stock')} className={`flex-1 py-2 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'stock' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
-                        <Search className="w-4 h-4" /> BUSCAR IMÁGENES
+                        <Search className="w-4 h-4" /> BUSCAR STOCK
                     </button>
                     <button onClick={() => setActiveTab('url')} className={`flex-1 py-2 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'url' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
                         <LinkIcon className="w-4 h-4" /> URL
@@ -148,29 +155,59 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar relative p-1 min-h-[300px]">
+                <div className="flex-1 overflow-y-auto custom-scrollbar relative p-1 min-h-[350px]">
                     
-                    {/* 1. UPLOAD */}
+                    {/* 1. UPLOAD TAB (Handles Current Image & New Uploads) */}
                     {activeTab === 'upload' && (
-                        <div 
-                            className={`h-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center p-8 transition-colors ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700 hover:border-gray-500'}`}
-                            onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-                        >
-                            {loading ? (
-                                <div className="text-center">
-                                    <Loader2 className="w-12 h-12 text-cyan-500 animate-spin mx-auto mb-4" />
-                                    <p className="font-mono text-cyan-400 animate-pulse">OPTIMIZANDO IMAGEN...</p>
+                        urlPreview ? (
+                            <div className="h-full flex flex-col items-center justify-center p-2 animate-in fade-in">
+                                <div className="relative group w-full h-full max-h-[300px] flex items-center justify-center bg-black/40 border border-gray-700 rounded-lg overflow-hidden">
+                                    <img src={urlPreview} className="max-w-full max-h-full object-contain" alt="Preview" />
+                                    
+                                    {/* Overlay Controls */}
+                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                                        <button 
+                                            onClick={() => setIsFullscreen(true)}
+                                            className="p-3 bg-gray-800 rounded-full hover:bg-cyan-600 text-white transition-colors"
+                                            title="Ver pantalla completa"
+                                        >
+                                            <Maximize2 className="w-6 h-6" />
+                                        </button>
+                                        <button 
+                                            onClick={handleDeletePreview}
+                                            className="p-3 bg-gray-800 rounded-full hover:bg-red-600 text-white transition-colors"
+                                            title="Eliminar imagen"
+                                        >
+                                            <Trash2 className="w-6 h-6" />
+                                        </button>
+                                    </div>
                                 </div>
-                            ) : (
-                                <>
-                                    <Upload className="w-16 h-16 text-gray-600 mb-4" />
-                                    <p className="text-gray-300 font-bold mb-2">ARRASTRA TU IMAGEN AQUÍ</p>
-                                    <p className="text-xs text-gray-500 mb-6">o haz clic para explorar</p>
-                                    <CyberButton onClick={() => fileInputRef.current?.click()} variant="secondary">SELECCIONAR ARCHIVO</CyberButton>
-                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} />
-                                </>
-                            )}
-                        </div>
+                                <div className="mt-4 flex gap-3 w-full">
+                                    <CyberButton onClick={handleUrlConfirm} className="flex-1">CONFIRMAR ESTA IMAGEN</CyberButton>
+                                    <CyberButton variant="secondary" onClick={handleDeletePreview}>CAMBIAR</CyberButton>
+                                </div>
+                            </div>
+                        ) : (
+                            <div 
+                                className={`h-full border-2 border-dashed rounded-lg flex flex-col items-center justify-center p-8 transition-colors ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700 hover:border-gray-500'}`}
+                                onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                            >
+                                {loading ? (
+                                    <div className="text-center">
+                                        <Loader2 className="w-12 h-12 text-cyan-500 animate-spin mx-auto mb-4" />
+                                        <p className="font-mono text-cyan-400 animate-pulse">PROCESANDO IMAGEN...</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Upload className="w-16 h-16 text-gray-600 mb-4" />
+                                        <p className="text-gray-300 font-bold mb-2">ARRASTRA TU IMAGEN AQUÍ</p>
+                                        <p className="text-xs text-gray-500 mb-6">o haz clic para explorar</p>
+                                        <CyberButton onClick={() => fileInputRef.current?.click()} variant="secondary">SELECCIONAR ARCHIVO</CyberButton>
+                                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} />
+                                    </>
+                                )}
+                            </div>
+                        )
                     )}
 
                     {/* 2. STOCK SEARCH */}
@@ -243,7 +280,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                 
                                 {urlPreview && (
                                     <div className="mt-4 p-2 bg-black/40 border border-gray-700 rounded flex flex-col items-center">
-                                        <p className="text-[10px] text-gray-500 mb-2 w-full text-left">VISTA PREVIA DE LA NUEVA IMAGEN:</p>
+                                        <p className="text-[10px] text-gray-500 mb-2 w-full text-left">VISTA PREVIA:</p>
                                         <img 
                                             src={urlPreview} 
                                             alt="Preview" 

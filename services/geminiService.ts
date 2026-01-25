@@ -62,11 +62,20 @@ const globalQueue = new RequestQueue();
 const withRetry = async <T>(op: () => Promise<T>): Promise<T> => globalQueue.add(op);
 
 // --- SCHEMAS ---
+const optionSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        text: { type: Type.STRING },
+        imageSearchQuery: { type: Type.STRING, description: "Optional. Only set this if you want an image for this specific option." }
+    },
+    required: ["text"]
+};
+
 const questionSchema: Schema = {
   type: Type.OBJECT,
   properties: {
     text: { type: Type.STRING },
-    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+    options: { type: Type.ARRAY, items: optionSchema },
     correctAnswerIndex: { type: Type.INTEGER },
     correctAnswerIndices: { type: Type.ARRAY, items: { type: Type.INTEGER } },
     feedback: { type: Type.STRING },
@@ -89,43 +98,19 @@ const quizRootSchema: Schema = {
   required: ["questions", "tags"]
 };
 
-const enhanceSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        text: { type: Type.STRING },
-        options: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    text: { type: Type.STRING },
-                    isCorrect: { type: Type.BOOLEAN },
-                    rationale: { type: Type.STRING }
-                },
-                required: ["text", "isCorrect"]
-            }
-        },
-        explanation: { type: Type.STRING },
-        reconstructed: { type: Type.BOOLEAN },
-        sourceEvidence: { type: Type.STRING },
-        qualityFlags: {
-            type: Type.OBJECT,
-            properties: { ambiguous: { type: Type.BOOLEAN }, needsHumanReview: { type: Type.BOOLEAN } }
-        },
-        imageUrl: { type: Type.STRING, nullable: true },
-        imageSearchQuery: { type: Type.STRING, nullable: true },
-        fallback_category: { type: Type.STRING, nullable: true }
-    },
-    required: ["options", "reconstructed"]
-};
-
 // --- SYSTEM PROMPT ---
 const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. 
 Tu misión es generar cuestionarios JSON precisos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
 Genera "tags" útiles.
-Sobre el campo "feedback":
-- SOLO genéralo para preguntas complejas, culturales o históricas donde un dato curioso, anécdota o explicación enriquezca la respuesta correcta (ej: Arte, Historia, Cine).
+
+REGLAS DE IMÁGENES:
+1. Genera SIEMPRE "imageSearchQuery" para la pregunta principal.
+2. ENTORNO AL 5% DE LAS PREGUNTAS (1 de cada 20 aprox): Genera preguntas visuales donde las opciones tengan imágenes. Para ello, rellena el campo "imageSearchQuery" dentro de los objetos "options".
+   Ejemplo: Pregunta "¿Qué animal es un mamífero?", Opciones: [ {text: "Tiburón", imageSearchQuery: "Shark photo"}, {text: "Ballena", imageSearchQuery: "Whale photo"}... ]
+
+REGLAS DE FEEDBACK:
+- SOLO genéralo para preguntas complejas, culturales o históricas donde un dato curioso, anécdota o explicación enriquezca la respuesta correcta.
 - OMITE el feedback (deja string vacío) para preguntas de Matemáticas simples, hechos obvios o definiciones básicas.`;
 
 interface GenParams {

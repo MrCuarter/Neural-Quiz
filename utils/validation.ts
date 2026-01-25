@@ -15,6 +15,8 @@ export const OptionSchema = z.object({
   id: z.string().default(() => uuid()),
   text: z.string().transform(val => String(val || "").trim()), // Force string and trim
   imageUrl: z.string().optional(),
+  // Temporary AI field
+  imageSearchQuery: z.string().optional(),
   // Allow optional boolean for ingestion convenience (stripped later)
   isCorrect: z.boolean().optional()
 });
@@ -97,6 +99,7 @@ export const QuestionSchema = z.object({
     if (cId && cIds.length === 0) cIds = [cId];
 
     // Clean options: Remove 'isCorrect' property to match strict internal Interface
+    // Note: We KEEP imageSearchQuery here so App.tsx can use it, then App.tsx should strip it.
     const cleanOptions = data.options.map(o => {
         const { isCorrect, ...rest } = o;
         return rest;

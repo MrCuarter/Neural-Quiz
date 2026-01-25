@@ -98,7 +98,7 @@ const NeuralApp: React.FC = () => {
     age: 'Universal',
     context: '',
     urls: '',
-    tone: 'Divertido'
+    tone: 'Neutral'
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState(''); 
@@ -391,6 +391,7 @@ const NeuralApp: React.FC = () => {
               correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []),
           };
 
+          // 1. Image Search for Main Question
           if (!qObj.imageUrl) {
               const query = qObj.imageSearchQuery; 
               console.log('🤖 IA Smart Search:', query); 
@@ -407,6 +408,23 @@ const NeuralApp: React.FC = () => {
                   }
               }
           }
+
+          // 2. Image Search for Options (The 5% feature)
+          // We check if the AI generated 'imageSearchQuery' for any option
+          if (qObj.options && Array.isArray(qObj.options)) {
+              for (const opt of qObj.options) {
+                  if (opt.imageSearchQuery && !opt.imageUrl) {
+                      console.log('🤖 Option Smart Search:', opt.imageSearchQuery);
+                      const optImgResult = await searchImage(opt.imageSearchQuery, 'default');
+                      if (optImgResult) {
+                          opt.imageUrl = optImgResult.url;
+                      }
+                      // Remove temp field before saving
+                      delete opt.imageSearchQuery;
+                  }
+              }
+          }
+
           return qObj;
       }));
 
@@ -874,6 +892,7 @@ const NeuralApp: React.FC = () => {
                             <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">TONO</label>
                             <CyberSelect 
                                 options={[
+                                    { value: 'Neutral', label: '🔘 Neutral / Estándar' },
                                     { value: 'Divertido', label: '🎉 Divertido / Casual' },
                                     { value: 'Infantil', label: '🧸 Infantil / Amable' },
                                     { value: 'Académico', label: '🎓 Académico / Serio' },
@@ -888,20 +907,42 @@ const NeuralApp: React.FC = () => {
 
                     <div className="h-px bg-gray-800 w-full" />
 
-                    {/* 2. TYPES */}
+                    {/* 2. TYPES - SPLIT INTO GROUPS */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-cyan-400">
                             <h3 className="font-mono font-bold text-lg">2. SELECCIONA TIPOS DE PREGUNTA</h3>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {Object.values(QUESTION_TYPES).map(type => (
-                                <CyberCheckbox 
-                                    key={type}
-                                    label={type}
-                                    checked={genParams.types.includes(type)}
-                                    onChange={() => toggleQuestionType(type)}
-                                />
-                            ))}
+                        
+                        <div className="space-y-6">
+                            {/* GROUP 1: VALIDATED */}
+                            <div className="bg-cyan-950/10 border border-cyan-900/30 p-4 rounded-lg">
+                                <h4 className="text-xs font-mono text-cyan-500 uppercase tracking-widest mb-3 border-b border-cyan-900/30 pb-1">CON VALIDACIÓN</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {[QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER].map(type => (
+                                        <CyberCheckbox 
+                                            key={type}
+                                            label={type}
+                                            checked={genParams.types.includes(type)}
+                                            onChange={() => toggleQuestionType(type)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* GROUP 2: NON-VALIDATED */}
+                            <div className="bg-purple-950/10 border border-purple-900/30 p-4 rounded-lg">
+                                <h4 className="text-xs font-mono text-purple-500 uppercase tracking-widest mb-3 border-b border-purple-900/30 pb-1">SIN VALIDACIÓN</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {[QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL].map(type => (
+                                        <CyberCheckbox 
+                                            key={type}
+                                            label={type}
+                                            checked={genParams.types.includes(type)}
+                                            onChange={() => toggleQuestionType(type)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -993,6 +1034,7 @@ const NeuralApp: React.FC = () => {
             </>
         )}
 
+        {/* ... (Existing views for convert_upload, convert_analysis, game_lobby, etc. are identical) ... */}
         {view === 'convert_upload' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
                 <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>

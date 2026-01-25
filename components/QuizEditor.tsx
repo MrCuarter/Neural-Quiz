@@ -45,6 +45,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   // Image Picker State
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [pickingImageForId, setPickingImageForId] = useState<string | null>(null);
+  const [pickingImageForOptionId, setPickingImageForOptionId] = useState<string | null>(null); // NEW: Option Image Support
   const [pickingImageCurrentUrl, setPickingImageCurrentUrl] = useState<string | null>(null);
   
   // Share/Publish State
@@ -95,6 +96,25 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           const el = cardRefs.current[q.id];
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
+  };
+
+  const changePage = (newPage: number) => {
+      if (newPage < 1 || newPage > totalPages) return;
+      setCurrentPage(newPage);
+      
+      // Auto-scroll to first item of the new page
+      const firstIndexOnPage = (newPage - 1) * ITEMS_PER_PAGE;
+      const q = quiz.questions[firstIndexOnPage];
+      if (q) {
+          // Optional: Auto-expand the first question of the new page for better UX
+          setExpandedQuestionId(q.id);
+          setTimeout(() => {
+              const el = cardRefs.current[q.id];
+              if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+          }, 100);
+      }
   };
 
   // --- ADD TO EXISTING LOGIC ---
@@ -166,29 +186,53 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   // --- IMAGE PICKER ---
-  const openImagePicker = (qId: string, currentUrl?: string) => {
+  const openImagePicker = (qId: string, currentUrl?: string, optionId?: string) => {
       setPickingImageForId(qId);
+      setPickingImageForOptionId(optionId || null); // Handle Option Images
       setPickingImageCurrentUrl(currentUrl || null);
       setShowImagePicker(true);
   };
 
   const handleImageSelected = (result: ImageResult) => {
       if (pickingImageForId) {
-          const credit = result.attribution ? {
-              name: result.attribution.authorName,
-              link: result.attribution.authorUrl,
-              source: result.attribution.sourceName as 'Unsplash' | 'Pexels' | 'Pixabay'
-          } : undefined;
+          if (pickingImageForOptionId) {
+              // OPTION IMAGE UPDATE
+              const q = quiz.questions.find(q => q.id === pickingImageForId);
+              if (q) {
+                  const updatedOptions = q.options.map(o => 
+                      o.id === pickingImageForOptionId 
+                          ? { ...o, imageUrl: result.url } 
+                          : o
+                  );
+                  updateQuestion(pickingImageForId, { options: updatedOptions });
+                  toast.success("Imagen de opción actualizada");
+              }
+          } else {
+              // QUESTION IMAGE UPDATE
+              const credit = result.attribution ? {
+                  name: result.attribution.authorName,
+                  link: result.attribution.authorUrl,
+                  source: result.attribution.sourceName as 'Unsplash' | 'Pexels' | 'Pixabay'
+              } : undefined;
 
-          updateQuestion(pickingImageForId, { 
-              imageUrl: result.url,
-              imageCredit: credit
-          });
-          toast.success("Imagen actualizada");
+              updateQuestion(pickingImageForId, { 
+                  imageUrl: result.url,
+                  imageCredit: credit
+              });
+              toast.success("Imagen actualizada");
+          }
       }
       setPickingImageForId(null);
+      setPickingImageForOptionId(null);
       setPickingImageCurrentUrl(null);
       setShowImagePicker(false);
+  };
+
+  const removeOptionImage = (qId: string, optId: string) => {
+      const q = quiz.questions.find(q => q.id === qId);
+      if (!q) return;
+      const updatedOptions = q.options.map(o => o.id === optId ? { ...o, imageUrl: undefined } : o);
+      updateQuestion(qId, { options: updatedOptions });
   };
 
   // --- CRUD OPERATIONS ---
@@ -906,7 +950,31 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                               </button>
                                                           )}
                                                           
-                                                          <input type="text" value={opt.text} onChange={(e) => updateOption(q.id, opt.id, e.target.value)} className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300" placeholder={`${t.option_placeholder} ${i + 1}`} />
+                                                          <div className="flex-1 flex gap-2 items-center">
+                                                              {/* OPTION IMAGE PREVIEW OR ADD BUTTON */}
+                                                              {opt.imageUrl ? (
+                                                                  <div className="relative group/img w-8 h-8 shrink-0">
+                                                                      <img src={opt.imageUrl} className="w-8 h-8 object-cover rounded border border-gray-600" />
+                                                                      <button 
+                                                                          onClick={() => removeOptionImage(q.id, opt.id)}
+                                                                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity"
+                                                                      >
+                                                                          <XCircle className="w-2 h-2" />
+                                                                      </button>
+                                                                  </div>
+                                                              ) : (
+                                                                  <button 
+                                                                      onClick={() => openImagePicker(q.id, undefined, opt.id)}
+                                                                      className="text-gray-600 hover:text-cyan-400 shrink-0"
+                                                                      title="Añadir imagen a opción"
+                                                                  >
+                                                                      <ImageIcon className="w-4 h-4" />
+                                                                  </button>
+                                                              )}
+                                                              
+                                                              <input type="text" value={opt.text} onChange={(e) => updateOption(q.id, opt.id, e.target.value)} className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300" placeholder={`${t.option_placeholder} ${i + 1}`} />
+                                                          </div>
+
                                                           {!isTF && (
                                                               <button onClick={() => removeOption(q.id, opt.id)} className="text-gray-600 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
                                                           )}
@@ -1026,7 +1094,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                         <div className="flex items-center justify-between border-t border-gray-800 pt-6">
                             <CyberButton 
                                 variant="ghost" 
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                onClick={() => changePage(Math.max(1, currentPage - 1))}
                                 disabled={currentPage === 1}
                                 className="flex items-center gap-2 text-xs"
                             >
@@ -1041,7 +1109,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
                             <CyberButton 
                                 variant="ghost" 
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                onClick={() => changePage(Math.min(totalPages, currentPage + 1))}
                                 disabled={currentPage === totalPages}
                                 className="flex items-center gap-2 text-xs"
                             >
