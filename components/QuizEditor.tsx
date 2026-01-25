@@ -809,7 +809,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
                                       {/* OPTIONS AREA */}
                                       <div className="bg-black/20 p-4 rounded border border-gray-800/50">
-                                          {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || !q.questionType) && (
+                                          {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE || !q.questionType) && (
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   {q.options.length === 0 && (
                                                       <div className="col-span-2 text-center py-4">
@@ -823,6 +823,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   
                                                   {q.options.map((opt, i) => {
                                                       const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
+                                                      const isTF = q.questionType === QUESTION_TYPES.TRUE_FALSE;
                                                       const isSelected = correctIds.includes(opt.id);
 
                                                       return (
@@ -835,11 +836,13 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                             )}
                                                           </button>
                                                           <input type="text" value={opt.text} onChange={(e) => updateOption(q.id, opt.id, e.target.value)} className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300" placeholder={`${t.option_placeholder} ${i + 1}`} />
-                                                          <button onClick={() => removeOption(q.id, opt.id)} className="text-gray-600 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                                                          {!isTF && (
+                                                              <button onClick={() => removeOption(q.id, opt.id)} className="text-gray-600 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                                                          )}
                                                       </div>
                                                       );
                                                   })}
-                                                  {q.options.length > 0 && q.options.length < 6 && (
+                                                  {q.questionType !== QUESTION_TYPES.TRUE_FALSE && q.options.length > 0 && q.options.length < 6 && (
                                                       <button onClick={() => addOption(q.id)} className="flex items-center justify-center gap-2 bg-black/20 border border-dashed border-gray-700 p-2 rounded text-gray-500 hover:text-cyan-400 hover:border-cyan-500 transition-all">
                                                           <Plus className="w-4 h-4" /> {t.option_placeholder}
                                                       </button>
