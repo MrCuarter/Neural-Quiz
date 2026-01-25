@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { CyberButton, CyberCard, CyberInput } from './CyberUI';
 import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import { uploadImageToCloudinary } from '../../services/cloudinaryService';
@@ -10,9 +10,10 @@ interface ImagePickerModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (result: ImageResult) => void;
+    initialUrl?: string;
 }
 
-export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onClose, onSelect }) => {
+export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onClose, onSelect, initialUrl }) => {
     const [activeTab, setActiveTab] = useState<'upload' | 'stock' | 'url'>('upload');
     const [loading, setLoading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
@@ -26,6 +27,25 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
     const [urlPreview, setUrlPreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Reset or Initialize when opening
+    useEffect(() => {
+        if (isOpen) {
+            // If we have an initial URL, pre-fill the URL tab inputs
+            if (initialUrl) {
+                setUrlInput(initialUrl);
+                setUrlPreview(getSafeImageUrl(initialUrl) || initialUrl);
+            } else {
+                setUrlInput('');
+                setUrlPreview(null);
+            }
+            
+            // Reset other states
+            setSearchResults([]);
+            setSearchQuery('');
+            setActiveTab('upload'); 
+        }
+    }, [isOpen, initialUrl]);
 
     if (!isOpen) return null;
 
@@ -89,7 +109,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
 
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-            <CyberCard className="w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[80vh] overflow-hidden">
+            <CyberCard className="w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[85vh] overflow-hidden">
                 
                 {/* Header */}
                 <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-4 shrink-0">
@@ -99,6 +119,20 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                     </div>
                     <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-6 h-6" /></button>
                 </div>
+
+                {/* CURRENT IMAGE PREVIEW (IF REPLACING) */}
+                {initialUrl && (
+                    <div className="mb-4 bg-black/40 border border-gray-700 rounded p-3 flex items-center gap-4 shrink-0">
+                        <div className="w-20 h-20 bg-gray-900 rounded overflow-hidden border border-gray-600 shrink-0">
+                            <img src={initialUrl} className="w-full h-full object-cover" alt="Current" />
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest mb-1">IMAGEN ACTUAL</p>
+                            <p className="text-xs text-gray-400 truncate max-w-[300px] mb-2">{initialUrl}</p>
+                            <p className="text-xs text-gray-500 italic">Selecciona una nueva opción abajo para reemplazarla.</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tabs */}
                 <div className="flex gap-2 mb-4 shrink-0">
@@ -114,7 +148,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar relative p-1">
+                <div className="flex-1 overflow-y-auto custom-scrollbar relative p-1 min-h-[300px]">
                     
                     {/* 1. UPLOAD */}
                     {activeTab === 'upload' && (
@@ -209,7 +243,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                 
                                 {urlPreview && (
                                     <div className="mt-4 p-2 bg-black/40 border border-gray-700 rounded flex flex-col items-center">
-                                        <p className="text-[10px] text-gray-500 mb-2 w-full text-left">VISTA PREVIA:</p>
+                                        <p className="text-[10px] text-gray-500 mb-2 w-full text-left">VISTA PREVIA DE LA NUEVA IMAGEN:</p>
                                         <img 
                                             src={urlPreview} 
                                             alt="Preview" 

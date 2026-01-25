@@ -123,7 +123,10 @@ const enhanceSchema: Schema = {
 const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. 
 Tu misión es generar cuestionarios JSON precisos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
-Genera "tags" útiles.`;
+Genera "tags" útiles.
+Sobre el campo "feedback":
+- SOLO genéralo para preguntas complejas, culturales o históricas donde un dato curioso, anécdota o explicación enriquezca la respuesta correcta (ej: Arte, Historia, Cine).
+- OMITE el feedback (deja string vacío) para preguntas de Matemáticas simples, hechos obvios o definiciones básicas.`;
 
 interface GenParams {
   topic: string;

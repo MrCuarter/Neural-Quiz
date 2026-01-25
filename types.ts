@@ -23,7 +23,7 @@ export interface Question {
   videoUrl?: string;
   audioUrl?: string;
   feedback?: string;
-  questionType?: string; // e.g., "Multiple Choice"
+  questionType?: string; // e.g. "Multiple Choice"
   
   // ANTI-SPOILER IMAGE SEARCH
   imageSearchQuery?: string; // RENAMED: AI Generated English Keywords
@@ -46,6 +46,13 @@ export interface Question {
   // DATA INTEGRITY FLAGS (New)
   needsEnhanceAI?: boolean;
   enhanceReason?: string;
+
+  // SHORT ANSWER CONFIG (New)
+  matchConfig?: {
+      caseSensitive?: boolean; // Default false
+      ignoreAccents?: boolean; // Default true
+      exactMatch?: boolean; // Default false (allows trimming)
+  };
 }
 
 export interface Quiz {
@@ -216,11 +223,10 @@ export interface GeneratedFile {
 export const QUESTION_TYPES = {
     MULTIPLE_CHOICE: 'Multiple Choice', // Single correct
     TRUE_FALSE: 'True/False',
-    FILL_GAP: 'Fill in the Blank', 
-    OPEN_ENDED: 'Open Ended',
+    FILL_GAP: 'Fill in the Blank', // NOW USED AS SHORT ANSWER
+    OPEN_ENDED: 'Pregunta Abierta', // RENAMED
     MULTI_SELECT: 'Multi-Select (Checkbox)', // Multiple correct
-    POLL: 'Poll',
-    DRAW: 'Draw',
+    POLL: 'Encuesta', // RENAMED
     ORDER: 'Order / Sort'
 };
 
@@ -279,7 +285,7 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     },
     [ExportFormat.WAYGROUND]: { 
         name: 'Wayground', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.DRAW] 
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL] 
     },
     [ExportFormat.PLICKERS]: {
         name: 'Plickers',

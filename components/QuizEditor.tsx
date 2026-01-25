@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
@@ -45,6 +45,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   // Image Picker State
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [pickingImageForId, setPickingImageForId] = useState<string | null>(null);
+  const [pickingImageCurrentUrl, setPickingImageCurrentUrl] = useState<string | null>(null);
   
   // Share/Publish State
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -63,6 +64,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+  const [draggedOption, setDraggedOption] = useState<{qId: string, idx: number} | null>(null);
   const cardRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
 
   useEffect(() => {
@@ -117,13 +119,11 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           const targetQuiz = userQuizzes.find(q => q.id === selectedTargetQuizId);
           if (!targetQuiz) throw new Error("Quiz not found");
 
-          // Regenerate IDs for current questions to avoid conflicts
           const newQuestions = quiz.questions.map(q => ({
               ...q,
               id: uuid(),
               options: q.options.map(o => ({...o, id: uuid()})),
-              correctOptionId: "", // Logic to remap correct IDs needed if strict
-              // Simplified: Just keep text structure mostly, deep ID remap complex here
+              correctOptionId: "", 
           }));
           
           const updatedQuiz: Quiz = {
@@ -166,8 +166,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   // --- IMAGE PICKER ---
-  const openImagePicker = (qId: string) => {
+  const openImagePicker = (qId: string, currentUrl?: string) => {
       setPickingImageForId(qId);
+      setPickingImageCurrentUrl(currentUrl || null);
       setShowImagePicker(true);
   };
 
@@ -186,6 +187,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           toast.success("Imagen actualizada");
       }
       setPickingImageForId(null);
+      setPickingImageCurrentUrl(null);
       setShowImagePicker(false);
   };
 
@@ -277,7 +279,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           ...prev,
           questions: prev.questions.map(q => {
               if (q.id !== qId) return q;
-              if (q.options.length >= 6) return q;
+              if (q.options.length >= 6 && q.questionType !== QUESTION_TYPES.FILL_GAP) return q; 
               return { ...q, options: [...q.options, { id: uuid(), text: '' }] };
           })
       }));
@@ -288,13 +290,16 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           ...prev,
           questions: prev.questions.map(q => {
               if (q.id !== qId) return q;
-              if (q.options.length <= 2) return q;
+              if (q.options.length <= 2 && q.questionType !== QUESTION_TYPES.FILL_GAP) return q; 
+              if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length <= 1) return q; 
               return { ...q, options: q.options.filter(o => o.id !== oId) };
           })
       }));
   };
 
   const handleCorrectSelection = (q: Question, optionId: string) => {
+      if (q.questionType === QUESTION_TYPES.POLL) return; // No correct answer for poll
+
       if (q.questionType === QUESTION_TYPES.MULTI_SELECT) {
           let currentIds = q.correctOptionIds || [];
           if (currentIds.length === 0 && q.correctOptionId) currentIds = [q.correctOptionId];
@@ -325,16 +330,24 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
          updates.correctOptionId = trueId;
          updates.correctOptionIds = [trueId];
      } else if (newType === QUESTION_TYPES.ORDER) {
+          // Initialize with 4 empty options for Order
           updates.correctOptionId = ""; 
           updates.correctOptionIds = [];
-          while(question.options.length < 3) question.options.push({id: uuid(), text: ''});
+          const newOpts = [];
+          for(let i=0; i<4; i++) newOpts.push({id: uuid(), text: ''});
+          updates.options = newOpts;
      } else if (newType === QUESTION_TYPES.FILL_GAP) {
-         updates.correctOptionId = ""; 
-         updates.correctOptionIds = [];
+         if (question.options.length === 0) {
+             updates.options = [{ id: uuid(), text: '' }];
+         }
+         updates.correctOptionId = question.options[0]?.id || "";
+         updates.correctOptionIds = [question.options[0]?.id || ""];
+         updates.matchConfig = { ignoreAccents: true, caseSensitive: false };
      } else if (newType === QUESTION_TYPES.OPEN_ENDED) {
          updates.options = [{ id: uuid(), text: '' }];
          updates.correctOptionId = "";
          updates.correctOptionIds = [];
+         updates.feedback = ""; // Clear feedback
      }
      
      updateQuestion(qId, updates);
@@ -349,8 +362,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
     if (q.questionType === QUESTION_TYPES.OPEN_ENDED || q.questionType === QUESTION_TYPES.POLL) return hasText;
     
     if (q.questionType === QUESTION_TYPES.FILL_GAP) {
-        const gapCount = (q.text.match(/__/g) || []).length;
-        return hasText && gapCount > 0 && q.options.length === gapCount && q.options.every(o => o.text.trim().length > 0);
+        return hasText && q.options.length > 0 && q.options[0].text.trim().length > 0;
     }
     
     if (q.questionType === QUESTION_TYPES.ORDER) {
@@ -379,12 +391,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   const ensureOptions = (q: Question) => {
-      if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.length === 0) {
+      if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.POLL) && q.options.length === 0) {
           const newOpts = [
               { id: uuid(), text: '' }, { id: uuid(), text: '' },
               { id: uuid(), text: '' }, { id: uuid(), text: '' }
           ];
           updateQuestion(q.id, { options: newOpts });
+      } else if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length === 0) {
+          updateQuestion(q.id, { options: [{ id: uuid(), text: '' }] });
       }
   };
 
@@ -395,7 +409,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       const platformTypes = PLATFORM_SPECS[targetPlatform].types;
       
       const aiResult = await generateQuizQuestions({
-        topic: aiTopic, count: aiCount, types: platformTypes.filter(t => t !== QUESTION_TYPES.DRAW), age: 'Universal', language: 'Spanish'
+        topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: 'Spanish'
       });
       
       const newQuestions: Question[] = aiResult.questions.map((gq: any) => {
@@ -430,7 +444,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
     } catch (e: any) { alert(t.alert_fail + ": " + e.message); } finally { setIsGenerating(false); }
   };
 
-  // --- TAGS HANDLER ---
   const handleAddTag = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && newTag.trim()) {
           const currentTags = quiz.tags || [];
@@ -451,15 +464,16 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       if (type === QUESTION_TYPES.TRUE_FALSE) return t.type_tf;
       if (type === QUESTION_TYPES.FILL_GAP) return t.type_short;
       if (type === QUESTION_TYPES.ORDER) return t.type_order;
+      if (type === QUESTION_TYPES.POLL) return t.type_poll;
+      if (type === QUESTION_TYPES.OPEN_ENDED) return t.type_open;
       return type;
   };
 
   const getTypeIcon = (type?: string) => {
       if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />;
       if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />;
-      if (type === QUESTION_TYPES.OPEN_ENDED) return <AlignLeft className="w-4 h-4" />;
-      if (type === QUESTION_TYPES.DRAW) return <Palette className="w-4 h-4" />;
-      if (type === QUESTION_TYPES.ORDER) return <ArrowDownUp className="w-4 h-4" />;
+      if (type === QUESTION_TYPES.OPEN_ENDED) return <MessageSquare className="w-4 h-4" />;
+      if (type === QUESTION_TYPES.ORDER) return <ListOrdered className="w-4 h-4" />;
       if (type === QUESTION_TYPES.MULTI_SELECT) return <CheckSquare className="w-4 h-4" />;
       return <Zap className="w-4 h-4" />; 
   };
@@ -470,7 +484,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       if (type === QUESTION_TYPES.OPEN_ENDED) return "text-pink-400 bg-pink-900/30 border-pink-500/50";
       if (type === QUESTION_TYPES.ORDER) return "text-purple-400 bg-purple-900/30 border-purple-500/50";
       if (type === QUESTION_TYPES.MULTI_SELECT) return "text-green-400 bg-green-900/30 border-green-500/50";
-      return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; // MC Default
+      return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; 
   };
 
   return (
@@ -488,6 +502,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           isOpen={showImagePicker}
           onClose={() => setShowImagePicker(false)}
           onSelect={handleImageSelected}
+          initialUrl={pickingImageCurrentUrl || undefined} 
       />
 
       {/* --- ADD TO EXISTING MODAL --- */}
@@ -773,7 +788,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                               <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block opacity-0">IMG</label> 
                                               {q.imageUrl ? (
                                                   <div 
-                                                      onClick={() => openImagePicker(q.id)}
+                                                      onClick={() => openImagePicker(q.id, q.imageUrl)} // PASS CURRENT URL
                                                       className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all flex items-center justify-center"
                                                   >
                                                       <img src={q.imageUrl} className="w-full h-full object-contain max-h-[120px]" alt="Q" />
@@ -809,7 +824,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
                                       {/* OPTIONS AREA */}
                                       <div className="bg-black/20 p-4 rounded border border-gray-800/50">
-                                          {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE || !q.questionType) && (
+                                          {/* --- STANDARD OPTIONS (MC, MS, TF, POLL, ORDER) --- */}
+                                          {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE || q.questionType === QUESTION_TYPES.POLL || q.questionType === QUESTION_TYPES.ORDER || !q.questionType) && (
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   {q.options.length === 0 && (
                                                       <div className="col-span-2 text-center py-4">
@@ -824,17 +840,42 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   {q.options.map((opt, i) => {
                                                       const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
                                                       const isTF = q.questionType === QUESTION_TYPES.TRUE_FALSE;
+                                                      const isPoll = q.questionType === QUESTION_TYPES.POLL;
+                                                      const isOrder = q.questionType === QUESTION_TYPES.ORDER;
                                                       const isSelected = correctIds.includes(opt.id);
+                                                      const isDragging = draggedOption?.qId === q.id && draggedOption?.idx === i;
 
                                                       return (
-                                                      <div key={opt.id} className={`flex items-center gap-3 bg-black/30 p-2 rounded border transition-colors group-focus-within:border-cyan-500 ${isSelected ? 'border-green-500/50 bg-green-950/10' : 'border-gray-800 hover:border-gray-600'}`}>
-                                                          <button onClick={() => handleCorrectSelection(q, opt.id)} className={`flex-shrink-0 transition-colors ${isSelected ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}`} title={t.mark_correct}>
-                                                            {isMulti ? (
-                                                                isSelected ? <CheckSquare className="w-6 h-6"/> : <div className="w-6 h-6 border-2 border-gray-600 rounded-sm hover:border-gray-400" />
-                                                            ) : (
-                                                                isSelected ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />
-                                                            )}
-                                                          </button>
+                                                      <div 
+                                                          key={opt.id} 
+                                                          draggable={isOrder}
+                                                          onDragStart={(e) => isOrder && setDraggedOption({qId: q.id, idx: i})}
+                                                          onDragOver={(e) => { e.preventDefault(); if(isOrder && draggedOption?.qId === q.id && draggedOption.idx !== i) {
+                                                              const newOpts = [...q.options];
+                                                              const [removed] = newOpts.splice(draggedOption.idx, 1);
+                                                              newOpts.splice(i, 0, removed);
+                                                              updateQuestion(q.id, { options: newOpts });
+                                                              setDraggedOption({qId: q.id, idx: i});
+                                                          }}}
+                                                          onDragEnd={() => setDraggedOption(null)}
+                                                          className={`flex items-center gap-3 bg-black/30 p-2 rounded border transition-colors group-focus-within:border-cyan-500 
+                                                              ${isSelected ? 'border-green-500/50 bg-green-950/10' : 'border-gray-800 hover:border-gray-600'}
+                                                              ${isDragging ? 'opacity-50 dashed border-purple-500' : ''}
+                                                          `}
+                                                      >
+                                                          {isOrder && <div className="text-gray-600 cursor-grab"><GripVertical className="w-4 h-4"/></div>}
+                                                          {isOrder && <span className="font-mono text-xs font-bold text-purple-400 w-4">{i + 1}º</span>}
+                                                          
+                                                          {!isPoll && !isOrder && (
+                                                              <button onClick={() => handleCorrectSelection(q, opt.id)} className={`flex-shrink-0 transition-colors ${isSelected ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}`} title={t.mark_correct}>
+                                                                {isMulti ? (
+                                                                    isSelected ? <CheckSquare className="w-6 h-6"/> : <div className="w-6 h-6 border-2 border-gray-600 rounded-sm hover:border-gray-400" />
+                                                                ) : (
+                                                                    isSelected ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />
+                                                                )}
+                                                              </button>
+                                                          )}
+                                                          
                                                           <input type="text" value={opt.text} onChange={(e) => updateOption(q.id, opt.id, e.target.value)} className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300" placeholder={`${t.option_placeholder} ${i + 1}`} />
                                                           {!isTF && (
                                                               <button onClick={() => removeOption(q.id, opt.id)} className="text-gray-600 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
@@ -849,20 +890,98 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   )}
                                               </div>
                                           )}
+
+                                          {/* --- SHORT ANSWER CONFIG (FILL_GAP) --- */}
+                                          {q.questionType === QUESTION_TYPES.FILL_GAP && (
+                                              <div className="space-y-4">
+                                                  {/* 1. Primary Answer */}
+                                                  <div className="space-y-2">
+                                                      <label className="text-xs font-mono text-green-400 uppercase tracking-widest font-bold">RESPUESTA CORRECTA PRINCIPAL</label>
+                                                      {q.options.length > 0 && (
+                                                          <CyberInput 
+                                                              value={q.options[0].text} 
+                                                              onChange={(e) => updateOption(q.id, q.options[0].id, e.target.value)}
+                                                              placeholder="Escribe la respuesta exacta..."
+                                                              className="border-green-500/50 bg-green-950/10 focus:border-green-400"
+                                                          />
+                                                      )}
+                                                      {q.options.length === 0 && (
+                                                          <CyberButton onClick={() => ensureOptions(q)} className="text-xs">Inicializar Respuesta</CyberButton>
+                                                      )}
+                                                  </div>
+
+                                                  {/* 2. Match Config */}
+                                                  <div className="bg-black/30 p-3 rounded border border-gray-700">
+                                                      <label className="text-xs font-mono text-gray-500 uppercase tracking-widest block mb-2">VALIDACIÓN DE RESPUESTA</label>
+                                                      <CyberCheckbox 
+                                                          label="Aceptar variaciones (Ignorar mayúsculas y tildes)" 
+                                                          checked={q.matchConfig?.ignoreAccents ?? true} 
+                                                          onChange={(c) => updateQuestion(q.id, { 
+                                                              matchConfig: { 
+                                                                  ...q.matchConfig, 
+                                                                  ignoreAccents: c,
+                                                                  caseSensitive: !c 
+                                                              } 
+                                                          })} 
+                                                      />
+                                                  </div>
+
+                                                  {/* 3. Alternative Answers */}
+                                                  <div className="space-y-2 pt-2 border-t border-gray-800">
+                                                      <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest block">RESPUESTAS ALTERNATIVAS (SINÓNIMOS)</label>
+                                                      <p className="text-[10px] text-gray-500 mb-2">Añade variaciones válidas (ej: "2ª GM", "II Guerra Mundial") para que el sistema las acepte automáticamente.</p>
+                                                      
+                                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                          {q.options.slice(1).map((opt, i) => (
+                                                              <div key={opt.id} className="flex items-center gap-2">
+                                                                  <input 
+                                                                      type="text" 
+                                                                      value={opt.text} 
+                                                                      onChange={(e) => updateOption(q.id, opt.id, e.target.value)} 
+                                                                      className="bg-black/40 border border-gray-700 text-sm p-2 rounded flex-1 focus:border-cyan-500 outline-none text-gray-300"
+                                                                      placeholder="Alternativa..." 
+                                                                  />
+                                                                  <button onClick={() => removeOption(q.id, opt.id)} className="text-gray-600 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                                                              </div>
+                                                          ))}
+                                                          <button onClick={() => addOption(q.id)} className="flex items-center justify-center gap-2 bg-black/20 border border-dashed border-gray-700 p-2 rounded text-gray-500 hover:text-cyan-400 hover:border-cyan-500 transition-all text-xs h-[38px]">
+                                                              <Plus className="w-3 h-3" /> AÑADIR ALTERNATIVA
+                                                          </button>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          )}
                                       </div>
 
                                       {/* FEEDBACK & FOOTER ACTIONS */}
-                                      <div className="space-y-4">
-                                          <CyberTextArea label={t.q_feedback_label} value={q.feedback || ''} onChange={(e) => updateQuestion(q.id, { feedback: e.target.value })} className="min-h-[60px] text-sm" placeholder="Explanation..." />
-                                          
-                                          <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
-                                              <CyberButton variant="secondary" onClick={() => duplicateQuestion(q.id)} className="text-xs h-9">
-                                                  <CopyPlus className="w-4 h-4 mr-2" /> DUPLICAR
-                                              </CyberButton>
-                                              <CyberButton onClick={addQuestion} className="text-xs h-9 bg-green-700 hover:bg-green-600 border-none">
-                                                  <Plus className="w-4 h-4 mr-2" /> AÑADIR NUEVA
-                                              </CyberButton>
+                                      {q.questionType !== QUESTION_TYPES.OPEN_ENDED && (
+                                          <div className="space-y-2">
+                                              <div className="flex items-center gap-4">
+                                                  <CyberCheckbox 
+                                                      label="Añadir Feedback / Curiosidad" 
+                                                      checked={!!q.feedback} 
+                                                      onChange={(checked) => updateQuestion(q.id, { feedback: checked ? " " : "" })} 
+                                                  />
+                                              </div>
+                                              {q.feedback !== undefined && q.feedback !== "" && (
+                                                  <CyberTextArea 
+                                                      label={t.q_feedback_label} 
+                                                      value={q.feedback} 
+                                                      onChange={(e) => updateQuestion(q.id, { feedback: e.target.value })} 
+                                                      className="min-h-[60px] text-sm animate-in slide-in-from-top-2" 
+                                                      placeholder="Añade un dato curioso que aparezca al responder..." 
+                                                  />
+                                              )}
                                           </div>
+                                      )}
+                                      
+                                      <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
+                                          <CyberButton variant="secondary" onClick={() => duplicateQuestion(q.id)} className="text-xs h-9">
+                                              <CopyPlus className="w-4 h-4 mr-2" /> DUPLICAR
+                                          </CyberButton>
+                                          <CyberButton onClick={addQuestion} className="text-xs h-9 bg-green-700 hover:bg-green-600 border-none">
+                                              <Plus className="w-4 h-4 mr-2" /> AÑADIR NUEVA
+                                          </CyberButton>
                                       </div>
                                   </div>
                               )}
