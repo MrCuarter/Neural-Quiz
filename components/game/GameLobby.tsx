@@ -4,8 +4,9 @@ import { Quiz, GameTeam, GameMode, JeopardyConfig, DistributionMode } from '../.
 import { getUserQuizzes } from '../../services/firebaseService';
 import { generateQuizCategories } from '../../services/geminiService';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberCheckbox } from '../ui/CyberUI';
-import { ArrowLeft, Gamepad2, Users, Play, Loader2, Search, Trophy, Map, Zap, Clock, Settings, Monitor, Lock, Shield, PenTool, BrainCircuit, Grid3X3, Dice5, List, CheckSquare, Layers, Type, Wand2, Smile } from 'lucide-react';
+import { ArrowLeft, Gamepad2, Users, Play, Loader2, Search, Trophy, Map, Zap, Clock, Settings, Monitor, Lock, Shield, PenTool, BrainCircuit, Grid3X3, Dice5, List, CheckSquare, Layers, Type, Wand2, Smile, Skull, Rocket, Calendar } from 'lucide-react';
 import { DEMO_QUIZZES } from '../../data/demoQuizzes';
+import { CreateEvaluationModal } from '../evaluations/CreateEvaluationModal';
 
 interface GameLobbyProps {
     user: any;
@@ -17,6 +18,7 @@ interface GameLobbyProps {
 }
 
 type LobbyPhase = 'SELECTION' | 'CONFIG';
+type SessionType = 'LIVE' | 'ASYNC';
 
 const EMOJIS = ['🚀', '🦁', '⭐', '🔥', '💎', '🍀', '⚡', '🧠', '👾', '🐉', '🍕', '🎸', '⚽', '🦄', '💀', '🤖'];
 const COLORS = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-orange-500', 'bg-lime-500', 'bg-teal-500'];
@@ -31,7 +33,11 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     // Selection State
     const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
     
-    // Config State
+    // NEW: Session Type (Live vs Async)
+    const [sessionType, setSessionType] = useState<SessionType>('LIVE');
+    const [showEvalModal, setShowEvalModal] = useState(false);
+
+    // Config State (Live)
     const [selectedMode, setSelectedMode] = useState<GameMode>('JEOPARDY');
     const [teamCount, setTeamCount] = useState(2);
     const [teamData, setTeamData] = useState<{name: string, color: string, emoji: string}[]>([
@@ -266,131 +272,233 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
     return (
         <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-8 pb-20">
             
-            {/* BLOCK 1: GAME SETTINGS */}
-            <CyberCard className="border-purple-500/30">
+            {/* EVALUATION MODAL WRAPPER */}
+            {selectedQuiz && showEvalModal && (
+                <CreateEvaluationModal 
+                    isOpen={showEvalModal}
+                    onClose={() => setShowEvalModal(false)}
+                    quiz={selectedQuiz}
+                    user={user}
+                />
+            )}
+
+            {/* BLOCK 0: EXPERIENCE TYPE SELECTOR */}
+            <CyberCard className="border-gray-700 bg-black/60 sticky top-4 z-20 backdrop-blur-md">
                 <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
-                    <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
-                        <Settings className="w-5 h-5 text-purple-400" /> 1. AJUSTES DE PARTIDA
-                    </h3>
+                    <h3 className="font-cyber font-bold text-white text-lg">TIPO DE EXPERIENCIA</h3>
                     {!preSelectedQuiz && <button onClick={() => setPhase('SELECTION')} className="text-xs text-gray-500 hover:text-white underline">Cambiar Quiz</button>}
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2 block">MODO DE JUEGO</label>
-                        <div className="flex gap-3">
-                            <button onClick={() => setSelectedMode('JEOPARDY')} className={`flex-1 p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'JEOPARDY' ? 'bg-purple-900/30 border-purple-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
-                                <Trophy className={`w-5 h-5 ${selectedMode === 'JEOPARDY' ? 'text-purple-400' : 'text-gray-500'}`} />
-                                <span className="font-bold text-[10px]">JEOPARDY</span>
-                            </button>
-                            <button onClick={() => setSelectedMode('HEX_CONQUEST')} className={`flex-1 p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'HEX_CONQUEST' ? 'bg-yellow-900/30 border-yellow-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
-                                <Map className={`w-5 h-5 ${selectedMode === 'HEX_CONQUEST' ? 'text-yellow-400' : 'text-gray-500'}`} />
-                                <span className="font-bold text-[10px]">HEX MAP</span>
-                            </button>
+                <div className="flex gap-4">
+                    <button 
+                        onClick={() => setSessionType('LIVE')} 
+                        className={`flex-1 p-4 rounded border-2 transition-all flex flex-col items-center gap-2 ${sessionType === 'LIVE' ? 'bg-cyan-900/40 border-cyan-500 text-white' : 'bg-gray-900/40 border-gray-800 text-gray-500 hover:border-gray-600'}`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Monitor className="w-5 h-5" />
+                            <span className="font-bold">EN VIVO (SÍNCRONO)</span>
                         </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <label className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2 block">REGLAS</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <CyberCheckbox label="Power-Ups" checked={config.usePowerUps} onChange={(c) => setConfig({...config, usePowerUps: c})} />
-                            <CyberCheckbox label="Eventos Random" checked={config.randomEvents} onChange={(c) => setConfig({...config, randomEvents: c})} />
-                            <CyberCheckbox label="Negativos" checked={config.allowNegativePoints} onChange={(c) => setConfig({...config, allowNegativePoints: c})} warning={config.allowNegativePoints} />
-                            <CyberCheckbox label="Catch-Up" checked={config.catchUpLogic} onChange={(c) => setConfig({...config, catchUpLogic: c})} />
+                        <span className="text-xs opacity-70">Para jugar en clase con proyector. Equipos.</span>
+                    </button>
+                    <button 
+                        onClick={() => setSessionType('ASYNC')} 
+                        className={`flex-1 p-4 rounded border-2 transition-all flex flex-col items-center gap-2 ${sessionType === 'ASYNC' ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-gray-900/40 border-gray-800 text-gray-500 hover:border-gray-600'}`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Rocket className="w-5 h-5" />
+                            <span className="font-bold">RETO ARCADE (ASÍNCRONO)</span>
                         </div>
-                    </div>
+                        <span className="text-xs opacity-70">Tarea para casa. Individual. Ranking Global.</span>
+                    </button>
                 </div>
             </CyberCard>
 
-            {/* BLOCK 2: QUESTIONS & CATEGORIES */}
-            <CyberCard className="border-cyan-500/30">
-                <div className="flex items-center justify-between mb-4 cursor-pointer" onClick={() => setQuestionsExpanded(!questionsExpanded)}>
-                    <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
-                        <List className="w-5 h-5 text-cyan-400" /> 2. PREGUNTAS Y CATEGORÍAS
-                    </h3>
-                    <div className="text-xs text-gray-500 flex items-center gap-2">
-                        {selectedCount} / {slotsNeeded} Seleccionadas
-                        {questionsExpanded ? <ArrowLeft className="w-4 h-4 -rotate-90"/> : <ArrowLeft className="w-4 h-4 rotate-90"/>}
-                    </div>
-                </div>
+            {/* --- LIVE MODE CONFIG --- */}
+            {sessionType === 'LIVE' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                    {/* BLOCK 1: GAME SETTINGS */}
+                    <CyberCard className="border-purple-500/30">
+                        <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+                            <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
+                                <Settings className="w-5 h-5 text-purple-400" /> 1. AJUSTES DE PARTIDA
+                            </h3>
+                        </div>
 
-                {questionsExpanded && (
-                    <div className="animate-in slide-in-from-top-2 space-y-4">
-                        {selectedMode === 'JEOPARDY' && (
-                            <div className="bg-black/20 p-3 rounded border border-gray-800">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs font-mono text-purple-400">CATEGORÍAS DEL TABLERO ({config.cols})</span>
-                                    <button onClick={handleGenerateCategories} disabled={isGeneratingCats} className="text-[10px] bg-purple-900/50 text-purple-200 px-2 py-1 rounded flex items-center gap-1 border border-purple-500/30">
-                                        <Wand2 className={`w-3 h-3 ${isGeneratingCats ? 'animate-spin' : ''}`} /> GENERAR IA
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2 block">MODO DE JUEGO</label>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setSelectedMode('JEOPARDY')} className={`flex-1 p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'JEOPARDY' ? 'bg-purple-900/30 border-purple-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
+                                        <Trophy className={`w-5 h-5 ${selectedMode === 'JEOPARDY' ? 'text-purple-400' : 'text-gray-500'}`} />
+                                        <span className="font-bold text-[10px]">JEOPARDY</span>
+                                    </button>
+                                    <button onClick={() => setSelectedMode('HEX_CONQUEST')} className={`flex-1 p-3 rounded border-2 transition-all flex flex-col items-center gap-1 ${selectedMode === 'HEX_CONQUEST' ? 'bg-yellow-900/30 border-yellow-500' : 'bg-black/20 border-gray-800 opacity-60'}`}>
+                                        <Map className={`w-5 h-5 ${selectedMode === 'HEX_CONQUEST' ? 'text-yellow-400' : 'text-gray-500'}`} />
+                                        <span className="font-bold text-[10px]">HEX MAP</span>
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                                    {config.categories.map((cat, idx) => (
-                                        <input key={idx} value={cat} onChange={(e) => {const n=[...config.categories]; n[idx]=e.target.value; setConfig({...config, categories: n})}} className="bg-black/40 border border-gray-700 text-xs text-white p-2 rounded focus:border-cyan-500 outline-none w-full" placeholder={`Col ${idx+1}`} />
-                                    ))}
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2 block">REGLAS</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <CyberCheckbox label="Power-Ups" checked={config.usePowerUps} onChange={(c) => setConfig({...config, usePowerUps: c})} />
+                                    <CyberCheckbox label="Eventos Random" checked={config.randomEvents} onChange={(c) => setConfig({...config, randomEvents: c})} />
+                                    <CyberCheckbox label="Negativos" checked={config.allowNegativePoints} onChange={(c) => setConfig({...config, allowNegativePoints: c})} warning={config.allowNegativePoints} />
+                                    <CyberCheckbox label="Catch-Up" checked={config.catchUpLogic} onChange={(c) => setConfig({...config, catchUpLogic: c})} />
+                                </div>
+                            </div>
+                        </div>
+                    </CyberCard>
+
+                    {/* BLOCK 2: QUESTIONS & CATEGORIES */}
+                    <CyberCard className="border-cyan-500/30">
+                        <div className="flex items-center justify-between mb-4 cursor-pointer" onClick={() => setQuestionsExpanded(!questionsExpanded)}>
+                            <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
+                                <List className="w-5 h-5 text-cyan-400" /> 2. PREGUNTAS Y CATEGORÍAS
+                            </h3>
+                            <div className="text-xs text-gray-500 flex items-center gap-2">
+                                {selectedCount} / {slotsNeeded} Seleccionadas
+                                {questionsExpanded ? <ArrowLeft className="w-4 h-4 -rotate-90"/> : <ArrowLeft className="w-4 h-4 rotate-90"/>}
+                            </div>
+                        </div>
+
+                        {questionsExpanded && (
+                            <div className="animate-in slide-in-from-top-2 space-y-4">
+                                {selectedMode === 'JEOPARDY' && (
+                                    <div className="bg-black/20 p-3 rounded border border-gray-800">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-mono text-purple-400">CATEGORÍAS DEL TABLERO ({config.cols})</span>
+                                            <button onClick={handleGenerateCategories} disabled={isGeneratingCats} className="text-[10px] bg-purple-900/50 text-purple-200 px-2 py-1 rounded flex items-center gap-1 border border-purple-500/30">
+                                                <Wand2 className={`w-3 h-3 ${isGeneratingCats ? 'animate-spin' : ''}`} /> GENERAR IA
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                                            {config.categories.map((cat, idx) => (
+                                                <input key={idx} value={cat} onChange={(e) => {const n=[...config.categories]; n[idx]=e.target.value; setConfig({...config, categories: n})}} className="bg-black/40 border border-gray-700 text-xs text-white p-2 rounded focus:border-cyan-500 outline-none w-full" placeholder={`Col ${idx+1}`} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="max-h-60 overflow-y-auto custom-scrollbar border border-gray-800 rounded bg-black/20 p-2 space-y-1">
+                                    {selectedQuiz?.questions.map((q, idx) => {
+                                        const isSelected = config.selectedQuestionIds.includes(q.id);
+                                        return (
+                                            <div key={q.id} onClick={() => toggleQuestionSelection(q.id)} className={`flex items-start gap-3 p-2 rounded border cursor-pointer transition-all ${isSelected ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-black/20 border-transparent opacity-60 hover:opacity-100'}`}>
+                                                <div className={`mt-0.5 ${isSelected ? 'text-cyan-400' : 'text-gray-600'}`}>{isSelected ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 border border-gray-600 rounded" />}</div>
+                                                <p className={`text-xs font-mono truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>{idx+1}. {q.text}</p>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
+                    </CyberCard>
 
-                        <div className="max-h-60 overflow-y-auto custom-scrollbar border border-gray-800 rounded bg-black/20 p-2 space-y-1">
-                            {selectedQuiz?.questions.map((q, idx) => {
-                                const isSelected = config.selectedQuestionIds.includes(q.id);
-                                return (
-                                    <div key={q.id} onClick={() => toggleQuestionSelection(q.id)} className={`flex items-start gap-3 p-2 rounded border cursor-pointer transition-all ${isSelected ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-black/20 border-transparent opacity-60 hover:opacity-100'}`}>
-                                        <div className={`mt-0.5 ${isSelected ? 'text-cyan-400' : 'text-gray-600'}`}>{isSelected ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 border border-gray-600 rounded" />}</div>
-                                        <p className={`text-xs font-mono truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>{idx+1}. {q.text}</p>
+                    {/* BLOCK 3: TEAMS */}
+                    <CyberCard className="border-green-500/30">
+                        <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+                            <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
+                                <Users className="w-5 h-5 text-green-400" /> 3. EQUIPOS
+                            </h3>
+                            <div className="flex items-center gap-2 bg-black/40 p-1 rounded">
+                                <button onClick={() => updateTeamCount(teamCount - 1)} className="w-6 h-6 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700">-</button>
+                                <span className="w-8 text-center font-mono font-bold text-sm">{teamCount}</span>
+                                <button onClick={() => updateTeamCount(teamCount + 1)} className="w-6 h-6 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700">+</button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                            {teamData.map((team, i) => (
+                                <div key={i} className={`p-3 rounded border border-gray-700 bg-black/40 flex flex-col gap-2 relative group overflow-hidden`}>
+                                    <div className={`absolute top-0 left-0 w-full h-1 ${team.color}`}></div>
+                                    
+                                    <div className="flex items-center gap-2">
+                                        <input value={team.name} onChange={(e) => updateTeamProp(i, 'name', e.target.value)} className="bg-transparent text-sm font-bold text-white w-full focus:outline-none border-b border-transparent focus:border-white" />
                                     </div>
-                                );
-                            })}
+                                    
+                                    <div className="flex items-center justify-between">
+                                        <select 
+                                            value={team.emoji} 
+                                            onChange={(e) => updateTeamProp(i, 'emoji', e.target.value)}
+                                            className="bg-gray-800 border border-gray-600 rounded text-lg w-12 h-8 text-center appearance-none cursor-pointer hover:bg-gray-700"
+                                        >
+                                            {EMOJIS.map(e => <option key={e} value={e}>{e}</option>)}
+                                        </select>
+                                        <div className={`w-4 h-4 rounded-full ${team.color} shadow-sm ring-2 ring-white/10`}></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CyberCard>
+
+                    {/* LAUNCH BUTTON */}
+                    <button 
+                        onClick={handleLaunch} 
+                        className="w-full py-5 rounded-xl font-black font-cyber tracking-widest text-2xl flex items-center justify-center gap-4 transition-all duration-300 shadow-[0_0_30px_rgba(34,197,94,0.3)] bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white hover:scale-[1.02]"
+                    >
+                        <Play className="w-8 h-8 fill-current" /> START LIVE GAME
+                    </button>
+                </div>
+            )}
+
+            {/* --- ASYNC ARCADE CONFIG --- */}
+            {sessionType === 'ASYNC' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* CARD BOSS */}
+                        <div className="relative group overflow-hidden bg-red-950/20 border-2 border-red-900/50 rounded-xl p-6 hover:border-red-500/50 transition-all cursor-default">
+                            <div className="absolute top-0 right-0 p-4 opacity-20"><Skull className="w-24 h-24 text-red-500" /></div>
+                            <h3 className="text-2xl font-black font-cyber text-red-400 mb-2">FINAL BOSS</h3>
+                            <p className="text-gray-400 text-sm mb-4">
+                                Convierte tu examen en una batalla épica RPG. Los alumnos deben responder correctamente para bajar la vida al Jefe.
+                            </p>
+                            <ul className="text-xs text-red-300 space-y-2 font-mono mb-6">
+                                <li className="flex items-center gap-2"><CheckSquare className="w-3 h-3"/> Barra de Vida</li>
+                                <li className="flex items-center gap-2"><CheckSquare className="w-3 h-3"/> Feedback Visual</li>
+                                <li className="flex items-center gap-2"><CheckSquare className="w-3 h-3"/> Modo Heroico</li>
+                            </ul>
+                        </div>
+
+                        {/* CARD TIME ATTACK */}
+                        <div className="relative group overflow-hidden bg-blue-950/20 border-2 border-blue-900/50 rounded-xl p-6 hover:border-blue-500/50 transition-all cursor-default">
+                            <div className="absolute top-0 right-0 p-4 opacity-20"><Clock className="w-24 h-24 text-blue-500" /></div>
+                            <h3 className="text-2xl font-black font-cyber text-blue-400 mb-2">TIME ATTACK</h3>
+                            <p className="text-gray-400 text-sm mb-4">
+                                Carrera contra el reloj. Los alumnos deben responder tantas preguntas como puedan antes de que se agote el tiempo global.
+                            </p>
+                            <ul className="text-xs text-blue-300 space-y-2 font-mono mb-6">
+                                <li className="flex items-center gap-2"><CheckSquare className="w-3 h-3"/> Timer Global</li>
+                                <li className="flex items-center gap-2"><CheckSquare className="w-3 h-3"/> Leaderboard</li>
+                                <li className="flex items-center gap-2"><CheckSquare className="w-3 h-3"/> Alta Intensidad</li>
+                            </ul>
                         </div>
                     </div>
-                )}
-            </CyberCard>
 
-            {/* BLOCK 3: TEAMS */}
-            <CyberCard className="border-green-500/30">
-                <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
-                    <h3 className="font-cyber font-bold text-white flex items-center gap-2 text-lg">
-                        <Users className="w-5 h-5 text-green-400" /> 3. EQUIPOS
-                    </h3>
-                    <div className="flex items-center gap-2 bg-black/40 p-1 rounded">
-                        <button onClick={() => updateTeamCount(teamCount - 1)} className="w-6 h-6 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700">-</button>
-                        <span className="w-8 text-center font-mono font-bold text-sm">{teamCount}</span>
-                        <button onClick={() => updateTeamCount(teamCount + 1)} className="w-6 h-6 flex items-center justify-center bg-gray-800 rounded hover:bg-gray-700">+</button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                    {teamData.map((team, i) => (
-                        <div key={i} className={`p-3 rounded border border-gray-700 bg-black/40 flex flex-col gap-2 relative group overflow-hidden`}>
-                            <div className={`absolute top-0 left-0 w-full h-1 ${team.color}`}></div>
-                            
-                            <div className="flex items-center gap-2">
-                                <input value={team.name} onChange={(e) => updateTeamProp(i, 'name', e.target.value)} className="bg-transparent text-sm font-bold text-white w-full focus:outline-none border-b border-transparent focus:border-white" />
+                    <CyberCard className="border-purple-500/30 text-center py-10">
+                        <h2 className="text-2xl font-cyber text-white mb-4">¿LISTO PARA CREAR EL RETO?</h2>
+                        <p className="text-gray-400 max-w-lg mx-auto mb-8">
+                            Se generará un enlace único que podrás compartir en Classroom o por email. Los alumnos podrán jugar desde casa a su propio ritmo.
+                        </p>
+                        
+                        {!user ? (
+                            <div className="inline-block bg-yellow-900/30 border border-yellow-500/50 p-4 rounded text-yellow-200 text-sm">
+                                <Lock className="w-4 h-4 inline mr-2" />
+                                Necesitas iniciar sesión para crear evaluaciones persistentes.
                             </div>
-                            
-                            <div className="flex items-center justify-between">
-                                <select 
-                                    value={team.emoji} 
-                                    onChange={(e) => updateTeamProp(i, 'emoji', e.target.value)}
-                                    className="bg-gray-800 border border-gray-600 rounded text-lg w-12 h-8 text-center appearance-none cursor-pointer hover:bg-gray-700"
-                                >
-                                    {EMOJIS.map(e => <option key={e} value={e}>{e}</option>)}
-                                </select>
-                                <div className={`w-4 h-4 rounded-full ${team.color} shadow-sm ring-2 ring-white/10`}></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </CyberCard>
+                        ) : (
+                            <button 
+                                onClick={() => setShowEvalModal(true)} 
+                                className="px-12 py-5 rounded-xl font-black font-cyber tracking-widest text-xl flex items-center justify-center gap-4 mx-auto transition-all duration-300 shadow-[0_0_30px_rgba(168,85,247,0.3)] bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 text-white"
+                            >
+                                <Rocket className="w-6 h-6" /> CONFIGURAR RETO ARCADE
+                            </button>
+                        )}
+                    </CyberCard>
 
-            {/* LAUNCH BUTTON */}
-            <button 
-                onClick={handleLaunch} 
-                className="w-full py-5 rounded-xl font-black font-cyber tracking-widest text-2xl flex items-center justify-center gap-4 transition-all duration-300 shadow-[0_0_30px_rgba(34,197,94,0.3)] bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white hover:scale-[1.02]"
-            >
-                <Play className="w-8 h-8 fill-current" /> START GAME
-            </button>
+                </div>
+            )}
         </div>
     );
 };

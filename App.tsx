@@ -804,8 +804,8 @@ const NeuralApp: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold font-cyber text-white group-hover:text-yellow-300 mb-2">NEURAL ARCADE</h3>
-                    <p className="text-yellow-400/80 font-mono text-xs uppercase tracking-wider mb-3">JEOPARDY // HEX MAP</p>
-                    <p className="text-gray-400 text-sm leading-relaxed">Lanza juegos interactivos en vivo. Compite por equipos en el tablero.</p>
+                    <p className="text-yellow-400/80 font-mono text-xs uppercase tracking-wider mb-3">JEOPARDY // HEX // BOSS BATTLE</p>
+                    <p className="text-gray-400 text-sm leading-relaxed">Lanza juegos en vivo (Teams) o crea retos individuales arcade (Boss/Time Attack).</p>
                   </div>
                 </div>
               </CyberCard>
@@ -813,6 +813,7 @@ const NeuralApp: React.FC = () => {
           </div>
         )}
 
+        {/* ... rest of the app ... */}
         {/* --- AUXILIARY VIEWS --- */}
         {view === 'community' && <CommunityPage onBack={() => setView('home')} onPlay={(q) => handlePlayFromEditor(q)} onImport={handleImportCommunityQuiz} />}
         {view === 'help' && <HelpView onBack={() => setView('home')} t={t} />}
