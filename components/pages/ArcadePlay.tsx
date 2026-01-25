@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation } from '../../services/firebaseService';
 import { Evaluation, Question } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Gamepad2, User, Rocket, Monitor, Zap, Clock, CheckCircle2, XCircle, Trophy, Star, ArrowRight, RotateCcw } from 'lucide-react';
+import { Loader2, AlertTriangle, Gamepad2, User, Rocket, Monitor, Zap, Clock, CheckCircle2, XCircle, Trophy, Star, ArrowRight, RotateCcw, Timer, Flame } from 'lucide-react';
 
 interface ArcadePlayProps {
     evaluationId: string;
@@ -11,12 +12,9 @@ interface ArcadePlayProps {
 
 type GameState = 'LOBBY' | 'PLAYING' | 'FINISHED';
 
-// Utility for shuffling options locally without affecting state permanently
-const shuffleOptions = (questions: Question[]) => {
-    return questions.map(q => ({
-        ...q,
-        options: [...q.options].sort(() => Math.random() - 0.5)
-    }));
+// Utility for shuffling
+const shuffleArray = <T,>(array: T[]): T[] => {
+    return [...array].sort(() => Math.random() - 0.5);
 };
 
 export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
@@ -30,18 +28,27 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const [nickname, setNickname] = useState("");
     const [gameState, setGameState] = useState<GameState>('LOBBY');
     const [score, setScore] = useState(0);
-    const [streak, setStreak] = useState(0); // Gamification Bonus
+    const [streak, setStreak] = useState(0); 
 
     // --- GAME ENGINE STATE ---
     const [currentQIndex, setCurrentQIndex] = useState(0);
-    const [timeLeft, setTimeLeft] = useState(20); // Default, overwritten by logic
+    
+    // Timers
+    const [timeLeft, setTimeLeft] = useState(20); // Local (Classic)
+    const [globalTimeLeft, setGlobalTimeLeft] = useState(0); // Global (Time Attack)
+    
     const [isAnswered, setIsAnswered] = useState(false);
     const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-    const [showNextButton, setShowNextButton] = useState(false); // Fallback if auto-advance fails or user wants to read
+    
+    // Redemption & Retry Logic
+    const [incorrectQuestions, setIncorrectQuestions] = useState<Question[]>([]); // Permanent record for Redemption
+    const [retryQueue, setRetryQueue] = useState<Question[]>([]); // Temporary loop for Time Attack
+    const [isRedemptionRound, setIsRedemptionRound] = useState(false);
 
-    // Timer Ref to handle clear/reset accurately
+    // Refs for intervals
     const timerRef = useRef<any>(null);
+    const globalTimerRef = useRef<any>(null);
 
     // --- 1. LOAD EVALUATION DATA ---
     useEffect(() => {
@@ -57,15 +64,12 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 if (now < startDate) throw new Error(`La evaluación comienza el ${startDate.toLocaleString()}`);
                 if (data.config.endDate && now > new Date(data.config.endDate)) throw new Error("El plazo ha finalizado.");
 
-                // If questions are missing in evaluation snapshot, we might need to fetch quiz (fallback logic)
-                // For now, assume snapshot exists as per CreateEvaluationModal
                 if (!data.questions || data.questions.length === 0) {
                     throw new Error("Error de integridad: No hay preguntas en esta evaluación.");
                 }
 
                 setEvaluation(data);
-                // Shuffle questions or options if needed? For now, shuffle options only.
-                setPlayableQuestions(shuffleOptions(data.questions));
+                prepareGame(data);
 
             } catch (e: any) {
                 console.error(e);
@@ -78,9 +82,42 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         loadEvaluation();
     }, [evaluationId]);
 
+    // Initial Preparation (Shuffle & Slice)
+    const prepareGame = (data: Evaluation) => {
+        const shuffled = shuffleArray(data.questions);
+        const limit = data.config.questionCount || data.questions.length;
+        const finalSet = shuffled.slice(0, limit);
+        
+        // Shuffle options for each question
+        const readyQuestions = finalSet.map(q => ({
+            ...q,
+            options: shuffleArray(q.options)
+        }));
+
+        setPlayableQuestions(readyQuestions);
+        
+        // Set Global Timer if Time Attack
+        if (data.config.gameMode === 'time_attack' && data.config.timeLimit) {
+            setGlobalTimeLeft(data.config.timeLimit);
+        }
+    };
+
     // --- 2. TIMER LOGIC ---
+    
+    // A. Local Timer (Classic Mode)
     useEffect(() => {
-        if (gameState === 'PLAYING' && !isAnswered && timeLeft > 0) {
+        if (gameState === 'PLAYING' && !isRedemptionRound && evaluation?.config.gameMode === 'classic' && !isAnswered && timeLeft > 0) {
+            timerRef.current = setInterval(() => {
+                setTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        handleTimeUp();
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } else if (isRedemptionRound && gameState === 'PLAYING' && !isAnswered && timeLeft > 0) {
+            // Redemption always behaves like Classic
             timerRef.current = setInterval(() => {
                 setTimeLeft((prev) => {
                     if (prev <= 1) {
@@ -92,10 +129,24 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
             }, 1000);
         }
 
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, [gameState, isAnswered, timeLeft]);
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [gameState, isAnswered, timeLeft, evaluation?.config.gameMode, isRedemptionRound]);
+
+    // B. Global Timer (Time Attack Mode)
+    useEffect(() => {
+        if (gameState === 'PLAYING' && !isRedemptionRound && evaluation?.config.gameMode === 'time_attack') {
+            globalTimerRef.current = setInterval(() => {
+                setGlobalTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        finishGame();
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
+        return () => { if (globalTimerRef.current) clearInterval(globalTimerRef.current); };
+    }, [gameState, evaluation?.config.gameMode, isRedemptionRound]);
 
     // --- 3. GAME ACTIONS ---
 
@@ -107,12 +158,14 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
 
     const startQuestion = (index: number) => {
         setCurrentQIndex(index);
-        
-        // Reset Round State
         const q = playableQuestions[index];
         const timeLimit = q.timeLimit && q.timeLimit > 0 ? q.timeLimit : 20;
         
-        setTimeLeft(timeLimit);
+        // Reset timers based on mode
+        if (evaluation?.config.gameMode === 'classic' || isRedemptionRound) {
+            setTimeLeft(timeLimit);
+        }
+        
         setIsAnswered(false);
         setSelectedOptionId(null);
         setIsCorrect(null);
@@ -120,79 +173,110 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     };
 
     const handleAnswer = (optionId: string) => {
-        if (isAnswered) return; // Prevent double clicks
+        if (isAnswered) return;
         
-        // Stop Timer
+        // Stop Local Timer
         if (timerRef.current) clearInterval(timerRef.current);
+        
         setIsAnswered(true);
         setSelectedOptionId(optionId);
 
         const currentQ = playableQuestions[currentQIndex];
         const correctIds = currentQ.correctOptionIds || [currentQ.correctOptionId];
-        
-        // Logic: Is this option ID in the correct list?
         const correct = correctIds.includes(optionId);
         setIsCorrect(correct);
 
         // Scoring Logic
         if (correct) {
-            let points = 100; // Base
-            // Speed Bonus
+            let points = 100;
             if (evaluation?.config.allowSpeedPoints) {
-                // e.g. 10 pts per second remaining
-                points += (timeLeft * 10);
+                // Classic: Based on timeLeft. Time Attack: Flat bonus or based on speed of click?
+                // Simplifying: Use local timeLeft variable which works for Classic. For TA we ignore speed bonus or use fixed.
+                if (evaluation.config.gameMode === 'classic') points += (timeLeft * 10);
+                else points += 50; // Flat bonus for TA
             }
-            // Streak Bonus (Visual mostly)
             if (streak > 2) points += 50;
-
             setScore(prev => prev + points);
             setStreak(prev => prev + 1);
         } else {
             setStreak(0);
+            // Track incorrect for Redemption
+            if (!incorrectQuestions.some(q => q.id === currentQ.id)) {
+                setIncorrectQuestions(prev => [...prev, currentQ]);
+            }
+            // Track for Time Attack Loop
+            if (evaluation?.config.gameMode === 'time_attack' && !isRedemptionRound) {
+                setRetryQueue(prev => [...prev, currentQ]);
+            }
         }
 
-        // Auto-Advance Delay
+        // Transition Logic
         setTimeout(() => {
-            if (currentQIndex < playableQuestions.length - 1) {
-                startQuestion(currentQIndex + 1);
-            } else {
-                setGameState('FINISHED');
-            }
-        }, 2500); // 2.5s delay to see feedback
+            advanceGame();
+        }, 2000); 
     };
 
     const handleTimeUp = () => {
         setIsAnswered(true);
-        setIsCorrect(false); // Time up = Wrong
+        setIsCorrect(false);
         setStreak(0);
         if (timerRef.current) clearInterval(timerRef.current);
+        
+        const currentQ = playableQuestions[currentQIndex];
+        if (!incorrectQuestions.some(q => q.id === currentQ.id)) {
+            setIncorrectQuestions(prev => [...prev, currentQ]);
+        }
+        if (evaluation?.config.gameMode === 'time_attack' && !isRedemptionRound) {
+            setRetryQueue(prev => [...prev, currentQ]);
+        }
 
         setTimeout(() => {
-            if (currentQIndex < playableQuestions.length - 1) {
-                startQuestion(currentQIndex + 1);
+            advanceGame();
+        }, 2000);
+    };
+
+    const advanceGame = () => {
+        const nextIndex = currentQIndex + 1;
+
+        if (nextIndex < playableQuestions.length) {
+            // Normal progression
+            startQuestion(nextIndex);
+        } else {
+            // End of list reached
+            if (evaluation?.config.gameMode === 'time_attack' && !isRedemptionRound) {
+                // Time Attack Loop Logic
+                if (retryQueue.length > 0 && globalTimeLeft > 5) {
+                    // Start Loop
+                    const loopQuestions = shuffleArray(retryQueue);
+                    setPlayableQuestions(loopQuestions);
+                    setRetryQueue([]); // Clear queue for next pass
+                    startQuestion(0);
+                    // Optional: Visual indication of Loop?
+                } else {
+                    finishGame();
+                }
             } else {
-                setGameState('FINISHED');
+                finishGame();
             }
-        }, 2500);
+        }
+    };
+
+    const finishGame = () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (globalTimerRef.current) clearInterval(globalTimerRef.current);
+        setGameState('FINISHED');
+    };
+
+    const startRedemptionRound = () => {
+        setPlayableQuestions(shuffleArray(incorrectQuestions));
+        setIsRedemptionRound(true);
+        // Reset counters but keep score? Usually reset score for sub-game or add to it?
+        // Let's add to it but maybe visual distinction.
+        setGameState('PLAYING');
+        startQuestion(0);
     };
 
     // --- 4. RENDER HELPERS ---
-
-    const getFeedbackMessage = (score: number, totalQs: number) => {
-        if (!evaluation) return "";
-        const maxBaseScore = totalQs * 100; // Rough estimate ignoring speed
-        // Actually easier to use percentage of correct answers if we tracked it, 
-        // but let's use a rough heuristic or passed props? 
-        // For simplicity, let's assume max possible per question is ~300 (fast answer)
-        // Let's rely on simple config based on percentage of max potential score?
-        // Simpler: Just random nice message for now or pass props later.
-        
-        // Let's use the percentage of questions passed vs total?
-        // We haven't tracked 'correctCount' explicitly in state, let's calculate rank based on score magnitude
-        // Assuming ~200pts average per correct answer.
-        
-        return "¡Gracias por participar!";
-    };
 
     if (loading) {
         return (
@@ -219,9 +303,12 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const totalQs = playableQuestions.length;
     const progressPercent = ((currentQIndex + 1) / totalQs) * 100;
     
-    // Timer Color Logic
-    const maxTime = currentQ?.timeLimit || 20;
-    const timerPercent = (timeLeft / maxTime) * 100;
+    // Timer Logic for Display
+    const isTimeAttack = evaluation.config.gameMode === 'time_attack' && !isRedemptionRound;
+    const displayTime = isTimeAttack ? globalTimeLeft : timeLeft;
+    const maxDisplayTime = isTimeAttack ? evaluation.config.timeLimit! : (currentQ?.timeLimit || 20);
+    const timerPercent = (displayTime / maxDisplayTime) * 100;
+    
     let timerColor = "bg-green-500";
     if (timerPercent < 50) timerColor = "bg-yellow-500";
     if (timerPercent < 20) timerColor = "bg-red-500";
@@ -243,9 +330,14 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                         <h1 className="text-4xl md:text-6xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] mb-2">
                             {evaluation.title.toUpperCase()}
                         </h1>
-                        <p className="text-cyan-400 font-mono text-sm md:text-base tracking-wide">
-                            {evaluation.questions.length} NIVELES • {evaluation.config.allowSpeedPoints ? 'SPEED BONUS ACTIVE' : 'STANDARD SCORE'}
-                        </p>
+                        <div className="flex items-center justify-center gap-4 mt-2">
+                            <span className="text-cyan-400 font-mono text-sm tracking-wide bg-cyan-950/30 px-3 py-1 rounded border border-cyan-500/30">
+                                {evaluation.config.questionCount} NIVELES
+                            </span>
+                            <span className={`text-sm font-mono tracking-wide px-3 py-1 rounded border ${evaluation.config.gameMode === 'time_attack' ? 'text-red-400 bg-red-950/30 border-red-500/30' : 'text-blue-400 bg-blue-950/30 border-blue-500/30'}`}>
+                                {evaluation.config.gameMode === 'time_attack' ? `TIME ATTACK (${evaluation.config.timeLimit}s)` : 'CLASSIC MODE'}
+                            </span>
+                        </div>
                     </div>
 
                     <CyberCard className="w-full max-w-md border-cyan-500/50 shadow-[0_0_50px_rgba(6,182,212,0.2)] bg-black/80 backdrop-blur-xl p-8">
@@ -294,7 +386,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
 
                         <div className="flex items-center gap-4">
                             <div className="bg-gray-900 px-3 py-1 rounded border border-gray-700 font-mono text-sm text-gray-300">
-                                Q {currentQIndex + 1} / {totalQs}
+                                {isRedemptionRound ? 'REDEMPTION' : `Q ${currentQIndex + 1} / ${totalQs}`}
                             </div>
                             <div className="font-bold text-cyan-400 font-cyber flex items-center gap-2">
                                 {nickname.toUpperCase()}
@@ -327,7 +419,8 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                             )}
 
                             {/* Question Text */}
-                            <div className="bg-black/60 border border-gray-700 p-6 md:p-8 rounded-xl text-center backdrop-blur-sm shadow-xl">
+                            <div className="bg-black/60 border border-gray-700 p-6 md:p-8 rounded-xl text-center backdrop-blur-sm shadow-xl relative">
+                                {isRedemptionRound && <div className="absolute -top-3 -right-3 bg-red-600 text-white px-2 py-1 rounded text-xs font-bold animate-pulse">REDEMPTION</div>}
                                 <h2 className="text-2xl md:text-4xl font-bold font-cyber text-white leading-tight">
                                     {currentQ.text}
                                 </h2>
@@ -380,8 +473,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                             {/* Timer / Status Feedback */}
                             <div className="h-8 flex justify-center items-center">
                                 {!isAnswered ? (
-                                    <div className={`flex items-center gap-2 font-mono font-bold text-xl ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>
-                                        <Clock className="w-5 h-5" /> {timeLeft}s
+                                    <div className={`flex items-center gap-2 font-mono font-bold text-xl ${displayTime <= 5 ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>
+                                        <Clock className="w-5 h-5" /> {displayTime}s
+                                        {isTimeAttack && <span className="text-xs text-gray-500 ml-2">(GLOBAL)</span>}
                                     </div>
                                 ) : (
                                     <div className="font-cyber text-lg tracking-widest animate-in zoom-in">
@@ -413,6 +507,16 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                             <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">PUNTUACIÓN FINAL</p>
                             <div className="text-6xl font-black font-mono text-white">{score}</div>
                         </div>
+
+                        {/* REDEMPTION ROUND BUTTON */}
+                        {!isRedemptionRound && incorrectQuestions.length > 0 && (
+                            <button 
+                                onClick={startRedemptionRound}
+                                className="w-full py-3 bg-red-900/50 border border-red-500 text-red-200 rounded font-bold font-cyber hover:bg-red-900 hover:text-white transition-all animate-pulse flex items-center justify-center gap-2"
+                            >
+                                <Flame className="w-5 h-5" /> RONDA DE REDENCIÓN
+                            </button>
+                        )}
 
                         <div className="h-px bg-gray-800 w-full"></div>
 

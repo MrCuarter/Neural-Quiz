@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Quiz, Evaluation, EvaluationConfig } from '../../types';
 import { createEvaluation } from '../../services/firebaseService';
-import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberTextArea } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield } from 'lucide-react';
+import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberTextArea, CyberSelect } from '../ui/CyberUI';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Timer, List } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
 interface CreateEvaluationModalProps {
@@ -24,6 +24,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     
+    // New: Game Mode Config
+    const [gameMode, setGameMode] = useState<'classic' | 'time_attack'>('classic');
+    const [questionCount, setQuestionCount] = useState(0);
+    const [timeLimit, setTimeLimit] = useState(180); // Default 3 mins for Time Attack
+    const [countWarning, setCountWarning] = useState(false);
+
     // Mechanics
     const [speedPoints, setSpeedPoints] = useState(true);
     const [powerUps, setPowerUps] = useState(false); // Default false for evaluation
@@ -38,15 +44,29 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         if (isOpen && quiz) {
             // Reset state on open
             setTitle(quiz.title || "Evaluación");
-            // Set default start date to NOW (ISO format for datetime-local input needs slicing)
+            // Set default start date to NOW
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             setStartDate(now.toISOString().slice(0, 16));
             setEndDate("");
             setCreatedUrl(null);
             setCopied(false);
+            
+            // Initialize count
+            setQuestionCount(quiz.questions.length);
+            setCountWarning(false);
         }
     }, [isOpen, quiz]);
+
+    // Handle Question Count Change with Validation
+    const handleCountChange = (val: number) => {
+        setQuestionCount(val);
+        if (val > quiz.questions.length) {
+            setCountWarning(true);
+        } else {
+            setCountWarning(false);
+        }
+    };
 
     const handleSave = async () => {
         if (!user || !quiz) return;
@@ -57,7 +77,13 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
         setIsLoading(true);
         try {
+            // Normalize count if exceeds max
+            const finalCount = Math.min(Math.max(1, questionCount), quiz.questions.length);
+
             const config: EvaluationConfig = {
+                gameMode,
+                questionCount: finalCount,
+                timeLimit: gameMode === 'time_attack' ? timeLimit : undefined,
                 allowSpeedPoints: speedPoints,
                 allowPowerUps: powerUps,
                 showRanking: showRanking,
@@ -163,12 +189,65 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                 </div>
                             </div>
 
-                            {/* 2. MECHANICS */}
+                            {/* 2. MODE & MECHANICS */}
                             <div className="space-y-4">
                                 <h3 className="text-xs font-mono font-bold text-white bg-gray-900/50 p-2 rounded border-l-2 border-purple-500 flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-purple-400" /> MECÁNICAS DE JUEGO
+                                    <Zap className="w-4 h-4 text-purple-400" /> MODO Y REGLAS
                                 </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-xs font-mono text-gray-500 uppercase tracking-widest block mb-2">MODO DE JUEGO</label>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => setGameMode('classic')}
+                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'classic' ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
+                                            >
+                                                <div className="font-bold text-sm">CLASSIC</div>
+                                                <div className="text-[10px] opacity-70">Ritmo normal</div>
+                                            </button>
+                                            <button 
+                                                onClick={() => setGameMode('time_attack')}
+                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'time_attack' ? 'bg-red-900/40 border-red-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
+                                            >
+                                                <div className="font-bold text-sm">TIME ATTACK</div>
+                                                <div className="text-[10px] opacity-70">Contrarreloj</div>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="flex gap-4">
+                                            <div className="flex-1">
+                                                <CyberInput 
+                                                    type="number"
+                                                    label="CANTIDAD PREGUNTAS"
+                                                    value={questionCount}
+                                                    onChange={(e) => handleCountChange(parseInt(e.target.value))}
+                                                    min={1}
+                                                />
+                                                {countWarning && (
+                                                    <div className="flex items-center gap-1 text-[10px] text-yellow-500 mt-1">
+                                                        <AlertCircle className="w-3 h-3" /> Máximo disponible: {quiz.questions.length}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {gameMode === 'time_attack' && (
+                                                <div className="flex-1 animate-in slide-in-from-left-2">
+                                                    <CyberInput 
+                                                        type="number"
+                                                        label="TIEMPO TOTAL (SEG)"
+                                                        value={timeLimit}
+                                                        onChange={(e) => setTimeLimit(parseInt(e.target.value))}
+                                                        min={30}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-gray-800">
                                     <CyberCheckbox 
                                         label="Puntos por Velocidad" 
                                         checked={speedPoints} 

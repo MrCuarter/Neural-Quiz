@@ -76,6 +76,9 @@ export interface Quiz {
 
 // --- EVALUATION (ARCADE MODE) ---
 export interface EvaluationConfig {
+    gameMode: 'classic' | 'time_attack'; // NEW: Game Mode
+    questionCount: number; // NEW: Limit number of questions
+    timeLimit?: number; // NEW: Global time limit for Time Attack (seconds)
     allowSpeedPoints: boolean; // More points for faster answers
     allowPowerUps: boolean; // Enable items/jokers
     showRanking: boolean; // Show leaderboard to student
