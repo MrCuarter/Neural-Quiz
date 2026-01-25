@@ -1,5 +1,30 @@
 
-import { BossSettings } from "../types";
+// Definimos las interfaces localmente para evitar errores de importación relativa en el build (TS2307)
+export interface BossImageConfig {
+    idle: string;   
+    damage?: string; 
+    defeat: string; 
+    win: string;    
+}
+
+export interface BossSettings {
+    bossName: string;
+    images: BossImageConfig;
+    health: {
+        bossHP: number;
+        playerHP: number;
+    };
+    difficulty: 'easy' | 'medium' | 'hard' | 'legend';
+    messages: {
+        bossWins: string;
+        playerWins: string;
+        perfectWin: string;
+    };
+    mechanics: {
+        enablePowerUps: boolean;
+        finishHimMove: boolean; 
+    };
+}
 
 export const PRESET_BOSSES: Record<string, BossSettings> = {
     CYBORG_PRIME: {
