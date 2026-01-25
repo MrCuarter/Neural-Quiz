@@ -435,7 +435,18 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                             {activeCell.q?.imageUrl && (
                                 <div className="relative inline-block max-w-full">
                                     <img src={activeCell.q.imageUrl} className="max-h-[40vh] mx-auto rounded border border-gray-700 shadow-xl" alt="Q" />
-                                    {activeCell.q.imageCredit && <div className="absolute bottom-1 right-1 bg-black/60 text-[9px] text-white px-2 py-1 rounded">Foto de {activeCell.q.imageCredit.name}</div>}
+                                    {/* UNSPLASH COMPLIANT ATTRIBUTION */}
+                                    {activeCell.q.imageCredit && (
+                                        <div className="absolute bottom-1 right-1 bg-black/60 text-[10px] text-white px-2 py-1 rounded backdrop-blur-sm border border-white/10 shadow-lg">
+                                            {activeCell.q.imageCredit.source === 'Unsplash' ? (
+                                                <>
+                                                    Photo by <a href={activeCell.q.imageCredit.link} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-white/50 hover:text-cyan-400 hover:decoration-cyan-400">{activeCell.q.imageCredit.name}</a> on <a href="https://unsplash.com/?utm_source=NeuralQuiz&utm_medium=referral" target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-white/50 hover:text-cyan-400 hover:decoration-cyan-400">Unsplash</a>
+                                                </>
+                                            ) : (
+                                                <span>Image by {activeCell.q.imageCredit.name} ({activeCell.q.imageCredit.source})</span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

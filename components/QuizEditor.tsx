@@ -780,6 +780,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                       className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all flex items-center justify-center"
                                                   >
                                                       <img src={q.imageUrl} className="w-full h-full object-contain max-h-[120px]" alt="Q" />
+                                                      
+                                                      {/* UNSPLASH ATTRIBUTION PREVIEW */}
+                                                      {q.imageCredit && q.imageCredit.source === 'Unsplash' && (
+                                                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-[8px] text-white p-1 truncate">
+                                                              Photo by {q.imageCredit.name} on Unsplash
+                                                          </div>
+                                                      )}
+
                                                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                           <ImageIcon className="w-6 h-6 text-white" />
                                                       </div>

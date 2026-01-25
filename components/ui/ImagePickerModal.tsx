@@ -165,14 +165,19 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                                 className="aspect-video relative group overflow-hidden rounded border border-gray-800 hover:border-cyan-500 transition-all w-full text-left"
                                             >
                                                 <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
-                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity z-10">
                                                     <CheckCircle2 className="w-8 h-8 text-cyan-400" />
                                                 </div>
-                                                {/* Attribution Badge on Hover */}
+                                                {/* Attribution Overlay - STRICT UNSPLASH COMPLIANCE */}
                                                 {img.attribution && (
-                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm text-[9px] text-gray-300 p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between">
-                                                        <span>{img.attribution.sourceName}</span>
-                                                        <span>{img.attribution.authorName}</span>
+                                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2 text-[9px] text-gray-300 leading-tight z-20 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                        {img.attribution.sourceName === 'Unsplash' ? (
+                                                            <>
+                                                                Photo by <span className="text-white font-bold">{img.attribution.authorName}</span> on <span className="text-white font-bold">Unsplash</span>
+                                                            </>
+                                                        ) : (
+                                                            <span>{img.attribution.sourceName} / {img.attribution.authorName}</span>
+                                                        )}
                                                     </div>
                                                 )}
                                             </button>
