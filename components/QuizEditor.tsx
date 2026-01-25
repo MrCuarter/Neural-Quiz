@@ -126,9 +126,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
               // Simplified: Just keep text structure mostly, deep ID remap complex here
           }));
           
-          // Better logic: Just use current questions as is but ensure IDs are unique compared to target
-          // Since UUIDs are random, collision probability is low.
-          
           const updatedQuiz: Quiz = {
               ...targetQuiz,
               questions: [...targetQuiz.questions, ...quiz.questions],
@@ -648,7 +645,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       onDragEnd={() => setDraggedItemIndex(null)}
                                       onClick={() => jumpToQuestion(idx)}
                                       className={`
-                                          group flex items-center gap-2 p-2 rounded text-xs cursor-pointer transition-all border
+                                          group flex items-center gap-2 p-2 rounded cursor-pointer transition-all border
                                           ${isActive ? 'bg-cyan-900/30 border-cyan-500/50 text-cyan-200' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400'}
                                           ${isDragging ? 'opacity-50 dashed border-gray-500' : ''}
                                       `}
@@ -656,8 +653,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       <div className="cursor-grab text-gray-700 hover:text-gray-400">
                                           <GripVertical className="w-3 h-3" />
                                       </div>
-                                      <span className="font-mono font-bold w-5">{idx + 1}.</span>
-                                      <span className="truncate flex-1">{q.text || "Empty..."}</span>
+                                      <span className="font-mono font-bold w-5 text-xs">{idx + 1}.</span>
+                                      <span className="text-xs leading-tight line-clamp-2 flex-1 break-words">{q.text || "Empty..."}</span>
                                       {isValid ? <CheckCircle2 className="w-3 h-3 text-green-500/50" /> : <AlertTriangle className="w-3 h-3 text-red-500" />}
                                   </div>
                               );
@@ -700,13 +697,13 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               <div className="flex items-center justify-between" onClick={() => toggleExpand(q.id)}>
                                   <div className="flex items-center gap-4 flex-1 overflow-hidden">
                                       {!isExpanded && (
-                                          <div className="flex-1 flex flex-col gap-1">
+                                          <div className="flex-1 flex flex-col gap-1 w-full">
                                               {/* Top Line: Icon | Text | Image Thumb */}
-                                              <div className="flex items-center gap-3">
+                                              <div className="flex items-center gap-3 w-full">
                                                   <div className={`p-1.5 rounded border ${getTypeColor(q.questionType)}`}>
                                                       {getTypeIcon(q.questionType)}
                                                   </div>
-                                                  <span className={`font-bold font-mono truncate max-w-[60%] ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>
+                                                  <span className={`font-bold font-mono text-sm md:text-base break-words flex-1 pr-4 ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>
                                                       {q.text || t.enter_question}
                                                   </span>
                                                   {q.imageUrl && (
