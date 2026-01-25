@@ -6,26 +6,57 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
         bossName: "Cyborg Prime",
         images: {
             idle: "https://i.postimg.cc/Y9mTF1jL/Cyborg.png",
-            damage: "https://i.postimg.cc/Y9mTF1jL/Cyborg.png", // Usamos la misma con efecto CSS shake
+            damage: "https://i.postimg.cc/Y9mTF1jL/Cyborg.png",
             defeat: "https://i.postimg.cc/C1f98jdB/Cyborg-Lose.png",
             win: "https://i.postimg.cc/sXZbWp1Z/Cyborg-Win.png"
         },
-        // Badge específico para la UI (no está en el tipo base pero lo usaremos en la UI)
-        // @ts-ignore 
+        // @ts-ignore
         badgeUrl: "https://i.postimg.cc/RFn2tcq3/Cyborg-Badge.png",
-        health: {
-            bossHP: 1000,
-            playerHP: 100
-        },
+        health: { bossHP: 1000, playerHP: 100 },
         difficulty: 'medium',
         messages: {
             bossWins: "Tu lógica es inferior. He vencido.",
             playerWins: "Error crítico... Sistema apagándose...",
             perfectWin: "Imposible. Cero errores detectados."
         },
-        mechanics: {
-            enablePowerUps: true,
-            finishHimMove: true
-        }
+        mechanics: { enablePowerUps: true, finishHimMove: true }
+    },
+    VAMPIRE_LORD: {
+        bossName: "Conde Byte",
+        images: {
+            idle: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png", 
+            damage: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png", // Shake effect applied in CSS
+            defeat: "https://i.postimg.cc/HLq9Xy3z/Vampire-Lose.png",
+            win: "https://i.postimg.cc/MKd4h3z1/Vampire-Win.png"
+        },
+        // @ts-ignore
+        badgeUrl: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png",
+        health: { bossHP: 1500, playerHP: 80 }, // Harder boss, less player HP
+        difficulty: 'hard',
+        messages: {
+            bossWins: "Tu conocimiento se ha desangrado...",
+            playerWins: "¡Maldición! La luz del saber quema...",
+            perfectWin: "Una mente inmaculada... delicioso."
+        },
+        mechanics: { enablePowerUps: true, finishHimMove: true }
+    },
+    GLITCH_MONSTER: {
+        bossName: "M1ssingN0",
+        images: {
+            idle: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
+            damage: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
+            defeat: "https://i.postimg.cc/PrN0x4qS/Glitch-Lose.png",
+            win: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png"
+        },
+        // @ts-ignore
+        badgeUrl: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
+        health: { bossHP: 800, playerHP: 120 }, // Erratic but easier stats
+        difficulty: 'medium',
+        messages: {
+            bossWins: "404: SKILL NOT FOUND.",
+            playerWins: "Seg.Fault... Core Dumped...",
+            perfectWin: "System.Optimized(100%)."
+        },
+        mechanics: { enablePowerUps: true, finishHimMove: false }
     }
 };

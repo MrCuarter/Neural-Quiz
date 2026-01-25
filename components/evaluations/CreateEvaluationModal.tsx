@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
 import { createEvaluation } from '../../services/firebaseService';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberTextArea, CyberSelect } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Timer, List, Skull, Heart, Sword, User } from 'lucide-react';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Timer, List, Skull, Heart, Sword, User, Edit3, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+import { PRESET_BOSSES } from '../../data/bossPresets';
 
 interface CreateEvaluationModalProps {
     isOpen: boolean;
@@ -31,21 +32,22 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [countWarning, setCountWarning] = useState(false);
 
     // --- BOSS SETTINGS STATE ---
+    const [selectedPreset, setSelectedPreset] = useState<string | null>('CYBORG_PRIME'); // Default selection
     const [bossName, setBossName] = useState("Dr. Caos");
     const [bossDifficulty, setBossDifficulty] = useState<'easy' | 'medium' | 'hard' | 'legend'>('medium');
     const [bossHP, setBossHP] = useState(1000);
     const [playerHP, setPlayerHP] = useState(100);
     
     // Boss Images
-    const [imgIdle, setImgIdle] = useState("https://media.tenor.com/images/9c5b570e30129759c5c7603375525389/tenor.gif");
+    const [imgIdle, setImgIdle] = useState("");
     const [imgDamage, setImgDamage] = useState("");
-    const [imgDefeat, setImgDefeat] = useState("https://media1.tenor.com/m/2y1o5Vp64nQAAAAC/explosion-boom.gif");
-    const [imgWin, setImgWin] = useState("https://media1.tenor.com/m/7ydrF7q8C84AAAAC/game-over-glitch.gif");
+    const [imgDefeat, setImgDefeat] = useState("");
+    const [imgWin, setImgWin] = useState("");
 
     // Boss Messages
-    const [msgBossWin, setMsgBossWin] = useState("¡Jajaja! ¡Te falta estudiar más, mortal!");
-    const [msgPlayerWin, setMsgPlayerWin] = useState("¡Imposible! ¡Me has derrotado!");
-    const [msgPerfect, setMsgPerfect] = useState("¡Nivel Legendario! Ni un solo rasguño.");
+    const [msgBossWin, setMsgBossWin] = useState("");
+    const [msgPlayerWin, setMsgPlayerWin] = useState("");
+    const [msgPerfect, setMsgPerfect] = useState("");
     
     // Boss Mechanics
     const [finishHim, setFinishHim] = useState(true);
@@ -64,7 +66,6 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         if (isOpen && quiz) {
             // Reset state on open
             setTitle(quiz.title || "Evaluación");
-            // Set default start date to NOW
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             setStartDate(now.toISOString().slice(0, 16));
@@ -75,8 +76,42 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             // Initialize count
             setQuestionCount(quiz.questions.length);
             setCountWarning(false);
+
+            // Load Default Preset
+            handleSelectPreset('CYBORG_PRIME');
         }
     }, [isOpen, quiz]);
+
+    const handleSelectPreset = (key: string) => {
+        setSelectedPreset(key);
+        if (key === 'CUSTOM') {
+            setBossName("Mi Jefe Personalizado");
+            setBossHP(1000);
+            setPlayerHP(100);
+            setImgIdle("");
+            setImgDamage("");
+            setImgDefeat("");
+            setImgWin("");
+            setMsgBossWin("¡Has perdido!");
+            setMsgPlayerWin("¡Has ganado!");
+            setMsgPerfect("¡Victoria perfecta!");
+        } else {
+            const p = PRESET_BOSSES[key];
+            if (p) {
+                setBossName(p.bossName);
+                setBossDifficulty(p.difficulty);
+                setBossHP(p.health.bossHP);
+                setPlayerHP(p.health.playerHP);
+                setImgIdle(p.images.idle);
+                setImgDamage(p.images.damage || p.images.idle);
+                setImgDefeat(p.images.defeat);
+                setImgWin(p.images.win);
+                setMsgBossWin(p.messages.bossWins);
+                setMsgPlayerWin(p.messages.playerWins);
+                setMsgPerfect(p.messages.perfectWin);
+            }
+        }
+    };
 
     // Handle Question Count Change with Validation
     const handleCountChange = (val: number) => {
@@ -92,18 +127,10 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const applyDifficultyPreset = (diff: 'easy' | 'medium' | 'hard' | 'legend') => {
         setBossDifficulty(diff);
         switch(diff) {
-            case 'easy':
-                setBossHP(500); setPlayerHP(200);
-                break;
-            case 'medium':
-                setBossHP(1000); setPlayerHP(100);
-                break;
-            case 'hard':
-                setBossHP(2000); setPlayerHP(50);
-                break;
-            case 'legend':
-                setBossHP(5000); setPlayerHP(1); // One hit kill
-                break;
+            case 'easy': setBossHP(500); setPlayerHP(200); break;
+            case 'medium': setBossHP(1000); setPlayerHP(100); break;
+            case 'hard': setBossHP(2000); setPlayerHP(50); break;
+            case 'legend': setBossHP(5000); setPlayerHP(1); break;
         }
     };
 
@@ -116,10 +143,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
         setIsLoading(true);
         try {
-            // Normalize count if exceeds max
             const finalCount = Math.min(Math.max(1, questionCount), quiz.questions.length);
 
-            // Construct Boss Settings if applicable
             let bossSettings: BossSettings | undefined = undefined;
             if (gameMode === 'final_boss') {
                 bossSettings = {
@@ -139,11 +164,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                 allowSpeedPoints: speedPoints,
                 allowPowerUps: powerUps,
                 showRanking: showRanking,
-                feedbackMessages: {
-                    high: msgHigh,
-                    medium: msgMed,
-                    low: msgLow
-                },
+                feedbackMessages: { high: msgHigh, medium: msgMed, low: msgLow },
                 startDate: new Date(startDate).toISOString(),
                 endDate: endDate ? new Date(endDate).toISOString() : undefined,
                 bossSettings
@@ -157,12 +178,10 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                 config: config,
                 isActive: true,
                 participants: 0,
-                questions: quiz.questions // Snapshot of current questions
+                questions: quiz.questions
             };
 
             const evalId = await createEvaluation(evaluationData);
-            
-            // Generate Play URL
             const url = `${window.location.origin}/play/${evalId}`;
             setCreatedUrl(url);
             toast.success("¡Evaluación creada con éxito!");
@@ -213,30 +232,15 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                     <Calendar className="w-4 h-4 text-cyan-400" /> CONFIGURACIÓN GENERAL
                                 </h3>
                                 <div className="grid grid-cols-1 gap-4">
-                                    <CyberInput 
-                                        label="TÍTULO DE LA SESIÓN" 
-                                        value={title} 
-                                        onChange={(e) => setTitle(e.target.value)} 
-                                        placeholder="Ej: Examen Unidad 1"
-                                    />
+                                    <CyberInput label="TÍTULO DE LA SESIÓN" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Examen Unidad 1"/>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="flex flex-col gap-1">
                                             <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest">FECHA INICIO</label>
-                                            <input 
-                                                type="datetime-local" 
-                                                value={startDate} 
-                                                onChange={(e) => setStartDate(e.target.value)}
-                                                className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"
-                                            />
+                                            <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"/>
                                         </div>
                                         <div className="flex flex-col gap-1">
                                             <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest">FECHA FIN (OPCIONAL)</label>
-                                            <input 
-                                                type="datetime-local" 
-                                                value={endDate} 
-                                                onChange={(e) => setEndDate(e.target.value)}
-                                                className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"
-                                            />
+                                            <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"/>
                                         </div>
                                     </div>
                                 </div>
@@ -252,24 +256,15 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                     <div className="md:col-span-3">
                                         <label className="text-xs font-mono text-gray-500 uppercase tracking-widest block mb-2">MODO DE JUEGO</label>
                                         <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => setGameMode('classic')}
-                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'classic' ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
-                                            >
+                                            <button onClick={() => setGameMode('classic')} className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'classic' ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
                                                 <div className="font-bold text-sm">CLASSIC</div>
                                                 <div className="text-[10px] opacity-70">Ritmo normal</div>
                                             </button>
-                                            <button 
-                                                onClick={() => setGameMode('time_attack')}
-                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'time_attack' ? 'bg-blue-900/40 border-blue-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
-                                            >
+                                            <button onClick={() => setGameMode('time_attack')} className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'time_attack' ? 'bg-blue-900/40 border-blue-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
                                                 <div className="font-bold text-sm">TIME ATTACK</div>
                                                 <div className="text-[10px] opacity-70">Contrarreloj</div>
                                             </button>
-                                            <button 
-                                                onClick={() => setGameMode('final_boss')}
-                                                className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'final_boss' ? 'bg-red-900/40 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}
-                                            >
+                                            <button onClick={() => setGameMode('final_boss')} className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'final_boss' ? 'bg-red-900/40 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
                                                 <div className="font-bold text-sm flex items-center justify-center gap-1"><Skull className="w-3 h-3"/> FINAL BOSS</div>
                                                 <div className="text-[10px] opacity-70">RPG Battle</div>
                                             </button>
@@ -279,28 +274,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                     <div className="md:col-span-3 space-y-4">
                                         <div className="flex gap-4">
                                             <div className="flex-1">
-                                                <CyberInput 
-                                                    type="number"
-                                                    label="CANTIDAD PREGUNTAS"
-                                                    value={questionCount}
-                                                    onChange={(e) => handleCountChange(parseInt(e.target.value))}
-                                                    min={1}
-                                                />
-                                                {countWarning && (
-                                                    <div className="flex items-center gap-1 text-[10px] text-yellow-500 mt-1">
-                                                        <AlertCircle className="w-3 h-3" /> Máximo disponible: {quiz.questions.length}
-                                                    </div>
-                                                )}
+                                                <CyberInput type="number" label="CANTIDAD PREGUNTAS" value={questionCount} onChange={(e) => handleCountChange(parseInt(e.target.value))} min={1} />
+                                                {countWarning && <div className="flex items-center gap-1 text-[10px] text-yellow-500 mt-1"><AlertCircle className="w-3 h-3" /> Máximo disponible: {quiz.questions.length}</div>}
                                             </div>
                                             {gameMode === 'time_attack' && (
                                                 <div className="flex-1 animate-in slide-in-from-left-2">
-                                                    <CyberInput 
-                                                        type="number"
-                                                        label="TIEMPO TOTAL (SEG)"
-                                                        value={timeLimit}
-                                                        onChange={(e) => setTimeLimit(parseInt(e.target.value))}
-                                                        min={30}
-                                                    />
+                                                    <CyberInput type="number" label="TIEMPO TOTAL (SEG)" value={timeLimit} onChange={(e) => setTimeLimit(parseInt(e.target.value))} min={30} />
                                                 </div>
                                             )}
                                         </div>
@@ -309,10 +288,40 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
                                 {/* BOSS CONFIGURATION PANEL */}
                                 {gameMode === 'final_boss' && (
-                                    <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 border border-red-500/30 bg-red-950/10 p-4 rounded-lg">
+                                    <div className="mt-6 space-y-6 animate-in slide-in-from-top-4 border border-red-500/30 bg-red-950/10 p-4 rounded-lg">
                                         <div className="flex items-center gap-2 text-red-400 border-b border-red-500/30 pb-2 mb-2">
                                             <Skull className="w-5 h-5" />
                                             <h4 className="font-cyber font-bold text-sm">CONFIGURACIÓN DEL JEFE</h4>
+                                        </div>
+
+                                        {/* PRESET SELECTOR */}
+                                        <div>
+                                            <label className="text-xs font-mono text-red-400/80 uppercase tracking-widest block mb-3">SELECCIONAR ENEMIGO</label>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                {Object.entries(PRESET_BOSSES).map(([key, boss]) => (
+                                                    <button 
+                                                        key={key}
+                                                        onClick={() => handleSelectPreset(key)}
+                                                        className={`relative p-2 rounded border-2 transition-all flex flex-col items-center gap-2 group overflow-hidden ${selectedPreset === key ? 'border-red-500 bg-red-900/40' : 'border-gray-700 bg-black/40 hover:border-gray-500'}`}
+                                                    >
+                                                        <div className="w-12 h-12 rounded-full border border-gray-600 overflow-hidden bg-black">
+                                                            <img src={boss.images.idle} className="w-full h-full object-cover" alt={boss.bossName} />
+                                                        </div>
+                                                        <span className={`text-[10px] font-bold font-cyber text-center ${selectedPreset === key ? 'text-red-300' : 'text-gray-400'}`}>{boss.bossName}</span>
+                                                        {selectedPreset === key && <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>}
+                                                    </button>
+                                                ))}
+                                                {/* CUSTOM CARD */}
+                                                <button 
+                                                    onClick={() => handleSelectPreset('CUSTOM')}
+                                                    className={`relative p-2 rounded border-2 transition-all flex flex-col items-center justify-center gap-2 group border-dashed ${selectedPreset === 'CUSTOM' ? 'border-red-500 bg-red-900/40' : 'border-gray-600 bg-black/20 hover:bg-black/40'}`}
+                                                >
+                                                    <div className="w-12 h-12 rounded-full border border-gray-600 flex items-center justify-center bg-black/50">
+                                                        <Edit3 className="w-6 h-6 text-gray-500 group-hover:text-white" />
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold font-cyber text-center ${selectedPreset === 'CUSTOM' ? 'text-red-300' : 'text-gray-400'}`}>PERSONALIZADO</span>
+                                                </button>
+                                            </div>
                                         </div>
 
                                         {/* Identity & Difficulty */}
@@ -347,7 +356,13 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
                                         {/* Images */}
                                         <div className="space-y-2">
-                                            <label className="text-xs font-mono text-gray-500 uppercase">IMÁGENES (URLs)</label>
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-xs font-mono text-gray-500 uppercase">IMÁGENES (URLs)</label>
+                                                <div className="flex items-center gap-1 text-[9px] text-gray-600 bg-gray-900 px-2 py-0.5 rounded border border-gray-800">
+                                                    <ImageIcon className="w-3 h-3" />
+                                                    <span>Usa enlaces directos (Imgur, PostImage)</span>
+                                                </div>
+                                            </div>
                                             <CyberInput label="IDLE (NORMAL)" placeholder="URL del Boss..." value={imgIdle} onChange={(e) => setImgIdle(e.target.value)} className="text-xs" />
                                             <div className="grid grid-cols-2 gap-2">
                                                 <CyberInput label="DERROTADO" placeholder="URL al morir..." value={imgDefeat} onChange={(e) => setImgDefeat(e.target.value)} className="text-xs" />
@@ -362,31 +377,14 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                             <CyberInput label="SI EL JUGADOR GANA" value={msgPlayerWin} onChange={(e) => setMsgPlayerWin(e.target.value)} className="text-xs text-green-200" />
                                         </div>
 
-                                        <CyberCheckbox 
-                                            label="ACTIVAR GOLPE DE GRACIA (Repasar fallos al final)" 
-                                            checked={finishHim} 
-                                            onChange={setFinishHim}
-                                            warning={finishHim}
-                                        />
+                                        <CyberCheckbox label="ACTIVAR GOLPE DE GRACIA (Repasar fallos al final)" checked={finishHim} onChange={setFinishHim} warning={finishHim} />
                                     </div>
                                 )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-gray-800">
-                                    <CyberCheckbox 
-                                        label="Puntos por Velocidad" 
-                                        checked={speedPoints} 
-                                        onChange={setSpeedPoints} 
-                                    />
-                                    <CyberCheckbox 
-                                        label="Habilitar Power-Ups" 
-                                        checked={powerUps} 
-                                        onChange={setPowerUps} 
-                                    />
-                                    <CyberCheckbox 
-                                        label="Mostrar Ranking Final" 
-                                        checked={showRanking} 
-                                        onChange={setShowRanking} 
-                                    />
+                                    <CyberCheckbox label="Puntos por Velocidad" checked={speedPoints} onChange={setSpeedPoints} />
+                                    <CyberCheckbox label="Habilitar Power-Ups" checked={powerUps} onChange={setPowerUps} />
+                                    <CyberCheckbox label="Mostrar Ranking Final" checked={showRanking} onChange={setShowRanking} />
                                 </div>
                             </div>
 
@@ -428,47 +426,29 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                             <div className="w-full bg-black/50 border border-green-500/30 rounded-lg p-4 flex flex-col gap-2">
                                 <label className="text-xs font-mono text-green-400 uppercase tracking-widest text-left">ENLACE DE ACCESO PÚBLICO</label>
                                 <div className="flex gap-2">
-                                    <input 
-                                        readOnly 
-                                        value={createdUrl} 
-                                        className="flex-1 bg-gray-900 border border-gray-700 rounded p-3 text-sm font-mono text-cyan-300 focus:outline-none select-all"
-                                    />
-                                    <button 
-                                        onClick={copyToClipboard}
-                                        className={`p-3 rounded border transition-all ${copied ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'}`}
-                                    >
+                                    <input readOnly value={createdUrl} className="flex-1 bg-gray-900 border border-gray-700 rounded p-3 text-sm font-mono text-cyan-300 focus:outline-none select-all"/>
+                                    <button onClick={copyToClipboard} className={`p-3 rounded border transition-all ${copied ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'}`}>
                                         {copied ? <Check className="w-5 h-5"/> : <Copy className="w-5 h-5"/>}
                                     </button>
                                 </div>
                             </div>
 
                             <div className="flex gap-4 w-full pt-4">
-                                <a 
-                                    href={createdUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="flex-1 flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white py-3 rounded border border-gray-600 text-sm font-bold transition-colors"
-                                >
+                                <a href={createdUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white py-3 rounded border border-gray-600 text-sm font-bold transition-colors">
                                     <ExternalLink className="w-4 h-4" /> PROBAR ENLACE
                                 </a>
-                                <CyberButton onClick={onClose} className="flex-1">
-                                    FINALIZAR
-                                </CyberButton>
+                                <CyberButton onClick={onClose} className="flex-1">FINALIZAR</CyberButton>
                             </div>
                         </div>
                     )}
 
                 </div>
 
-                {/* Footer Actions (Only show if not created yet) */}
+                {/* Footer Actions */}
                 {!createdUrl && (
                     <div className="mt-4 pt-4 border-t border-gray-800 flex justify-end gap-3 shrink-0">
-                        <CyberButton variant="ghost" onClick={onClose} disabled={isLoading}>
-                            CANCELAR
-                        </CyberButton>
-                        <CyberButton onClick={handleSave} isLoading={isLoading} className="px-8">
-                            CREAR Y OBTENER LINK
-                        </CyberButton>
+                        <CyberButton variant="ghost" onClick={onClose} disabled={isLoading}>CANCELAR</CyberButton>
+                        <CyberButton onClick={handleSave} isLoading={isLoading} className="px-8">CREAR Y OBTENER LINK</CyberButton>
                     </div>
                 )}
 

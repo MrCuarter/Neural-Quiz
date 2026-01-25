@@ -90,6 +90,8 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
             setLoading(true);
             try {
                 const data = await getEvaluation(evaluationId);
+                console.log("[ArcadePlay] Loaded Data:", data); // DEBUG
+                console.log("[ArcadePlay] Game Mode:", data.config.gameMode); // DEBUG
                 
                 if (!data.isActive) throw new Error("Esta evaluación ha sido cerrada por el profesor.");
                 
@@ -170,6 +172,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         if (data.config.gameMode === 'time_attack' && data.config.timeLimit) {
             setGlobalTimeLeft(data.config.timeLimit);
         } else if (data.config.gameMode === 'final_boss') {
+            console.log("[ArcadePlay] Initializing Boss Config..."); // DEBUG
             // Setup Boss
             const settings = data.config.bossSettings || PRESET_BOSSES.CYBORG_PRIME;
             setBossConfig(settings);
@@ -462,7 +465,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const isSingleChoice = !isMultiSelect && !isShortAnswer;
 
     const isTimeAttack = evaluation.config.gameMode === 'time_attack' && !isRedemptionRound;
-    const isBossMode = evaluation.config.gameMode === 'final_boss' && bossConfig;
+    
+    // DEBUGGED: Check both mode AND state
+    const isBossMode = evaluation.config.gameMode === 'final_boss' && (bossConfig !== null);
     
     // Timer Colors
     const displayTime = isTimeAttack ? globalTimeLeft : timeLeft;

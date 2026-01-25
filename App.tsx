@@ -734,7 +734,7 @@ const NeuralApp: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#020617] text-white overflow-x-hidden">
+    <div className="flex flex-col bg-[#020617] text-white overflow-x-hidden">
       <Header 
         language={language} 
         setLanguage={setLanguage} 
@@ -745,7 +745,7 @@ const NeuralApp: React.FC = () => {
       
       {showMissingAnswersModal && renderMissingAnswersModal()}
 
-      <main className="flex-1 flex flex-col p-4 md:p-8 relative z-10 w-full max-w-[1920px] mx-auto">
+      <main className="min-h-screen flex flex-col p-4 md:p-8 relative z-10 w-full max-w-[1920px] mx-auto">
         <Stepper />
 
         {/* HOME VIEW */}
@@ -843,6 +843,7 @@ const NeuralApp: React.FC = () => {
 
         {view === 'create_ai' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
+                {/* ... existing create_ai content ... */}
                 <div className="flex items-center gap-4">
                      <button onClick={() => setView('create_menu')} className="group flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors uppercase font-mono font-bold tracking-widest text-sm">
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
