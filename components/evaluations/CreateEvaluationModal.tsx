@@ -5,7 +5,7 @@ import { createEvaluation } from '../../services/firebaseService';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberTextArea, CyberSelect } from '../ui/CyberUI';
 import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Timer, List, Skull, Heart, Sword, User, Edit3, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '../ui/Toast';
-import { PRESET_BOSSES } from '../../data/bossPresets_v2';
+import { PRESET_BOSSES } from '../../data/bossPresets';
 
 interface CreateEvaluationModalProps {
     isOpen: boolean;

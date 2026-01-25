@@ -5,7 +5,7 @@ import { Evaluation, Question, EvaluationAttempt, QUESTION_TYPES, BossSettings }
 import { CyberButton, CyberCard, CyberInput } from '../ui/CyberUI';
 import { Loader2, AlertTriangle, User, Rocket, Monitor, Clock, CheckCircle2, XCircle, Trophy, Star, RotateCcw, Timer, Flame, CloudUpload, CheckSquare, Square, Type, Check, Skull, Shield, Heart } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
-import { PRESET_BOSSES } from '../../data/bossPresets_v2';
+import { PRESET_BOSSES } from '../../data/bossPresets';
 
 interface ArcadePlayProps {
     evaluationId: string;
