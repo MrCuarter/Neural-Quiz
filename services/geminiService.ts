@@ -137,8 +137,9 @@ interface GenParams {
   tone?: string;
 }
 
-// *** CRITICAL: HARDCODED STABLE MODEL NAME FOR HIGH QUOTA ***
-const MODEL_NAME = "gemini-1.5-flash"; 
+// *** CRITICAL: HARDCODED PRODUCTION MODEL FOR CHEAP/HIGH QUOTA ***
+// gemini-2.0-flash is the current standard for speed and low cost ($0.10/1M input tokens)
+const MODEL_NAME = "gemini-2.0-flash"; 
 
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
