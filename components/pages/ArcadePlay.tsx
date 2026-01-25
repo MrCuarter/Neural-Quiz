@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { getEvaluation } from '../../services/firebaseService';
-import { Evaluation, Question } from '../../types';
+import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
+import { Evaluation, Question, EvaluationAttempt } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Gamepad2, User, Rocket, Monitor, Zap, Clock, CheckCircle2, XCircle, Trophy, Star, ArrowRight, RotateCcw, Timer, Flame } from 'lucide-react';
+import { Loader2, AlertTriangle, User, Rocket, Monitor, Clock, CheckCircle2, XCircle, Trophy, Star, RotateCcw, Timer, Flame, CloudUpload } from 'lucide-react';
+import { Leaderboard } from './Leaderboard';
 
 interface ArcadePlayProps {
     evaluationId: string;
@@ -32,20 +32,29 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
 
     // --- GAME ENGINE STATE ---
     const [currentQIndex, setCurrentQIndex] = useState(0);
-    const [showNextButton, setShowNextButton] = useState(false); // Added missing state
+    const [showNextButton, setShowNextButton] = useState(false);
     
     // Timers
     const [timeLeft, setTimeLeft] = useState(20); // Local (Classic)
     const [globalTimeLeft, setGlobalTimeLeft] = useState(0); // Global (Time Attack)
+    
+    // Stats Tracking
+    const startTimeRef = useRef<number>(0);
+    const [correctCount, setCorrectCount] = useState(0);
     
     const [isAnswered, setIsAnswered] = useState(false);
     const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     
     // Redemption & Retry Logic
-    const [incorrectQuestions, setIncorrectQuestions] = useState<Question[]>([]); // Permanent record for Redemption
-    const [retryQueue, setRetryQueue] = useState<Question[]>([]); // Temporary loop for Time Attack
+    const [incorrectQuestions, setIncorrectQuestions] = useState<Question[]>([]); 
+    const [retryQueue, setRetryQueue] = useState<Question[]>([]); 
     const [isRedemptionRound, setIsRedemptionRound] = useState(false);
+
+    // Submission State
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasSubmitted, setHasSubmitted] = useState(false);
+    const [savedAttemptId, setSavedAttemptId] = useState<string | null>(null);
 
     // Refs for intervals
     const timerRef = useRef<any>(null);
@@ -83,13 +92,56 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         loadEvaluation();
     }, [evaluationId]);
 
-    // Initial Preparation (Shuffle & Slice)
+    // --- 2. SUBMISSION LOGIC (Effect) ---
+    useEffect(() => {
+        const submitScore = async () => {
+            if (gameState === 'FINISHED' && !isRedemptionRound && !hasSubmitted && !isSubmitting && evaluation) {
+                setIsSubmitting(true);
+                try {
+                    const endTime = Date.now();
+                    const totalDurationSeconds = Math.floor((endTime - startTimeRef.current) / 1000);
+                    
+                    // Cap duration if strange values (e.g. paused tab)
+                    const saneDuration = Math.min(totalDurationSeconds, 3600); 
+                    
+                    const totalQs = evaluation.config.questionCount;
+                    const accuracy = totalQs > 0 ? (correctCount / totalQs) * 100 : 0;
+
+                    const attemptData: Omit<EvaluationAttempt, 'id' | 'timestamp'> = {
+                        evaluationId: evaluationId,
+                        nickname: nickname,
+                        score: score,
+                        totalTime: saneDuration,
+                        accuracy: accuracy,
+                        answersSummary: {
+                            correct: correctCount,
+                            incorrect: totalQs - correctCount,
+                            total: totalQs
+                        }
+                    };
+
+                    const id = await saveEvaluationAttempt(attemptData);
+                    setSavedAttemptId(id);
+                    setHasSubmitted(true);
+                } catch (e) {
+                    console.error("Submission failed", e);
+                    // Optionally set an error state here to show retry button
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        };
+
+        submitScore();
+    }, [gameState, isRedemptionRound, hasSubmitted, isSubmitting, evaluation, correctCount, score, nickname, evaluationId]);
+
+
+    // Initial Preparation
     const prepareGame = (data: Evaluation) => {
         const shuffled = shuffleArray(data.questions);
         const limit = data.config.questionCount || data.questions.length;
         const finalSet = shuffled.slice(0, limit);
         
-        // Shuffle options for each question
         const readyQuestions = finalSet.map(q => ({
             ...q,
             options: shuffleArray(q.options)
@@ -97,7 +149,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
 
         setPlayableQuestions(readyQuestions);
         
-        // Set Global Timer if Time Attack
         if (data.config.gameMode === 'time_attack' && data.config.timeLimit) {
             setGlobalTimeLeft(data.config.timeLimit);
         }
@@ -105,7 +156,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
 
     // --- 2. TIMER LOGIC ---
     
-    // A. Local Timer (Classic Mode)
+    // A. Local Timer
     useEffect(() => {
         if (gameState === 'PLAYING' && !isRedemptionRound && evaluation?.config.gameMode === 'classic' && !isAnswered && timeLeft > 0) {
             timerRef.current = setInterval(() => {
@@ -118,7 +169,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 });
             }, 1000);
         } else if (isRedemptionRound && gameState === 'PLAYING' && !isAnswered && timeLeft > 0) {
-            // Redemption always behaves like Classic
             timerRef.current = setInterval(() => {
                 setTimeLeft((prev) => {
                     if (prev <= 1) {
@@ -133,7 +183,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }, [gameState, isAnswered, timeLeft, evaluation?.config.gameMode, isRedemptionRound]);
 
-    // B. Global Timer (Time Attack Mode)
+    // B. Global Timer
     useEffect(() => {
         if (gameState === 'PLAYING' && !isRedemptionRound && evaluation?.config.gameMode === 'time_attack') {
             globalTimerRef.current = setInterval(() => {
@@ -154,6 +204,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const handleJoin = () => {
         if (!nickname.trim()) return;
         setGameState('PLAYING');
+        startTimeRef.current = Date.now(); // Start tracking real time
         startQuestion(0);
     };
 
@@ -162,7 +213,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         const q = playableQuestions[index];
         const timeLimit = q.timeLimit && q.timeLimit > 0 ? q.timeLimit : 20;
         
-        // Reset timers based on mode
         if (evaluation?.config.gameMode === 'classic' || isRedemptionRound) {
             setTimeLeft(timeLimit);
         }
@@ -176,7 +226,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const handleAnswer = (optionId: string) => {
         if (isAnswered) return;
         
-        // Stop Local Timer
         if (timerRef.current) clearInterval(timerRef.current);
         
         setIsAnswered(true);
@@ -187,31 +236,26 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         const correct = correctIds.includes(optionId);
         setIsCorrect(correct);
 
-        // Scoring Logic
         if (correct) {
             let points = 100;
             if (evaluation?.config.allowSpeedPoints) {
-                // Classic: Based on timeLeft. Time Attack: Flat bonus or based on speed of click?
-                // Simplifying: Use local timeLeft variable which works for Classic. For TA we ignore speed bonus or use fixed.
                 if (evaluation.config.gameMode === 'classic') points += (timeLeft * 10);
-                else points += 50; // Flat bonus for TA
+                else points += 50; 
             }
             if (streak > 2) points += 50;
             setScore(prev => prev + points);
             setStreak(prev => prev + 1);
+            if (!isRedemptionRound) setCorrectCount(prev => prev + 1);
         } else {
             setStreak(0);
-            // Track incorrect for Redemption
             if (!incorrectQuestions.some(q => q.id === currentQ.id)) {
                 setIncorrectQuestions(prev => [...prev, currentQ]);
             }
-            // Track for Time Attack Loop
             if (evaluation?.config.gameMode === 'time_attack' && !isRedemptionRound) {
                 setRetryQueue(prev => [...prev, currentQ]);
             }
         }
 
-        // Transition Logic
         setTimeout(() => {
             advanceGame();
         }, 2000); 
@@ -240,19 +284,14 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         const nextIndex = currentQIndex + 1;
 
         if (nextIndex < playableQuestions.length) {
-            // Normal progression
             startQuestion(nextIndex);
         } else {
-            // End of list reached
             if (evaluation?.config.gameMode === 'time_attack' && !isRedemptionRound) {
-                // Time Attack Loop Logic
                 if (retryQueue.length > 0 && globalTimeLeft > 5) {
-                    // Start Loop
                     const loopQuestions = shuffleArray(retryQueue);
                     setPlayableQuestions(loopQuestions);
-                    setRetryQueue([]); // Clear queue for next pass
+                    setRetryQueue([]); 
                     startQuestion(0);
-                    // Optional: Visual indication of Loop?
                 } else {
                     finishGame();
                 }
@@ -271,8 +310,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const startRedemptionRound = () => {
         setPlayableQuestions(shuffleArray(incorrectQuestions));
         setIsRedemptionRound(true);
-        // Reset counters but keep score? Usually reset score for sub-game or add to it?
-        // Let's add to it but maybe visual distinction.
         setGameState('PLAYING');
         startQuestion(0);
     };
@@ -304,7 +341,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const totalQs = playableQuestions.length;
     const progressPercent = ((currentQIndex + 1) / totalQs) * 100;
     
-    // Timer Logic for Display
     const isTimeAttack = evaluation.config.gameMode === 'time_attack' && !isRedemptionRound;
     const displayTime = isTimeAttack ? globalTimeLeft : timeLeft;
     const maxDisplayTime = isTimeAttack ? evaluation.config.timeLimit! : (currentQ?.timeLimit || 20);
@@ -377,10 +413,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
             {/* --- PLAYING VIEW --- */}
             {gameState === 'PLAYING' && currentQ && (
                 <div className="flex-1 flex flex-col z-10 h-full max-h-screen">
-                    
-                    {/* TOP BAR */}
                     <div className="bg-black/40 backdrop-blur-md border-b border-gray-800 p-4 flex justify-between items-center relative">
-                        {/* Progress Line */}
                         <div className="absolute bottom-0 left-0 h-1 bg-gray-800 w-full">
                             <div className="h-full bg-cyan-500 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
                         </div>
@@ -400,7 +433,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                         </div>
                     </div>
 
-                    {/* TIMER BAR (Floating) */}
                     <div className="w-full h-3 bg-gray-900 relative">
                         <div 
                             className={`h-full transition-all duration-1000 ease-linear ${timerColor}`}
@@ -408,18 +440,15 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                         />
                     </div>
 
-                    {/* QUESTION AREA */}
                     <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto">
                         <div className="w-full max-w-4xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             
-                            {/* Image (Optional) */}
                             {currentQ.imageUrl && (
                                 <div className="flex justify-center mb-4">
                                     <img src={currentQ.imageUrl} alt="Question Media" className="max-h-48 md:max-h-64 rounded-lg border-2 border-gray-700 shadow-2xl object-contain bg-black" />
                                 </div>
                             )}
 
-                            {/* Question Text */}
                             <div className="bg-black/60 border border-gray-700 p-6 md:p-8 rounded-xl text-center backdrop-blur-sm shadow-xl relative">
                                 {isRedemptionRound && <div className="absolute -top-3 -right-3 bg-red-600 text-white px-2 py-1 rounded text-xs font-bold animate-pulse">REDEMPTION</div>}
                                 <h2 className="text-2xl md:text-4xl font-bold font-cyber text-white leading-tight">
@@ -427,25 +456,23 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                                 </h2>
                             </div>
 
-                            {/* OPTIONS GRID */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 {currentQ.options.map((opt, idx) => {
                                     const isSelected = selectedOptionId === opt.id;
                                     const correctIds = currentQ.correctOptionIds || [currentQ.correctOptionId];
                                     const isActuallyCorrect = correctIds.includes(opt.id);
                                     
-                                    // Visual State Logic
-                                    let btnClass = "bg-gray-800/80 border-gray-600 hover:bg-gray-700 hover:border-cyan-500 text-gray-200"; // Default
+                                    let btnClass = "bg-gray-800/80 border-gray-600 hover:bg-gray-700 hover:border-cyan-500 text-gray-200"; 
                                     
                                     if (isAnswered) {
                                         if (isSelected && isCorrect) {
-                                            btnClass = "bg-green-600 border-green-400 text-white animate-pulse shadow-[0_0_20px_rgba(34,197,94,0.5)]"; // Correct Pick
+                                            btnClass = "bg-green-600 border-green-400 text-white animate-pulse shadow-[0_0_20px_rgba(34,197,94,0.5)]"; 
                                         } else if (isSelected && !isCorrect) {
-                                            btnClass = "bg-red-600 border-red-400 text-white animate-shake"; // Wrong Pick
+                                            btnClass = "bg-red-600 border-red-400 text-white animate-shake"; 
                                         } else if (!isSelected && isActuallyCorrect) {
-                                            btnClass = "bg-green-900/30 border-green-500/50 text-green-200 opacity-70"; // Reveal Correct
+                                            btnClass = "bg-green-900/30 border-green-500/50 text-green-200 opacity-70"; 
                                         } else {
-                                            btnClass = "bg-gray-900 border-gray-800 text-gray-600 opacity-50"; // Dim others
+                                            btnClass = "bg-gray-900 border-gray-800 text-gray-600 opacity-50"; 
                                         }
                                     }
 
@@ -462,8 +489,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                                             `}
                                         >
                                             <span className="flex-1 text-left">{opt.text}</span>
-                                            
-                                            {/* Icons for feedback */}
                                             {isAnswered && isSelected && isCorrect && <CheckCircle2 className="w-8 h-8 text-white" />}
                                             {isAnswered && isSelected && !isCorrect && <XCircle className="w-8 h-8 text-white" />}
                                         </button>
@@ -471,7 +496,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                                 })}
                             </div>
 
-                            {/* Timer / Status Feedback */}
                             <div className="h-8 flex justify-center items-center">
                                 {!isAnswered ? (
                                     <div className={`flex items-center gap-2 font-mono font-bold text-xl ${displayTime <= 5 ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>
@@ -490,51 +514,67 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 </div>
             )}
 
-            {/* --- FINISHED VIEW --- */}
+            {/* --- FINISHED VIEW (LEADERBOARD) --- */}
             {gameState === 'FINISHED' && (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 animate-in slide-in-from-bottom duration-700 z-10 text-center">
-                    <div className="relative">
-                        <div className="absolute inset-0 bg-yellow-500/20 blur-[100px] rounded-full"></div>
-                        <Trophy className="w-32 h-32 text-yellow-400 mx-auto mb-6 drop-shadow-[0_0_20px_rgba(234,179,8,0.6)] animate-bounce" />
-                    </div>
+                <div className="flex-1 flex flex-col items-center justify-center p-4 animate-in slide-in-from-bottom duration-700 z-10 text-center overflow-y-auto">
                     
-                    <h1 className="text-5xl md:text-7xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-2">
-                        GAME OVER
-                    </h1>
-                    <p className="text-xl text-gray-400 font-mono mb-8">{nickname}</p>
-
-                    <CyberCard className="w-full max-w-md border-yellow-500/30 bg-black/80 backdrop-blur-xl p-8 space-y-6">
-                        <div className="space-y-2">
-                            <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">PUNTUACIÓN FINAL</p>
-                            <div className="text-6xl font-black font-mono text-white">{score}</div>
+                    {/* Header */}
+                    <div className="mb-6">
+                        <div className="relative inline-block">
+                            <div className="absolute inset-0 bg-yellow-500/20 blur-[60px] rounded-full"></div>
+                            <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-2 drop-shadow-[0_0_20px_rgba(234,179,8,0.6)] animate-bounce" />
                         </div>
+                        <h1 className="text-4xl md:text-5xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600">
+                            GAME OVER
+                        </h1>
+                    </div>
 
-                        {/* REDEMPTION ROUND BUTTON */}
-                        {!isRedemptionRound && incorrectQuestions.length > 0 && (
-                            <button 
-                                onClick={startRedemptionRound}
-                                className="w-full py-3 bg-red-900/50 border border-red-500 text-red-200 rounded font-bold font-cyber hover:bg-red-900 hover:text-white transition-all animate-pulse flex items-center justify-center gap-2"
-                            >
-                                <Flame className="w-5 h-5" /> RONDA DE REDENCIÓN
-                            </button>
-                        )}
+                    {/* Submission State */}
+                    {isSubmitting ? (
+                        <div className="flex flex-col items-center gap-4 text-cyan-400 animate-pulse">
+                            <CloudUpload className="w-12 h-12" />
+                            <p className="font-mono text-lg">SUBIENDO PUNTUACIÓN...</p>
+                        </div>
+                    ) : (
+                        <div className="w-full max-w-2xl space-y-6 flex flex-col items-center">
+                            
+                            {/* LEADERBOARD COMPONENT */}
+                            <Leaderboard 
+                                evaluationId={evaluationId} 
+                                currentAttemptId={savedAttemptId} 
+                            />
 
-                        <div className="h-px bg-gray-800 w-full"></div>
+                            {/* YOUR SCORE CARD */}
+                            <CyberCard className="w-full bg-gray-900/50 border-gray-700 p-4">
+                                <div className="flex justify-between items-center text-sm font-mono text-gray-400 mb-2">
+                                    <span>TU PUNTUACIÓN</span>
+                                    <span>{nickname}</span>
+                                </div>
+                                <div className="text-4xl font-black font-mono text-white tracking-wider">{score}</div>
+                                {evaluation && (
+                                    <p className="text-xs text-cyan-300 mt-2 italic">
+                                        "{evaluation.config.feedbackMessages.high}"
+                                    </p>
+                                )}
+                            </CyberCard>
 
-                        {evaluation && (
-                            <div className="bg-gray-900/50 p-4 rounded border border-gray-700">
-                                <p className="text-sm text-cyan-300 font-bold mb-1">
-                                    <Star className="w-4 h-4 inline mr-2 text-yellow-400" /> 
-                                    FEEDBACK
-                                </p>
-                                <p className="text-gray-300 text-sm italic">"{evaluation.config.feedbackMessages.high}"</p>
+                            {/* REDEMPTION & EXIT */}
+                            <div className="w-full space-y-3">
+                                {!isRedemptionRound && incorrectQuestions.length > 0 && (
+                                    <button 
+                                        onClick={startRedemptionRound}
+                                        className="w-full py-4 bg-red-900/40 border border-red-500/50 text-red-200 rounded-lg font-bold font-cyber hover:bg-red-900/60 hover:text-white transition-all animate-pulse flex items-center justify-center gap-2 hover:scale-[1.02]"
+                                    >
+                                        <Flame className="w-5 h-5" /> JUGAR RONDA DE REDENCIÓN ({incorrectQuestions.length})
+                                    </button>
+                                )}
+
+                                <CyberButton onClick={() => window.location.href = '/'} className="w-full h-14 text-lg bg-white text-black hover:bg-gray-200 border-none font-bold">
+                                    <RotateCcw className="w-5 h-5 mr-2" /> VOLVER AL INICIO
+                                </CyberButton>
                             </div>
-                        )}
-
-                        <CyberButton onClick={() => window.location.href = '/'} className="w-full h-14 text-lg bg-white text-black hover:bg-gray-200 border-none font-bold">
-                            <RotateCcw className="w-5 h-5 mr-2" /> VOLVER AL INICIO
-                        </CyberButton>
-                    </CyberCard>
+                        </div>
+                    )}
                 </div>
             )}
 

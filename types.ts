@@ -104,6 +104,17 @@ export interface Evaluation {
     participants?: number; // Counter
 }
 
+export interface EvaluationAttempt {
+    id?: string;
+    evaluationId: string;
+    nickname: string;
+    score: number;
+    totalTime: number; // Seconds
+    accuracy: number; // Percentage 0-100
+    timestamp: any; // ServerTimestamp
+    answersSummary?: { correct: number; incorrect: number; total: number };
+}
+
 // --- GAME TYPES ---
 export type GameMode = 'JEOPARDY' | 'HEX_CONQUEST';
 

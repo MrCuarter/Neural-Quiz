@@ -18,10 +18,11 @@ import {
   query, 
   where, 
   orderBy, 
-  serverTimestamp 
+  serverTimestamp,
+  limit
 } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
-import { Quiz, Evaluation } from "../types";
+import { Quiz, Evaluation, EvaluationAttempt } from "../types";
 
 // --- 0. HELPER PARA CARGA SEGURA DE VARIABLES DE ENTORNO ---
 // Evita el crash "Cannot read properties of undefined" en entornos sin env vars
@@ -246,6 +247,90 @@ export const getEvaluation = async (evaluationId: string): Promise<Evaluation> =
     } catch (error) {
         console.error("Error fetching evaluation:", error);
         throw error;
+    }
+};
+
+/**
+ * Save Evaluation Attempt (Leaderboard Data)
+ */
+export const saveEvaluationAttempt = async (attempt: Omit<EvaluationAttempt, 'id' | 'timestamp'>): Promise<string> => {
+    if (isOfflineMode) {
+        console.warn("Saving attempt mocked in Offline Mode");
+        return "mock-attempt-id";
+    }
+    
+    try {
+        const payload = {
+            ...attempt,
+            timestamp: serverTimestamp()
+        };
+        
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        const docRef = await addDoc(collection(db, "attempts"), cleanPayload);
+        
+        // Increment participant count in parent evaluation (Optional but good for stats)
+        // const evalRef = doc(db, "evaluations", attempt.evaluationId);
+        // updateDoc(evalRef, { participants: increment(1) }); // Need 'increment' imported from firestore
+
+        return docRef.id;
+    } catch (error) {
+        console.error("Error saving attempt:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get Leaderboard for Evaluation
+ * Sorts by Score (DESC) then Total Time (ASC)
+ */
+export const getEvaluationLeaderboard = async (evaluationId: string, limitCount = 50): Promise<EvaluationAttempt[]> => {
+    if (isOfflineMode) return []; // Mock data handled in component?
+    
+    try {
+        // Requires composite index in Firestore: score DESC, totalTime ASC
+        const q = query(
+            collection(db, "attempts"),
+            where("evaluationId", "==", evaluationId),
+            orderBy("score", "desc"),
+            orderBy("totalTime", "asc"),
+            limit(limitCount)
+        );
+        
+        const snapshot = await getDocs(q);
+        const attempts: EvaluationAttempt[] = [];
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            attempts.push({
+                id: doc.id,
+                ...data,
+                // Convert server timestamp to Date if needed, handling potential null pending writes
+                timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+            } as EvaluationAttempt);
+        });
+        
+        return attempts;
+    } catch (error: any) {
+        // Fallback for missing index error
+        if (error.code === 'failed-precondition' || error.message.includes('index')) {
+            console.warn("⚠️ Missing Firestore Index for Leaderboard. Falling back to client-side sort.");
+            
+            const qSimple = query(
+                collection(db, "attempts"),
+                where("evaluationId", "==", evaluationId)
+            );
+            const snapshot = await getDocs(qSimple);
+            const rawAttempts: EvaluationAttempt[] = [];
+            snapshot.forEach(doc => rawAttempts.push({ id: doc.id, ...doc.data() } as EvaluationAttempt));
+            
+            // Client-side Sort
+            return rawAttempts.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score; // Score DESC
+                return a.totalTime - b.totalTime; // Time ASC
+            }).slice(0, limitCount);
+        }
+        console.error("Error fetching leaderboard:", error);
+        return [];
     }
 };
 
