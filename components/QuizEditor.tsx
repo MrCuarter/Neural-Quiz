@@ -487,6 +487,31 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; 
   };
 
+  // Helper to generate grouped options for the Select component
+  const getGroupedTypeOptions = () => {
+      const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
+      
+      const validationGroup = [
+          QUESTION_TYPES.MULTIPLE_CHOICE,
+          QUESTION_TYPES.MULTI_SELECT,
+          QUESTION_TYPES.TRUE_FALSE,
+          QUESTION_TYPES.FILL_GAP,
+          QUESTION_TYPES.ORDER
+      ].filter(t => allowedTypes.includes(t))
+       .map(t => ({ value: t, label: getTranslatedType(t) }));
+
+      const noValidationGroup = [
+          QUESTION_TYPES.OPEN_ENDED,
+          QUESTION_TYPES.POLL
+      ].filter(t => allowedTypes.includes(t))
+       .map(t => ({ value: t, label: getTranslatedType(t) }));
+
+      return [
+          { label: "CON VALIDACIÓN DE RESPUESTA", options: validationGroup },
+          { label: "SIN VALIDACIÓN DE RESPUESTA", options: noValidationGroup }
+      ];
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
@@ -769,7 +794,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       {/* TYPE & TIMER ROW */}
                                       <div className="flex flex-col md:flex-row gap-4">
                                           <div className="flex-1">
-                                              <CyberSelect label={t.q_type_label} options={allowedTypes.map(type => ({ value: type, label: getTranslatedType(type) }))} value={q.questionType || QUESTION_TYPES.MULTIPLE_CHOICE} onChange={(e) => handleTypeChange(q.id, e.target.value)} />
+                                              <CyberSelect 
+                                                  label={t.q_type_label} 
+                                                  options={getGroupedTypeOptions() as any} // Pass grouped options
+                                                  value={q.questionType || QUESTION_TYPES.MULTIPLE_CHOICE} 
+                                                  onChange={(e) => handleTypeChange(q.id, e.target.value)} 
+                                              />
                                           </div>
                                           <div className="w-full md:w-32">
                                               <label className="text-xs font-mono text-gray-500 block mb-1">{t.timer_sec}</label>

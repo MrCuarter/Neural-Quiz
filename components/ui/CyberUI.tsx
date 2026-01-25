@@ -56,9 +56,15 @@ export const CyberInput: React.FC<InputProps> = ({ label, className = '', ...pro
   );
 };
 
+interface SelectOption {
+    value: string;
+    label: string;
+    options?: SelectOption[]; // For optgroup support
+}
+
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
-  options: { value: string; label: string }[];
+  options: SelectOption[];
 }
 
 export const CyberSelect: React.FC<SelectProps> = ({ label, options, className = '', ...props }) => {
@@ -69,8 +75,20 @@ export const CyberSelect: React.FC<SelectProps> = ({ label, options, className =
         className={`cyber-select bg-black/40 backdrop-blur-sm border border-gray-700 text-cyan-100 p-3 font-mono focus:border-cyan-500 focus:outline-none focus:shadow-[0_0_10px_rgba(6,182,212,0.2)] transition-all rounded-sm appearance-none ${className}`}
         {...props}
       >
-        {options.map(opt => (
-          <option key={opt.value} value={opt.value} className="bg-gray-900 text-gray-200">{opt.label}</option>
+        {options.map((opt: any) => (
+          opt.options ? (
+            <optgroup key={opt.label} label={opt.label} className="bg-gray-900 text-gray-400 font-bold">
+              {opt.options.map((subOpt: any) => (
+                <option key={subOpt.value} value={subOpt.value} className="bg-gray-900 text-gray-200 pl-4">
+                  {subOpt.label}
+                </option>
+              ))}
+            </optgroup>
+          ) : (
+            <option key={opt.value} value={opt.value} className="bg-gray-900 text-gray-200">
+              {opt.label}
+            </option>
+          )
         ))}
       </select>
     </div>

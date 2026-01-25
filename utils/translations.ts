@@ -169,8 +169,8 @@ export const translations = {
     fmt_genially: "Banco de preguntas Genially. Soporta Ordenar, Huecos, Elección...",
     fmt_gimkit_classic: "Formatos oficiales. Elige entre Clásico o Texto.",
     fmt_wordwall: "Texto simple. Copia y pega en el editor de Wordwall.",
-    fmt_flippity: "Generates Excel for Flippity Quiz Show.",
-    fmt_sandbox: "Simple text format for Quiz Sandbox.",
+    fmt_flippity: "Genera el Excel para Flippity Quiz Show.",
+    fmt_sandbox: "Texto simple para Quiz Sandbox.",
     fmt_quizlet: "Formato ficha (Término + Definición). Para sets de estudio.",
     fmt_decktoys: "Study Set format for Deck.Toys activities.",
     fmt_wayground: "Wayground Excel with explanations.",
@@ -190,9 +190,9 @@ export const translations = {
     editor_types_available: "TIPOS DE PREGUNTA DISPONIBLES:",
     editor_types_desc: "Hemos filtrado los tipos de pregunta para asegurar compatibilidad con la plataforma elegida. Si exportas a otra, te ayudaremos a adaptar las preguntas después.",
     
-    // Question Types
-    type_mc: "Respuesta Única (Solo una)",
-    type_ms: "Elección Múltiple (Varias)",
+    // Question Types - CLEANED UP
+    type_mc: "Respuesta Única",
+    type_ms: "Elección Múltiple",
     type_tf: "Verdadero / Falso",
     type_short: "Respuesta Corta",
     type_open: "Pregunta Abierta",
