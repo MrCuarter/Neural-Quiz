@@ -35,7 +35,8 @@ const getSafeImageUrl = (url: string | undefined | null): string | null => {
 export const exportToGoogleSlides = async (
     title: string, 
     questions: Question[], 
-    token: string
+    token: string,
+    description: string = "" // Added description param
 ): Promise<string> => {
     // --- 1. VALIDACIONES DE SEGURIDAD ---
     if (!token) throw new Error("Authentication token is missing.");
@@ -72,6 +73,7 @@ export const exportToGoogleSlides = async (
     const introSlideId = "slide_intro_01";
     const titleBoxId = "textbox_title_01";
     const subBoxId = "textbox_sub_01";
+    const descBoxId = "textbox_desc_01"; // New Description Box
 
     structureRequests.push({
         createSlide: {
@@ -88,7 +90,7 @@ export const exportToGoogleSlides = async (
             elementProperties: {
                 pageObjectId: introSlideId,
                 size: { height: { magnitude: 100, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
-                transform: { scaleX: 1, scaleY: 1, translateX: 50, translateY: 150, unit: 'PT' }
+                transform: { scaleX: 1, scaleY: 1, translateX: 50, translateY: 100, unit: 'PT' }
             }
         }
     });
@@ -101,19 +103,37 @@ export const exportToGoogleSlides = async (
         } 
     });
 
-    // Caja Subtítulo
+    // Caja Subtítulo (Count)
     structureRequests.push({
         createShape: {
             objectId: subBoxId,
             shapeType: 'TEXT_BOX',
             elementProperties: {
                 pageObjectId: introSlideId,
-                size: { height: { magnitude: 50, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
-                transform: { scaleX: 1, scaleY: 1, translateX: 50, translateY: 260, unit: 'PT' }
+                size: { height: { magnitude: 30, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
+                transform: { scaleX: 1, scaleY: 1, translateX: 50, translateY: 210, unit: 'PT' }
             }
         }
     });
-    structureRequests.push({ insertText: { objectId: subBoxId, text: "Generado con Neural Quiz" } });
+    structureRequests.push({ insertText: { objectId: subBoxId, text: `${questions.length} PREGUNTAS` } });
+    structureRequests.push({ updateTextStyle: { objectId: subBoxId, style: { fontSize: { magnitude: 14, unit: 'PT' }, bold: true }, fields: "fontSize,bold" } });
+
+    // Caja Descripción
+    if (description) {
+        structureRequests.push({
+            createShape: {
+                objectId: descBoxId,
+                shapeType: 'TEXT_BOX',
+                elementProperties: {
+                    pageObjectId: introSlideId,
+                    size: { height: { magnitude: 100, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
+                    transform: { scaleX: 1, scaleY: 1, translateX: 50, translateY: 260, unit: 'PT' }
+                }
+            }
+        });
+        structureRequests.push({ insertText: { objectId: descBoxId, text: description } });
+        structureRequests.push({ updateTextStyle: { objectId: descBoxId, style: { fontSize: { magnitude: 12, unit: 'PT' }, foregroundColor: { opaqueColor: { rgbColor: { red: 0.4, green: 0.4, blue: 0.4 } } } }, fields: "fontSize,foregroundColor" } });
+    }
 
 
     // >>>> BUCLE DE PREGUNTAS <<<<
@@ -127,6 +147,7 @@ export const exportToGoogleSlides = async (
         const aSlideId = `slide_a_${index}`;
         const aTextBoxId = `text_ans_${index}`;
         const aResultBoxId = `text_res_${index}`;
+        const aFeedbackBoxId = `text_feed_${index}`; // New Feedback Box
 
         // ---------------------------------------------------------
         // VALIDACIÓN DE IMAGEN (USANDO PROXY CENTRALIZADO)
@@ -227,7 +248,7 @@ export const exportToGoogleSlides = async (
                 shapeType: 'TEXT_BOX',
                 elementProperties: {
                     pageObjectId: aSlideId,
-                    size: { height: { magnitude: 200, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
+                    size: { height: { magnitude: 150, unit: 'PT' }, width: { magnitude: 600, unit: 'PT' } },
                     transform: { scaleX: 1, scaleY: 1, translateX: 60, translateY: 120, unit: 'PT' }
                 }
             }
@@ -261,6 +282,40 @@ export const exportToGoogleSlides = async (
                 fields: "alignment"
             }
         });
+
+        // FEEDBACK BOX (Below Answer)
+        if (q.feedback) {
+            structureRequests.push({
+                createShape: {
+                    objectId: aFeedbackBoxId,
+                    shapeType: 'TEXT_BOX',
+                    elementProperties: {
+                        pageObjectId: aSlideId,
+                        size: { height: { magnitude: 100, unit: 'PT' }, width: { magnitude: 550, unit: 'PT' } },
+                        transform: { scaleX: 1, scaleY: 1, translateX: 85, translateY: 280, unit: 'PT' }
+                    }
+                }
+            });
+            structureRequests.push({ insertText: { objectId: aFeedbackBoxId, text: `ℹ️ ${q.feedback}` } });
+            structureRequests.push({
+                updateTextStyle: {
+                    objectId: aFeedbackBoxId,
+                    style: {
+                        foregroundColor: { opaqueColor: { rgbColor: { red: 0.3, green: 0.3, blue: 0.3 } } },
+                        fontSize: { magnitude: 14, unit: 'PT' },
+                        italic: true
+                    },
+                    fields: "foregroundColor,fontSize,italic"
+                }
+            });
+            structureRequests.push({
+                updateParagraphStyle: {
+                    objectId: aFeedbackBoxId,
+                    style: { alignment: 'CENTER' },
+                    fields: "alignment"
+                }
+            });
+        }
     });
 
     // --- 4. ENVIAR BATCH DE ESTRUCTURA (CRÍTICO) ---

@@ -5,15 +5,17 @@ import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, Check
 import { uploadImageToCloudinary } from '../../services/cloudinaryService';
 import { searchStockImages, triggerDownload, ImageResult } from '../../services/imageService';
 import { getSafeImageUrl } from '../../services/imageProxyService';
+import { ImageCredit } from '../../types';
 
 interface ImagePickerModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (result: ImageResult) => void;
     initialUrl?: string;
+    initialCredit?: ImageCredit; // NEW PROP
 }
 
-export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onClose, onSelect, initialUrl }) => {
+export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onClose, onSelect, initialUrl, initialCredit }) => {
     const [activeTab, setActiveTab] = useState<'upload' | 'stock' | 'url'>('upload');
     const [loading, setLoading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
@@ -25,6 +27,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
     // URL State
     const [urlInput, setUrlInput] = useState('');
     const [urlPreview, setUrlPreview] = useState<string | null>(null);
+    const [currentCredit, setCurrentCredit] = useState<ImageCredit | undefined | null>(null);
 
     // Fullscreen Preview State
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -38,9 +41,11 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
             if (initialUrl) {
                 setUrlInput(initialUrl);
                 setUrlPreview(getSafeImageUrl(initialUrl) || initialUrl);
+                setCurrentCredit(initialCredit); // SET CREDIT
             } else {
                 setUrlInput('');
                 setUrlPreview(null);
+                setCurrentCredit(null);
             }
             
             // Reset other states
@@ -49,7 +54,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
             setActiveTab('upload');
             setIsFullscreen(false);
         }
-    }, [isOpen, initialUrl]);
+    }, [isOpen, initialUrl, initialCredit]);
 
     if (!isOpen) return null;
 
@@ -111,6 +116,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
     const handleDeletePreview = () => {
         setUrlPreview(null);
         setUrlInput('');
+        setCurrentCredit(null);
     };
 
     // --- DRAG & DROP ---
@@ -164,6 +170,19 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                 <div className="relative group w-full h-full max-h-[300px] flex items-center justify-center bg-black/40 border border-gray-700 rounded-lg overflow-hidden">
                                     <img src={urlPreview} className="max-w-full max-h-full object-contain" alt="Preview" />
                                     
+                                    {/* CREDIT OVERLAY */}
+                                    {currentCredit && (
+                                        <div className="absolute top-0 left-0 right-0 bg-black/70 text-white p-2 text-xs font-mono z-10 flex justify-between items-center pointer-events-auto">
+                                            <span>
+                                                {currentCredit.source === 'Unsplash' ? 'Photo by ' : 'Image by '}
+                                                <a href={currentCredit.link} target="_blank" rel="noreferrer" className="underline font-bold text-cyan-400 hover:text-white">
+                                                    {currentCredit.name}
+                                                </a>
+                                                {' on ' + currentCredit.source}
+                                            </span>
+                                        </div>
+                                    )}
+
                                     {/* Overlay Controls */}
                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
                                         <button 

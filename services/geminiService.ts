@@ -104,14 +104,21 @@ Tu misión es generar cuestionarios JSON precisos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
 Genera "tags" útiles.
 
-REGLAS DE IMÁGENES:
-1. Genera SIEMPRE "imageSearchQuery" para la pregunta principal.
-2. ENTORNO AL 5% DE LAS PREGUNTAS (1 de cada 20 aprox): Genera preguntas visuales donde las opciones tengan imágenes. Para ello, rellena el campo "imageSearchQuery" dentro de los objetos "options".
-   Ejemplo: Pregunta "¿Qué animal es un mamífero?", Opciones: [ {text: "Tiburón", imageSearchQuery: "Shark photo"}, {text: "Ballena", imageSearchQuery: "Whale photo"}... ]
+REGLAS DE TIPOS DE PREGUNTA:
+1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones. Solo una correcta.
+2. "Fill in the Blank" (Respuesta Corta):
+   - La opción con índice 0 es la respuesta principal perfecta.
+   - Las opciones con índices 1, 2, 3 deben ser VARIACIONES ACEPTADAS o SINÓNIMOS (ej: "II Guerra Mundial", "2ª GM", "Segunda Guerra Mundial").
+   - NO generes distractores falsos para este tipo, solo variaciones válidas.
 
 REGLAS DE FEEDBACK:
-- SOLO genéralo para preguntas complejas, culturales o históricas donde un dato curioso, anécdota o explicación enriquezca la respuesta correcta.
-- OMITE el feedback (deja string vacío) para preguntas de Matemáticas simples, hechos obvios o definiciones básicas.`;
+- El feedback debe ser puramente educativo, curioso o explicativo.
+- PROHIBIDO empezar con palabras de validación como "Correcto", "¡Muy bien!", "Acertaste", "Incorrecto", "Efectivamente".
+- Ve directo al grano. Ejemplo BIEN: "El guepardo alcanza 110km/h en 3 segundos." Ejemplo MAL: "¡Correcto! El guepardo es rápido."
+
+REGLAS DE IMÁGENES:
+1. Genera SIEMPRE "imageSearchQuery" para la pregunta principal.
+2. ENTORNO AL 5% DE LAS PREGUNTAS (1 de cada 20 aprox): Genera preguntas visuales donde las opciones tengan imágenes. Para ello, rellena el campo "imageSearchQuery" dentro de los objetos "options".`;
 
 interface GenParams {
   topic: string;
@@ -133,7 +140,8 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
   return withRetry(async () => {
     const ai = getAI();
     const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral' } = params;
-    const safeCount = Math.min(Math.max(count, 1), 30);
+    // UPDATED LIMIT TO 50
+    const safeCount = Math.min(Math.max(count, 1), 50);
 
     let prompt = `Generate a Quiz about "${topic}".`;
     prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;

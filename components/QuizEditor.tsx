@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat } from '../types';
+import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
 import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
@@ -45,8 +45,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   // Image Picker State
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [pickingImageForId, setPickingImageForId] = useState<string | null>(null);
-  const [pickingImageForOptionId, setPickingImageForOptionId] = useState<string | null>(null); // NEW: Option Image Support
+  const [pickingImageForOptionId, setPickingImageForOptionId] = useState<string | null>(null); 
   const [pickingImageCurrentUrl, setPickingImageCurrentUrl] = useState<string | null>(null);
+  const [pickingImageCurrentCredit, setPickingImageCurrentCredit] = useState<ImageCredit | undefined>(undefined); // NEW
   
   // Share/Publish State
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -186,10 +187,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   // --- IMAGE PICKER ---
-  const openImagePicker = (qId: string, currentUrl?: string, optionId?: string) => {
+  // Updated to receive credit object
+  const openImagePicker = (qId: string, currentUrl?: string, optionId?: string, credit?: ImageCredit) => {
       setPickingImageForId(qId);
-      setPickingImageForOptionId(optionId || null); // Handle Option Images
+      setPickingImageForOptionId(optionId || null);
       setPickingImageCurrentUrl(currentUrl || null);
+      setPickingImageCurrentCredit(credit);
       setShowImagePicker(true);
   };
 
@@ -225,6 +228,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       setPickingImageForId(null);
       setPickingImageForOptionId(null);
       setPickingImageCurrentUrl(null);
+      setPickingImageCurrentCredit(undefined);
       setShowImagePicker(false);
   };
 
@@ -572,6 +576,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           onClose={() => setShowImagePicker(false)}
           onSelect={handleImageSelected}
           initialUrl={pickingImageCurrentUrl || undefined} 
+          initialCredit={pickingImageCurrentCredit} // PASS CREDIT
       />
 
       {/* --- ADD TO EXISTING MODAL --- */}
@@ -862,7 +867,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                               <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block opacity-0">IMG</label> 
                                               {q.imageUrl ? (
                                                   <div 
-                                                      onClick={() => openImagePicker(q.id, q.imageUrl)} // PASS CURRENT URL
+                                                      onClick={() => openImagePicker(q.id, q.imageUrl, undefined, q.imageCredit)} // PASS CURRENT URL & CREDIT
                                                       className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all flex items-center justify-center"
                                                   >
                                                       <img src={q.imageUrl} className="w-full h-full object-contain max-h-[120px]" alt="Q" />
