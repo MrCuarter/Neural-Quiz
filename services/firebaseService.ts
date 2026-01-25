@@ -1,4 +1,3 @@
-
 import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
@@ -15,7 +14,7 @@ import {
   deleteDoc, 
   doc, 
   getDocs, 
-  getDoc, // ADDED getDoc
+  getDoc,
   query, 
   where, 
   orderBy, 
@@ -25,14 +24,16 @@ import { getAnalytics } from "firebase/analytics";
 import { Quiz, Evaluation } from "../types";
 
 // --- 1. CONFIGURACIÓN DEL PROYECTO 'UNA-PARA-TODAS' ---
+// SECURITY UPDATE: Credentials removed from source code.
+// Ensure these VITE_ variables are set in your Hostinger/Vercel environment.
 const firebaseConfig = { 
-  apiKey: "AIzaSyCAhcayYuNdENYbAF-ezITwZA5EeVnbcZ0", 
-  authDomain: "una-para-todas.firebaseapp.com", 
-  projectId: "una-para-todas", 
-  storageBucket: "una-para-todas.firebasestorage.app", 
-  messagingSenderId: "1005385021667", 
-  appId: "1:1005385021667:web:b0c13438ab526d29bcadd6", 
-  measurementId: "G-M5VDERWPRJ" 
+  apiKey: (import.meta as any).env.VITE_API_FIREBASE, 
+  authDomain: (import.meta as any).env.VITE_AUTH_DOMAIN, 
+  projectId: (import.meta as any).env.VITE_PROJECT_ID, 
+  storageBucket: (import.meta as any).env.VITE_STORAGE_BUCKET || "una-para-todas.firebasestorage.app", 
+  messagingSenderId: (import.meta as any).env.VITE_MESSAGING_SENDER_ID || "1005385021667", 
+  appId: (import.meta as any).env.VITE_APP_ID || "1:1005385021667:web:b0c13438ab526d29bcadd6", 
+  measurementId: (import.meta as any).env.VITE_MEASUREMENT_ID || "G-M5VDERWPRJ" 
 };
 
 // --- 2. INICIALIZACIÓN ---
@@ -57,7 +58,7 @@ googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 // Exportamos onAuthStateChanged para uso en componentes
 export { onAuthStateChanged };
 
-console.log("🔥 Firebase (NPM) 'una-para-todas' inicializado. Scope: drive.file");
+console.log("🔥 Firebase (NPM) inicializado de forma segura.");
 
 // --- 4. FUNCIONES DE AUTENTICACIÓN ---
 
@@ -153,7 +154,7 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
             return docRef.id;
         }
     } catch (e: any) {
-        console.error("🔥 Error al guardar en Firestore (una-para-todas).");
+        console.error("🔥 Error al guardar en Firestore.");
         console.error(">> Datos:", cleanData); 
         console.error(">> Error:", e);
         throw e;
