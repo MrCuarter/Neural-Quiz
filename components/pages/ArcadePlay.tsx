@@ -491,7 +491,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                         value={textInput} 
                         onChange={(e) => setTextInput(e.target.value)}
                         placeholder="Escribe tu respuesta aquí..."
-                        className="w-full bg-black/50 border-2 border-cyan-500/50 rounded-lg p-4 text-xl text-center text-white focus:border-cyan-400 outline-none font-mono"
+                        className="w-full bg-black/50 border-2 border-cyan-500/50 rounded-lg p-3 md:p-6 text-lg md:text-2xl text-center text-white focus:border-cyan-400 outline-none font-mono"
                         onKeyDown={(e) => e.key === 'Enter' && handleAttack()}
                     />
                 </div>
@@ -507,12 +507,12 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             return (
                 <div className="w-full space-y-2">
                     {orderedOptions.map((opt, idx) => (
-                        <div key={opt.id} className="flex items-center gap-2 bg-gray-800 p-3 rounded border border-gray-600">
+                        <div key={opt.id} className="flex items-center gap-2 bg-gray-900/80 p-3 md:p-4 rounded border border-gray-600">
                             <span className="font-bold font-mono text-cyan-400 w-6">{idx + 1}</span>
-                            <span className="flex-1 text-sm">{opt.text}</span>
+                            <span className="flex-1 text-sm md:text-base font-bold">{opt.text}</span>
                             <div className="flex flex-col gap-1">
-                                <button onClick={() => idx > 0 && moveItem(idx, idx - 1)} className="p-1 hover:bg-gray-700 rounded"><ArrowUp className="w-4 h-4"/></button>
-                                <button onClick={() => idx < orderedOptions.length - 1 && moveItem(idx, idx + 1)} className="p-1 hover:bg-gray-700 rounded"><ArrowDown className="w-4 h-4"/></button>
+                                <button onClick={() => idx > 0 && moveItem(idx, idx - 1)} className="p-1 hover:bg-gray-700 rounded text-cyan-400"><ArrowUp className="w-5 h-5"/></button>
+                                <button onClick={() => idx < orderedOptions.length - 1 && moveItem(idx, idx + 1)} className="p-1 hover:bg-gray-700 rounded text-cyan-400"><ArrowDown className="w-5 h-5"/></button>
                             </div>
                         </div>
                     ))}
@@ -523,7 +523,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
         
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
                 {q.options.map((opt, i) => {
                     const isSelected = selectedOptionIds.includes(opt.id);
                     return (
@@ -536,15 +536,15 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                                     handleAttack(opt.id);
                                 }
                             }}
-                            className={`p-4 rounded-lg border-2 text-left transition-all flex items-center gap-3 relative overflow-hidden group hover:scale-[1.02] active:scale-95
-                                ${isSelected ? 'bg-cyan-900/40 border-cyan-400' : 'bg-gray-900/80 border-gray-700 hover:border-gray-500'}
+                            className={`p-3 md:p-5 rounded-xl border-2 text-left transition-all flex items-center gap-3 relative overflow-hidden group hover:scale-[1.02] active:scale-95 shadow-lg
+                                ${isSelected ? 'bg-cyan-900/60 border-cyan-400 ring-2 ring-cyan-500/50' : 'bg-gray-900/90 border-gray-700 hover:border-gray-500'}
                             `}
                         >
-                            <div className={`w-6 h-6 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-cyan-500 border-cyan-500 text-black' : 'border-gray-500'}`}>
-                                {isMulti ? (isSelected && <CheckSquare className="w-4 h-4"/>) : (isSelected && <div className="w-3 h-3 bg-black rounded-full"/>)}
+                            <div className={`w-6 h-6 md:w-8 md:h-8 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-cyan-500 border-cyan-500 text-black' : 'border-gray-500'}`}>
+                                {isMulti ? (isSelected && <CheckSquare className="w-4 h-4 md:w-5 md:h-5"/>) : (isSelected && <div className="w-3 h-3 md:w-4 md:h-4 bg-black rounded-full"/>)}
                             </div>
-                            <span className="text-sm font-bold flex-1 text-white shadow-black drop-shadow-md">{opt.text}</span>
-                            {opt.imageUrl && <img src={opt.imageUrl} crossOrigin="anonymous" className="w-12 h-12 object-cover rounded border border-gray-600" />}
+                            <span className="text-sm md:text-lg font-bold flex-1 text-white text-balance leading-tight">{opt.text}</span>
+                            {opt.imageUrl && <img src={opt.imageUrl} crossOrigin="anonymous" className="w-12 h-12 md:w-16 md:h-16 object-cover rounded border border-gray-600" />}
                         </button>
                     );
                 })}
@@ -609,183 +609,180 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const isSingleChoice = currentQ.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || currentQ.questionType === QUESTION_TYPES.TRUE_FALSE;
 
     return (
-        <div className={`min-h-screen bg-[#050505] text-white flex flex-col md:flex-row overflow-hidden relative transition-colors duration-1000 ${shakeScreen ? 'animate-shake' : ''}`}>
+        <div className={`fixed inset-0 overflow-hidden bg-[#050505] text-white font-sans select-none transition-colors duration-1000 ${shakeScreen ? 'animate-shake' : ''}`}>
             
             {/* 1. MUTE TOGGLE (ABSOLUTE TOP LEFT) */}
             <button onClick={toggleMute} className="absolute top-4 left-4 z-50 p-2 bg-black/50 rounded-full border border-gray-600 text-white hover:bg-white/20 transition-colors">
                 {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
             </button>
 
-            {/* 2. LEFT SIDE: BOSS AREA (35% Width on Desktop) */}
-            <div className="w-full md:w-[40%] h-[40vh] md:h-full relative flex flex-col justify-end items-center bg-gradient-to-t from-red-950/20 to-transparent">
-                
-                {/* Boss Image - Aligned Bottom */}
+            {/* 2. LAYER 0: BOSS BACKGROUND SCENE */}
+            <div className="absolute inset-0 z-0 flex items-end md:items-center justify-center md:justify-start bg-gradient-to-t from-red-950/40 to-transparent">
                 <img 
                     src={getBossImage()} 
                     crossOrigin="anonymous"
                     className={`
-                        w-auto h-[90%] max-h-[500px] object-contain transition-all duration-100 z-10
-                        ${isHit ? 'filter brightness-200 contrast-150 scale-105' : 'drop-shadow-[0_0_50px_rgba(255,0,0,0.15)]'}
+                        h-[60vh] md:h-[90vh] w-auto object-contain transition-all duration-300 ease-out
+                        ${isHit ? 'filter brightness-200 contrast-150 scale-105' : 'opacity-80 md:opacity-100 drop-shadow-[0_0_50px_rgba(0,0,0,0.8)]'}
+                        md:-ml-12 lg:ml-0
                     `}
                     style={isHit ? { transform: 'translate(5px, -5px) skew(5deg)' } : {}}
                     alt="Boss"
                 />
+            </div>
 
-                {/* Boss Damage Text Overlay */}
-                {combatState === 'PLAYER_ATTACK' && (
-                    <div className="absolute top-1/3 left-1/2 -translate-x-1/2 text-6xl font-black text-yellow-400 font-cyber animate-bounce drop-shadow-[0_4px_0_rgba(0,0,0,1)] z-20">
-                        CRITICAL!
-                    </div>
-                )}
+            {/* CRITICAL HIT OVERLAY */}
+            {combatState === 'PLAYER_ATTACK' && (
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 md:left-1/4 text-6xl md:text-8xl font-black text-yellow-400 font-cyber animate-bounce drop-shadow-[0_4px_0_rgba(0,0,0,1)] z-20 pointer-events-none">
+                    CRITICAL!
+                </div>
+            )}
 
-                {/* BOSS HUD (Bottom Left) */}
-                <div className="absolute bottom-6 left-6 right-6 z-20 flex flex-col gap-2">
-                    <div className="flex items-end gap-3">
-                        <div className="w-20 h-20 rounded-full border-4 border-red-600 bg-black overflow-hidden shadow-[0_0_20px_red] shrink-0">
-                            <img src={bossConfig?.badgeUrl || bossConfig?.images?.badge || bossConfig?.images?.idle} className="w-full h-full object-cover" crossOrigin="anonymous"/>
-                        </div>
-                        <div className="flex-1 pb-2">
-                            <h2 className="text-2xl font-cyber text-red-500 font-bold leading-none mb-1 text-shadow-red">{bossConfig?.bossName}</h2>
-                            {/* HP BAR */}
-                            <div className="w-full h-6 bg-gray-900 rounded-r-lg border border-red-900 overflow-hidden relative skew-x-[-15deg] origin-bottom-left">
-                                <div className="h-full bg-gradient-to-r from-red-800 to-red-500 transition-all duration-500 ease-out" style={{ width: `${(bossHP.current / bossHP.max) * 100}%` }} />
-                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white/90 skew-x-[15deg]">
-                                    {bossHP.current} / {bossHP.max}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    {/* Status Icons Row */}
-                    <div className="flex gap-1 pl-24">
-                        {bossStatus.map((s, i) => <img key={i} src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-6 h-6 border border-red-500 rounded bg-black" title={s.type}/>)}
-                    </div>
+            {/* 3. LAYER 1: HUD ELEMENTS (Floating) */}
+            
+            {/* BOSS HUD (Mobile: Top Left below mute / Desktop: Bottom Left) */}
+            <div className="absolute top-16 left-4 md:top-auto md:bottom-8 md:left-8 z-20 flex flex-col gap-1 w-48 md:w-80 pointer-events-none">
+                <div className="flex items-center gap-2 mb-1">
+                    <img src={bossConfig?.badgeUrl || bossConfig?.images?.badge} className="w-8 h-8 md:w-12 md:h-12 rounded-full border border-red-500 bg-black" crossOrigin="anonymous"/>
+                    <h2 className="text-sm md:text-2xl font-cyber text-red-500 font-bold leading-none text-shadow-red truncate">{bossConfig?.bossName}</h2>
+                </div>
+                {/* HP BAR */}
+                <div className="w-full h-3 md:h-6 bg-black/80 rounded-r-lg border border-red-900 overflow-hidden relative skew-x-[-15deg] origin-bottom-left shadow-lg">
+                    <div className="h-full bg-gradient-to-r from-red-900 to-red-600 transition-all duration-500 ease-out" style={{ width: `${(bossHP.current / bossHP.max) * 100}%` }} />
+                    <span className="absolute inset-0 flex items-center justify-center text-[8px] md:text-xs font-mono font-bold text-white/90 skew-x-[15deg]">
+                        {bossHP.current} / {bossHP.max}
+                    </span>
+                </div>
+                {/* Status Icons */}
+                <div className="flex gap-1 h-6">
+                    {bossStatus.map((s, i) => <img key={i} src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-5 h-5 md:w-6 md:h-6 border border-red-500 rounded bg-black" title={s.type}/>)}
                 </div>
             </div>
 
-            {/* 3. RIGHT SIDE: INTERACTION AREA (60% Width on Desktop) */}
-            <div className="flex-1 h-[60vh] md:h-full relative flex flex-col p-4 md:p-8 bg-black/40 backdrop-blur-sm">
+            {/* PLAYER HUD (Top Right) */}
+            <div className="absolute top-4 right-4 flex flex-col items-end gap-1 z-30 pointer-events-none">
+                <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-end">
+                        <span className="font-cyber font-bold text-sm md:text-xl text-green-400">{nickname}</span>
+                        <span className="text-[9px] md:text-xs text-gray-400 font-mono">LVL {1 + Math.floor(score/1000)}</span>
+                    </div>
+                    {passiveEffect && <img src={PASSIVES[passiveEffect].image} crossOrigin="anonymous" className="w-8 h-8 md:w-12 md:h-12 border-2 border-purple-500 rounded-full bg-purple-900/50" />}
+                </div>
+                {/* Player HP Bar */}
+                <div className="w-32 md:w-64 h-2 md:h-4 bg-black/80 rounded border border-green-900 overflow-hidden relative shadow-lg">
+                    <div className="h-full bg-gradient-to-r from-green-900 to-green-500 transition-all duration-300" style={{ width: `${(playerHP.current / playerHP.max) * 100}%` }} />
+                </div>
+                <span className="text-[9px] md:text-xs font-mono font-bold text-white/80">{playerHP.current}/{playerHP.max}</span>
+            </div>
+
+            {/* RIGHT EDGE TOOLBAR (Inventory & Buffs) */}
+            <div className="absolute right-2 md:right-4 top-20 md:top-32 flex flex-col gap-2 z-20 pointer-events-auto">
+                {/* Active Buffs */}
+                {playerStatus.map((s, i) => (
+                    <div key={i} className="w-8 h-8 md:w-12 md:h-12 bg-black/60 border border-blue-500 rounded flex items-center justify-center relative group backdrop-blur">
+                        <img src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-6 h-6 md:w-8 md:h-8"/>
+                        <span className="absolute -top-1 -right-1 bg-blue-600 text-[8px] w-4 h-4 flex items-center justify-center rounded-full text-white">{s.turns}</span>
+                    </div>
+                ))}
+                {/* Inventory Buttons */}
+                {playerInventory.map((item, idx) => (
+                    <button key={`inv-${idx}`} onClick={() => handleUsePotion(item, idx)} disabled={combatState !== 'IDLE'} className="w-10 h-10 md:w-14 md:h-14 bg-black/60 border border-yellow-500/50 rounded-lg flex items-center justify-center hover:scale-110 transition-transform relative group hover:border-yellow-400 backdrop-blur shadow-lg">
+                        <img src={POTIONS[item].image} crossOrigin="anonymous" className="w-7 h-7 md:w-10 md:h-10" />
+                    </button>
+                ))}
+            </div>
+
+            {/* 4. LAYER 2: INTERACTION CARD (Center/Bottom) */}
+            <div className="absolute inset-x-0 bottom-0 top-[35%] md:top-0 md:left-[35%] md:right-0 z-10 flex items-center justify-center p-2 md:p-8 pointer-events-none">
                 
-                {/* TOP RIGHT: PLAYER HUD */}
-                <div className="absolute top-4 right-4 flex flex-col items-end gap-1 z-30">
-                    <div className="flex items-center gap-3">
-                        <div className="flex flex-col items-end">
-                            <span className="font-cyber font-bold text-xl text-green-400">{nickname}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">LVL {1 + Math.floor(score/1000)}</span>
+                {/* CARD CONTAINER */}
+                <div className="pointer-events-auto w-full max-w-3xl bg-black/90 md:bg-black/80 backdrop-blur-xl border-t-2 md:border border-gray-700/50 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] rounded-t-3xl md:rounded-2xl flex flex-col h-full md:h-auto md:max-h-[90vh] overflow-hidden relative animate-in slide-in-from-bottom-10 duration-500">
+                    
+                    {/* Q Badge & Timer */}
+                    <div className="flex justify-between items-center p-4 border-b border-white/10 bg-white/5">
+                        <div className="bg-cyan-900/50 text-cyan-300 px-3 py-1 rounded text-xs font-mono font-bold border border-cyan-500/30">
+                            Q-{currentQIndex + 1}
                         </div>
-                        {passiveEffect && <img src={PASSIVES[passiveEffect].image} crossOrigin="anonymous" className="w-10 h-10 border-2 border-purple-500 rounded-full bg-purple-900/50" />}
-                    </div>
-                    {/* Player HP Bar */}
-                    <div className="w-48 h-4 bg-gray-900 rounded border border-green-900 overflow-hidden relative">
-                        <div className="h-full bg-gradient-to-r from-green-800 to-green-500 transition-all duration-300" style={{ width: `${(playerHP.current / playerHP.max) * 100}%` }} />
-                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white/90">
-                            {playerHP.current} / {playerHP.max}
-                        </span>
-                    </div>
-                </div>
-
-                {/* RIGHT EDGE: ACTIVE BUFFS/DEBUFFS (Vertical Stack) */}
-                <div className="absolute right-4 top-24 flex flex-col gap-2 z-20">
-                    {playerStatus.map((s, i) => (
-                        <div key={i} className="w-10 h-10 bg-black/60 border border-blue-500 rounded flex items-center justify-center relative group">
-                            <img src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-8 h-8"/>
-                            <span className="absolute -top-1 -right-1 bg-blue-600 text-[9px] w-4 h-4 flex items-center justify-center rounded-full text-white">{s.turns}</span>
+                        <div className={`text-2xl md:text-4xl font-black font-mono tracking-tighter ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
+                            {timeLeft}
                         </div>
-                    ))}
-                    {/* Items Inventory - Also stacked here for easy access */}
-                    {playerInventory.map((item, idx) => (
-                        <button key={`inv-${idx}`} onClick={() => handleUsePotion(item, idx)} disabled={combatState !== 'IDLE'} className="w-10 h-10 bg-black/60 border border-yellow-500/50 rounded flex items-center justify-center hover:scale-110 transition-transform relative group">
-                            <img src={POTIONS[item].image} crossOrigin="anonymous" className="w-8 h-8" />
-                        </button>
-                    ))}
-                </div>
+                    </div>
 
-                {/* CENTER: QUESTION CARD */}
-                <div className="flex-1 flex items-center justify-center w-full max-w-3xl mx-auto">
-                    <div className="w-full bg-black/90 border border-gray-800 p-6 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden flex flex-col gap-6">
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6">
                         
-                        {/* Question Number Badge */}
-                        <div className="absolute top-0 left-0 bg-gray-800 px-3 py-1 rounded-br-lg text-xs font-mono text-gray-400">
-                            Q: {currentQIndex + 1}
-                        </div>
-
-                        {/* LOOT NOTIFICATION */}
+                        {/* Loot Notification (Floating) */}
                         {lootDrop && (
-                            <div className="absolute top-4 right-1/2 translate-x-1/2 bg-yellow-500/20 border border-yellow-400 px-4 py-2 rounded-full animate-bounce flex items-center gap-2 z-50">
+                            <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-yellow-900/90 border border-yellow-400 px-4 py-2 rounded-full animate-bounce flex items-center gap-2 z-50 w-max shadow-lg">
                                 <img src={POTIONS[lootDrop].image} crossOrigin="anonymous" className="w-6 h-6" />
-                                <span className="text-yellow-300 text-xs font-bold font-mono">¡POCIÓN ROBADA!</span>
-                                <span className="text-[10px] text-yellow-100">{POTIONS[lootDrop].description}</span>
+                                <div>
+                                    <span className="text-yellow-300 text-xs font-bold block leading-none">¡ROBADO!</span>
+                                    <span className="text-[9px] text-yellow-100">{POTIONS[lootDrop].description}</span>
+                                </div>
                             </div>
                         )}
 
-                        {/* Image Area */}
+                        {/* Image */}
                         {currentQ.imageUrl && (
-                            <div className="w-full h-48 bg-black/50 rounded-lg border border-gray-800 flex items-center justify-center relative group overflow-hidden">
+                            <div className="w-full h-32 md:h-48 rounded-lg bg-black/50 border border-white/10 flex items-center justify-center overflow-hidden relative group">
                                 <img src={currentQ.imageUrl} crossOrigin="anonymous" className="h-full object-contain" />
-                                {/* Attribution */}
                                 {currentQ.imageCredit && (
-                                    <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-[8px] text-gray-400 px-2 py-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        📷 {currentQ.imageCredit.name} ({currentQ.imageCredit.source})
+                                    <div className="absolute bottom-0 inset-x-0 bg-black/80 text-[8px] text-gray-400 text-center py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        📷 {currentQ.imageCredit.name}
                                     </div>
                                 )}
                             </div>
                         )}
 
                         {/* Question Text */}
-                        <h3 className="text-xl md:text-2xl font-bold text-center text-gray-100 font-sans leading-tight">
+                        <h3 className="text-lg md:text-2xl font-bold text-center text-white font-sans leading-snug text-balance">
                             {currentQ.text}
                         </h3>
 
-                        {/* Combat State Message */}
+                        {/* Combat State Overlay */}
                         {combatState !== 'IDLE' && (
-                            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-40 flex flex-col items-center justify-center">
+                            <div className="p-4 bg-gray-900/80 rounded-lg border border-gray-700 text-center animate-in zoom-in-95">
                                 {combatState === 'BOSS_ATTACK' ? (
                                     <>
-                                        <span className="font-cyber text-4xl animate-pulse text-red-500 mb-4">¡FALLASTE!</span>
+                                        <span className="font-cyber text-2xl md:text-3xl text-red-500 block mb-2">¡FALLASTE!</span>
                                         {showCorrectAnswer && (
-                                            <p className="text-sm text-gray-400 font-mono bg-gray-900 px-4 py-2 rounded border border-gray-700">
-                                                Solución: <span className="text-green-400 font-bold">{currentQ.options.find(o => currentQ.correctOptionIds?.includes(o.id) || o.id === currentQ.correctOptionId)?.text}</span>
+                                            <p className="text-xs md:text-sm text-gray-400 font-mono">
+                                                Era: <span className="text-green-400 font-bold">{currentQ.options.find(o => currentQ.correctOptionIds?.includes(o.id) || o.id === currentQ.correctOptionId)?.text}</span>
                                             </p>
                                         )}
                                     </>
                                 ) : (
-                                    <span className="font-cyber text-3xl animate-pulse text-cyan-400">PROCESANDO...</span>
+                                    <span className="font-cyber text-xl text-cyan-400 animate-pulse">PROCESANDO...</span>
                                 )}
                             </div>
                         )}
 
-                        {/* Options / Input Area */}
+                        {/* Inputs */}
                         {combatState === 'IDLE' && (
-                            <div className="w-full">
+                            <div className="w-full pb- safe-bottom">
                                 {renderInputArea(currentQ)}
                                 
                                 {!isSingleChoice && (
                                     <button 
                                         onClick={() => handleAttack()} 
-                                        className="w-full mt-6 py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black font-cyber text-xl tracking-widest rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-3 border border-red-400/50"
+                                        className="w-full mt-6 py-4 bg-gradient-to-r from-red-600 to-orange-600 text-white font-black font-cyber text-lg md:text-xl tracking-widest rounded-lg shadow-lg hover:shadow-red-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2 border border-white/10"
                                     >
-                                        <Sword className="w-6 h-6" /> ATACAR
+                                        <Sword className="w-5 h-5" /> ATACAR
                                     </button>
                                 )}
                             </div>
                         )}
                     </div>
                 </div>
-
-                {/* BOTTOM RIGHT: TIMER */}
-                <div className="absolute bottom-8 right-8 z-10">
-                    <div className={`text-8xl font-black font-mono tracking-tighter ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
-                        {timeLeft}
-                    </div>
-                </div>
-
-                {/* COMBAT LOG (Bottom Center) */}
-                {combatLog && (
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/50 text-red-100 px-6 py-2 rounded-full font-mono font-bold animate-in fade-in slide-in-from-bottom-4 shadow-lg z-30">
-                        {combatLog}
-                    </div>
-                )}
-
             </div>
+
+            {/* COMBAT LOG (Absolute Bottom Center) */}
+            {combatLog && (
+                <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/50 text-red-100 px-6 py-2 rounded-full font-mono text-xs md:text-sm font-bold animate-in fade-in slide-in-from-bottom-4 shadow-lg z-50 whitespace-nowrap pointer-events-none">
+                    {combatLog}
+                </div>
+            )}
+
         </div>
     );
 };
