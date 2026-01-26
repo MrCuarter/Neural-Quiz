@@ -3,7 +3,7 @@ import { db, auth } from '../../services/firebaseService';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy } from 'firebase/firestore';
 import { Evaluation } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, Clock, CheckCircle2, XCircle, MoreVertical, Play, Pause, ExternalLink } from 'lucide-react';
+import { Loader2, Clock, CheckCircle2, XCircle, MoreVertical, Play, Pause, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
 interface EvaluationsDashboardProps {
@@ -13,6 +13,7 @@ interface EvaluationsDashboardProps {
 export const EvaluationsDashboard: React.FC<EvaluationsDashboardProps> = ({ onClose }) => {
     const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const toast = useToast();
 
     useEffect(() => {
@@ -22,6 +23,7 @@ export const EvaluationsDashboard: React.FC<EvaluationsDashboardProps> = ({ onCl
     const loadEvaluations = async () => {
         if (!auth.currentUser) return;
         setLoading(true);
+        setError(null);
         try {
             const q = query(
                 collection(db, 'evaluations'),
@@ -31,17 +33,24 @@ export const EvaluationsDashboard: React.FC<EvaluationsDashboardProps> = ({ onCl
             const snap = await getDocs(q);
             const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Evaluation));
             setEvaluations(items);
-        } catch (error: any) {
-            console.error("🔥 ERROR CRÍTICO FIRESTORE:", error);
-            // Truco para ver el link aunque Firebase lo oculte
-            if (error.message && error.message.includes('index')) {
-                console.error("👇👇👇 ¡HAZ CLIC EN ESTE ENLACE PARA ARREGLARLO! 👇👇👇");
-                // A veces el link está dentro del string del mensaje
-                console.error(error.message); 
-            }
-            toast.error("Error cargando evaluaciones: " + error.message);
-        } finally {
             setLoading(false);
+        } catch (error: any) {
+            console.error("🔥 STOP!! ERROR CRÍTICO DE FIRESTORE 🔥");
+            console.error("EL CÓDIGO DEL ERROR ES:", error.code);
+            console.error("EL MENSAJE COMPLETO ES:", error.message);
+            
+            // Intentar extraer el link si está oculto en el mensaje
+            if (error.message && error.message.includes("https://console.firebase.google.com")) {
+                console.error("👇👇👇 ¡LINK DE CREACIÓN DE ÍNDICE DETECTADO! 👇👇👇");
+                console.error(error.message);
+            } else {
+                console.error("No se detectó link en el mensaje. Revisa el objeto 'error' arriba.");
+            }
+            
+            // Dejar que la app falle visiblemente para enterarme
+            setError(error.message);
+            setLoading(false);
+            throw error; 
         }
     };
 
@@ -80,11 +89,24 @@ export const EvaluationsDashboard: React.FC<EvaluationsDashboardProps> = ({ onCl
                     <CyberButton onClick={onClose} variant="ghost">CERRAR PANEL</CyberButton>
                 </div>
 
-                {loading ? (
+                {error && (
+                    <div className="bg-red-900/50 border-2 border-red-500 p-6 rounded-lg text-center animate-pulse">
+                        <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                        <h3 className="text-2xl font-bold text-white mb-2">ERROR DE FIRESTORE (FALTA ÍNDICE)</h3>
+                        <p className="text-red-200 font-mono text-sm break-all mb-4">{error}</p>
+                        <div className="bg-black/50 p-4 rounded text-cyan-400 font-mono text-xs">
+                            <p>¡IMPORTANTE! Abre la consola del navegador (F12 o Clic Derecho {'>'} Inspeccionar {'>'} Console).</p>
+                            <p>Busca el mensaje rojo con el enlace: "https://console.firebase.google.com/..."</p>
+                            <p>Haz clic en ese enlace para crear el índice automáticamente.</p>
+                        </div>
+                    </div>
+                )}
+
+                {loading && !error ? (
                     <div className="flex justify-center py-20"><Loader2 className="w-12 h-12 animate-spin text-cyan-500" /></div>
-                ) : evaluations.length === 0 ? (
+                ) : !error && evaluations.length === 0 ? (
                     <div className="text-center py-20 text-gray-500">No hay evaluaciones activas.</div>
-                ) : (
+                ) : !error && (
                     <div className="grid gap-4">
                         <div className="grid grid-cols-12 gap-4 text-xs font-mono text-gray-500 uppercase tracking-widest px-4 pb-2 border-b border-gray-800 hidden md:grid">
                             <div className="col-span-4">Título / Quiz</div>

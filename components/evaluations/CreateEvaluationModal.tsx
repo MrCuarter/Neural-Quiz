@@ -4,7 +4,7 @@ import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
 import { createEvaluation, auth } from '../../services/firebaseService';
 import { signInAnonymously } from 'firebase/auth';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play } from 'lucide-react';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play, Copy, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES } from '../../data/bossPresets';
 import { ArcadePlay } from '../pages/ArcadePlay';
@@ -406,7 +406,48 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                     ) : (
                         // SUCCESS STATE
                         <div className="flex flex-col items-center justify-center py-8 space-y-6 text-center animate-in zoom-in-95 duration-500">
-                            {/* ... Success content ... */}
+                            <div className="p-4 bg-green-500/20 rounded-full border border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)] animate-bounce">
+                                <Rocket className="w-12 h-12 text-green-400" />
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <h3 className="text-2xl font-bold font-cyber text-white">¡MISIÓN INICIADA!</h3>
+                                <p className="text-gray-400 font-mono text-sm max-w-sm mx-auto">
+                                    Tu evaluación arcade está activa. Comparte este enlace con tus alumnos para que comiencen.
+                                </p>
+                            </div>
+
+                            <div className="w-full bg-black/50 p-4 rounded-lg border border-gray-700 flex flex-col gap-3">
+                                <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest text-left">ENLACE DE ACCESO</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        readOnly 
+                                        value={createdUrl} 
+                                        className="flex-1 bg-black/80 border border-gray-600 rounded p-3 text-cyan-300 font-mono text-sm focus:outline-none"
+                                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                                    />
+                                    <button 
+                                        onClick={copyToClipboard}
+                                        className={`p-3 rounded border transition-all ${copied ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-cyan-500 hover:text-cyan-400'}`}
+                                    >
+                                        {copied ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 w-full">
+                                <a 
+                                    href={`https://wa.me/?text=${encodeURIComponent("¡Reto Arcade listo! Entra aquí: " + createdUrl)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex-1 py-3 bg-[#25D366]/20 border border-[#25D366]/50 text-[#25D366] rounded font-bold hover:bg-[#25D366]/30 transition-all flex items-center justify-center gap-2"
+                                >
+                                    WhatsApp
+                                </a>
+                                <CyberButton onClick={onClose} variant="neural" className="flex-1">
+                                    FINALIZAR
+                                </CyberButton>
+                            </div>
                         </div>
                     )}
 
