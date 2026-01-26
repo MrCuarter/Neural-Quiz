@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
-import { createEvaluation } from '../../services/firebaseService';
-import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberTextArea, CyberSelect } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Timer, List, Skull, Heart, Sword, User, Edit3, Image as ImageIcon } from 'lucide-react';
+import { createEvaluation, auth } from '../../services/firebaseService';
+import { signInAnonymously } from 'firebase/auth';
+import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Skull, Heart, Sword, Edit3, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES } from '../../data/bossPresets';
 
@@ -28,17 +29,17 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     // Game Mode Config
     const [gameMode, setGameMode] = useState<'classic' | 'time_attack' | 'final_boss'>('classic');
     const [questionCount, setQuestionCount] = useState(0);
-    const [timeLimit, setTimeLimit] = useState(180); // Default 3 mins for Time Attack
+    const [timeLimit, setTimeLimit] = useState(180); 
     const [countWarning, setCountWarning] = useState(false);
 
     // --- BOSS SETTINGS STATE ---
-    const [selectedPreset, setSelectedPreset] = useState<string | null>('CYBORG_PRIME'); // Default selection
+    const [selectedPreset, setSelectedPreset] = useState<string | null>('kryon_v');
     const [bossName, setBossName] = useState("Dr. Caos");
     const [bossDifficulty, setBossDifficulty] = useState<'easy' | 'medium' | 'hard' | 'legend'>('medium');
     const [bossHP, setBossHP] = useState(1000);
     const [playerHP, setPlayerHP] = useState(100);
     
-    // Boss Images
+    // Boss Images (Only used if Custom)
     const [imgIdle, setImgIdle] = useState("");
     const [imgDamage, setImgDamage] = useState("");
     const [imgDefeat, setImgDefeat] = useState("");
@@ -49,22 +50,17 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [msgPlayerWin, setMsgPlayerWin] = useState("");
     const [msgPerfect, setMsgPerfect] = useState("");
     
-    // Boss Mechanics
     const [finishHim, setFinishHim] = useState(true);
-
-    // Mechanics (General)
     const [speedPoints, setSpeedPoints] = useState(true);
     const [powerUps, setPowerUps] = useState(false);
     const [showRanking, setShowRanking] = useState(true);
 
-    // Feedback (General)
     const [msgHigh, setMsgHigh] = useState("¡Impresionante! Eres un maestro.");
     const [msgMed, setMsgMed] = useState("¡Buen trabajo! Vas por buen camino.");
     const [msgLow, setMsgLow] = useState("Sigue practicando, ¡tú puedes!");
 
     useEffect(() => {
         if (isOpen && quiz) {
-            // Reset state on open
             setTitle(quiz.title || "Evaluación");
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -72,13 +68,9 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             setEndDate("");
             setCreatedUrl(null);
             setCopied(false);
-            
-            // Initialize count
             setQuestionCount(quiz.questions.length);
             setCountWarning(false);
-
-            // Load Default Preset
-            handleSelectPreset('CYBORG_PRIME');
+            handleSelectPreset('kryon_v');
         }
     }, [isOpen, quiz]);
 
@@ -113,17 +105,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         }
     };
 
-    // Handle Question Count Change with Validation
     const handleCountChange = (val: number) => {
         setQuestionCount(val);
-        if (val > quiz.questions.length) {
-            setCountWarning(true);
-        } else {
-            setCountWarning(false);
-        }
+        if (val > quiz.questions.length) setCountWarning(true);
+        else setCountWarning(false);
     };
 
-    // Apply Difficulty Presets
     const applyDifficultyPreset = (diff: 'easy' | 'medium' | 'hard' | 'legend') => {
         setBossDifficulty(diff);
         switch(diff) {
@@ -135,14 +122,22 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     };
 
     const handleSave = async () => {
-        if (!user || !quiz) return;
-        if (!title.trim()) {
-            toast.error("El título es obligatorio");
-            return;
-        }
+        if (!quiz) return;
+        if (!title.trim()) { toast.error("El título es obligatorio"); return; }
 
         setIsLoading(true);
         try {
+            let hostUserId = user?.uid;
+            if (!hostUserId) {
+                try {
+                    const cred = await signInAnonymously(auth);
+                    hostUserId = cred.user.uid;
+                } catch (e) {
+                    console.warn("Anonymous auth failed", e);
+                    hostUserId = "guest_host"; 
+                }
+            }
+
             const finalCount = Math.min(Math.max(1, questionCount), quiz.questions.length);
 
             let bossSettings: BossSettings | undefined = undefined;
@@ -171,9 +166,9 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             };
 
             const evaluationData: Omit<Evaluation, 'id' | 'createdAt'> = {
-                quizId: quiz.id!,
+                quizId: quiz.id || "temp-quiz",
                 quizTitle: quiz.title,
-                hostUserId: user.uid,
+                hostUserId: hostUserId,
                 title: title,
                 config: config,
                 isActive: true,
@@ -324,23 +319,52 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                             </div>
                                         </div>
 
-                                        {/* Identity & Difficulty */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <CyberInput label="NOMBRE DEL BOSS" value={bossName} onChange={(e) => setBossName(e.target.value)} />
-                                            <div className="flex flex-col gap-1 w-full">
-                                                <label className="text-xs font-mono text-red-400/80 uppercase tracking-widest">DIFICULTAD (PRESETS)</label>
-                                                <select 
-                                                    value={bossDifficulty} 
-                                                    onChange={(e) => applyDifficultyPreset(e.target.value as any)}
-                                                    className="bg-black/40 border border-red-500/50 text-red-100 p-3 rounded text-sm focus:border-red-400 outline-none"
-                                                >
-                                                    <option value="easy">RECLUTA (Fácil)</option>
-                                                    <option value="medium">GUERRERO (Normal)</option>
-                                                    <option value="hard">PESADILLA (Difícil)</option>
-                                                    <option value="legend">LEYENDA (Imposible)</option>
-                                                </select>
+                                        {/* PRESET SUMMARY OR CUSTOM FIELDS */}
+                                        {selectedPreset !== 'CUSTOM' ? (
+                                            <div className="flex items-center gap-4 bg-black/20 p-3 rounded border border-red-900/30">
+                                                <img src={imgIdle} className="w-16 h-16 object-contain border border-gray-700 rounded bg-black" />
+                                                <div>
+                                                    <h3 className="font-cyber font-bold text-red-300">{bossName}</h3>
+                                                    <p className="text-xs text-gray-500 font-mono">Dificultad: {bossDifficulty.toUpperCase()}</p>
+                                                    <p className="text-xs text-gray-500 font-mono">HP: {bossHP}</p>
+                                                </div>
                                             </div>
-                                        </div>
+                                        ) : (
+                                            <div className="space-y-4 animate-in fade-in">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <CyberInput label="NOMBRE DEL BOSS" value={bossName} onChange={(e) => setBossName(e.target.value)} />
+                                                    <div className="flex flex-col gap-1 w-full">
+                                                        <label className="text-xs font-mono text-red-400/80 uppercase tracking-widest">DIFICULTAD (PRESETS)</label>
+                                                        <select 
+                                                            value={bossDifficulty} 
+                                                            onChange={(e) => applyDifficultyPreset(e.target.value as any)}
+                                                            className="bg-black/40 border border-red-500/50 text-red-100 p-3 rounded text-sm focus:border-red-400 outline-none"
+                                                        >
+                                                            <option value="easy">RECLUTA (Fácil)</option>
+                                                            <option value="medium">GUERRERO (Normal)</option>
+                                                            <option value="hard">PESADILLA (Difícil)</option>
+                                                            <option value="legend">LEYENDA (Imposible)</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* IMAGES */}
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <label className="text-xs font-mono text-gray-500 uppercase">IMÁGENES (URLs)</label>
+                                                        <div className="flex items-center gap-1 text-[9px] text-gray-600 bg-gray-900 px-2 py-0.5 rounded border border-gray-800">
+                                                            <ImageIcon className="w-3 h-3" />
+                                                            <span>Usa enlaces directos (Imgur, PostImage)</span>
+                                                        </div>
+                                                    </div>
+                                                    <CyberInput label="IMAGEN PRINCIPAL (BATALLA)" placeholder="URL del Boss..." value={imgIdle} onChange={(e) => setImgIdle(e.target.value)} className="text-xs" />
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <CyberInput label="IMAGEN: ENEMIGO DERROTADO" placeholder="URL al morir..." value={imgDefeat} onChange={(e) => setImgDefeat(e.target.value)} className="text-xs" />
+                                                        <CyberInput label="IMAGEN: ENEMIGO GANA" placeholder="URL al ganar..." value={imgWin} onChange={(e) => setImgWin(e.target.value)} className="text-xs" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Health Stats */}
                                         <div className="grid grid-cols-2 gap-4 bg-black/20 p-2 rounded">
@@ -351,22 +375,6 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                             <div className="flex flex-col gap-1">
                                                 <label className="text-[10px] font-mono text-green-400 uppercase flex items-center gap-1"><Heart className="w-3 h-3"/> VIDA JUGADOR</label>
                                                 <input type="number" value={playerHP} onChange={(e) => setPlayerHP(parseInt(e.target.value))} className="bg-transparent border-b border-green-500 text-2xl font-black text-white w-full focus:outline-none text-center" />
-                                            </div>
-                                        </div>
-
-                                        {/* Images */}
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <label className="text-xs font-mono text-gray-500 uppercase">IMÁGENES (URLs)</label>
-                                                <div className="flex items-center gap-1 text-[9px] text-gray-600 bg-gray-900 px-2 py-0.5 rounded border border-gray-800">
-                                                    <ImageIcon className="w-3 h-3" />
-                                                    <span>Usa enlaces directos (Imgur, PostImage)</span>
-                                                </div>
-                                            </div>
-                                            <CyberInput label="IDLE (NORMAL)" placeholder="URL del Boss..." value={imgIdle} onChange={(e) => setImgIdle(e.target.value)} className="text-xs" />
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <CyberInput label="DERROTADO" placeholder="URL al morir..." value={imgDefeat} onChange={(e) => setImgDefeat(e.target.value)} className="text-xs" />
-                                                <CyberInput label="VICTORIA" placeholder="URL al ganar..." value={imgWin} onChange={(e) => setImgWin(e.target.value)} className="text-xs" />
                                             </div>
                                         </div>
 

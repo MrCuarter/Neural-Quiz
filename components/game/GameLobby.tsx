@@ -482,19 +482,19 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ user, onBack, onStartGame,
                             Se generará un enlace único que podrás compartir en Classroom o por email. Los alumnos podrán jugar desde casa a su propio ritmo.
                         </p>
                         
-                        {!user ? (
-                            <div className="inline-block bg-yellow-900/30 border border-yellow-500/50 p-4 rounded text-yellow-200 text-sm">
+                        {!user && (
+                            <div className="inline-block bg-yellow-900/30 border border-yellow-500/50 p-4 rounded text-yellow-200 text-sm mb-6">
                                 <Lock className="w-4 h-4 inline mr-2" />
-                                Necesitas iniciar sesión para crear evaluaciones persistentes.
+                                Modo Invitado: Podrás lanzar el reto, pero no se guardará en tu historial ni podrás ver los resultados detallados después.
                             </div>
-                        ) : (
-                            <button 
-                                onClick={() => setShowEvalModal(true)} 
-                                className="px-12 py-5 rounded-xl font-black font-cyber tracking-widest text-xl flex items-center justify-center gap-4 mx-auto transition-all duration-300 shadow-[0_0_30px_rgba(168,85,247,0.3)] bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 text-white"
-                            >
-                                <Rocket className="w-6 h-6" /> CONFIGURAR RETO ARCADE
-                            </button>
                         )}
+                        
+                        <button 
+                            onClick={() => setShowEvalModal(true)} 
+                            className="px-12 py-5 rounded-xl font-black font-cyber tracking-widest text-xl flex items-center justify-center gap-4 mx-auto transition-all duration-300 shadow-[0_0_30px_rgba(168,85,247,0.3)] bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 text-white"
+                        >
+                            <Rocket className="w-6 h-6" /> CONFIGURAR RETO ARCADE
+                        </button>
                     </CyberCard>
 
                 </div>

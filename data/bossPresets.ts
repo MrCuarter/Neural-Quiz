@@ -1,6 +1,5 @@
 
 // data/bossPresets.ts
-// NOTE: Types defined locally to avoid build path issues on Linux
 
 export interface BossImageConfig {
     idle: string;
@@ -23,13 +22,12 @@ export interface BossSettings {
         playerWins: string;
         perfectWin: string;
     };
-    // Mechanics added to ensure compatibility with game logic
     mechanics: {
         enablePowerUps: boolean;
         finishHimMove: boolean;
     };
-    // Optional legacy prop
-    badgeUrl?: string;
+    badgeUrl?: string; // Legacy support
+    attackVoice?: string; // NEW: Voice file path
 }
 
 export const PRESET_BOSSES: Record<string, BossSettings> = {
@@ -50,7 +48,8 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
       playerWins: "Error crítico... Apagando...",
       perfectWin: "Cálculos imposibles. Eres perfecto."
     },
-    mechanics: { enablePowerUps: true, finishHimMove: true }
+    mechanics: { enablePowerUps: true, finishHimMove: true },
+    attackVoice: '/sounds/kryonvoice.mp3'
   },
   'lythara': {
     bossName: "Lythara",
@@ -69,7 +68,8 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
       playerWins: "El hechizo... se ha roto.",
       perfectWin: "Tu mana es infinito."
     },
-    mechanics: { enablePowerUps: true, finishHimMove: true }
+    mechanics: { enablePowerUps: true, finishHimMove: true },
+    attackVoice: '/sounds/lytharavoice.mp3'
   },
   'valdros': {
     bossName: "Valdros",
@@ -88,6 +88,7 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
       playerWins: "¡Un guerrero digno al fin!",
       perfectWin: "Imposible... ni un rasguño."
     },
-    mechanics: { enablePowerUps: true, finishHimMove: false }
+    mechanics: { enablePowerUps: true, finishHimMove: false },
+    attackVoice: '/sounds/valdrosvoice.mp3'
   }
 };
