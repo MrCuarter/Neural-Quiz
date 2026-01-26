@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { db, auth } from '../../services/firebaseService';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy } from 'firebase/firestore';
@@ -33,9 +32,14 @@ export const EvaluationsDashboard: React.FC<EvaluationsDashboardProps> = ({ onCl
             const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Evaluation));
             setEvaluations(items);
         } catch (error: any) {
-            console.error("🔥 FIRESTORE ERROR COMPLETO:", error);
-            console.error("🔗 MENSAJE (Busca el link aquí):", error.message);
-            toast.error("Error cargando evaluaciones");
+            console.error("🔥 ERROR CRÍTICO FIRESTORE:", error);
+            // Truco para ver el link aunque Firebase lo oculte
+            if (error.message && error.message.includes('index')) {
+                console.error("👇👇👇 ¡HAZ CLIC EN ESTE ENLACE PARA ARREGLARLO! 👇👇👇");
+                // A veces el link está dentro del string del mensaje
+                console.error(error.message); 
+            }
+            toast.error("Error cargando evaluaciones: " + error.message);
         } finally {
             setLoading(false);
         }
