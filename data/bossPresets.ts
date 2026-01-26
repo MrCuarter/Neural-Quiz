@@ -23,67 +23,71 @@ export interface BossSettings {
         playerWins: string;
         perfectWin: string;
     };
+    // Mechanics added to ensure compatibility with game logic
     mechanics: {
         enablePowerUps: boolean;
         finishHimMove: boolean;
     };
-    // Propiedad opcional para la UI
+    // Optional legacy prop
     badgeUrl?: string;
 }
 
 export const PRESET_BOSSES: Record<string, BossSettings> = {
-    CYBORG_PRIME: {
-        bossName: "Cyborg Prime",
-        images: {
-            idle: "https://i.postimg.cc/Y9mTF1jL/Cyborg.png",
-            damage: "https://i.postimg.cc/Y9mTF1jL/Cyborg.png",
-            defeat: "https://i.postimg.cc/C1f98jdB/Cyborg-Lose.png",
-            win: "https://i.postimg.cc/sXZbWp1Z/Cyborg-Win.png"
-        },
-        badgeUrl: "https://i.postimg.cc/RFn2tcq3/Cyborg-Badge.png",
-        health: { bossHP: 1000, playerHP: 100 },
-        difficulty: 'medium',
-        messages: {
-            bossWins: "Tu lógica es inferior. He vencido.",
-            playerWins: "Error crítico... Sistema apagándose...",
-            perfectWin: "Imposible. Cero errores detectados."
-        },
-        mechanics: { enablePowerUps: true, finishHimMove: true }
+  'kryon_v': {
+    bossName: "Kryon-V",
+    images: {
+      idle: "/finalboss/kryon.png",
+      badge: "/finalboss/kryonbadge.png",
+      defeat: "/finalboss/kryonlose.png",
+      win: "/finalboss/kryonwin.png",
+      damage: "/finalboss/kryon.png"
     },
-    VAMPIRE_LORD: {
-        bossName: "Conde Byte",
-        images: {
-            idle: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png", 
-            damage: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png", 
-            defeat: "https://i.postimg.cc/HLq9Xy3z/Vampire-Lose.png",
-            win: "https://i.postimg.cc/MKd4h3z1/Vampire-Win.png"
-        },
-        badgeUrl: "https://i.postimg.cc/k4Xzkz1y/Vampire-Idle.png",
-        health: { bossHP: 1500, playerHP: 80 }, 
-        difficulty: 'hard',
-        messages: {
-            bossWins: "Tu conocimiento se ha desangrado...",
-            playerWins: "¡Maldición! La luz del saber quema...",
-            perfectWin: "Una mente inmaculada... delicioso."
-        },
-        mechanics: { enablePowerUps: true, finishHimMove: true }
+    badgeUrl: "/finalboss/kryonbadge.png",
+    health: { bossHP: 1200, playerHP: 100 },
+    difficulty: 'medium',
+    messages: {
+      bossWins: "Sistemas optimizados. Humanidad obsoleta.",
+      playerWins: "Error crítico... Apagando...",
+      perfectWin: "Cálculos imposibles. Eres perfecto."
     },
-    GLITCH_MONSTER: {
-        bossName: "M1ssingN0",
-        images: {
-            idle: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
-            damage: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
-            defeat: "https://i.postimg.cc/PrN0x4qS/Glitch-Lose.png",
-            win: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png"
-        },
-        badgeUrl: "https://i.postimg.cc/FRpP0gqS/Glitch-Idle.png",
-        health: { bossHP: 800, playerHP: 120 }, 
-        difficulty: 'medium',
-        messages: {
-            bossWins: "404: SKILL NOT FOUND.",
-            playerWins: "Seg.Fault... Core Dumped...",
-            perfectWin: "System.Optimized(100%)."
-        },
-        mechanics: { enablePowerUps: true, finishHimMove: false }
-    }
+    mechanics: { enablePowerUps: true, finishHimMove: true }
+  },
+  'lythara': {
+    bossName: "Lythara",
+    images: {
+      idle: "/finalboss/lythara.png",
+      badge: "/finalboss/lytharabadge.png",
+      defeat: "/finalboss/lytharalose.png",
+      win: "/finalboss/lytharawin.png",
+      damage: "/finalboss/lythara.png"
+    },
+    badgeUrl: "/finalboss/lytharabadge.png",
+    health: { bossHP: 1000, playerHP: 80 },
+    difficulty: 'hard',
+    messages: {
+      bossWins: "Tu magia es débil.",
+      playerWins: "El hechizo... se ha roto.",
+      perfectWin: "Tu mana es infinito."
+    },
+    mechanics: { enablePowerUps: true, finishHimMove: true }
+  },
+  'valdros': {
+    bossName: "Valdros",
+    images: {
+      idle: "/finalboss/valdros.png",
+      badge: "/finalboss/valdrosbadge.png",
+      defeat: "/finalboss/valdroslose.png",
+      win: "/finalboss/valdroswin.png",
+      damage: "/finalboss/valdros.png"
+    },
+    badgeUrl: "/finalboss/valdrosbadge.png",
+    health: { bossHP: 2000, playerHP: 150 },
+    difficulty: 'legend',
+    messages: {
+      bossWins: "Cenizas a las cenizas.",
+      playerWins: "¡Un guerrero digno al fin!",
+      perfectWin: "Imposible... ni un rasguño."
+    },
+    mechanics: { enablePowerUps: true, finishHimMove: false }
+  }
 };
