@@ -1,6 +1,8 @@
 
 // data/bossPresets.ts
 
+const ASSETS_BASE = "https://assets.mistercuarter.es";
+
 export interface BossImageConfig {
     idle: string;
     damage?: string;
@@ -27,20 +29,20 @@ export interface BossSettings {
         finishHimMove: boolean;
     };
     badgeUrl?: string; // Legacy support
-    attackVoice?: string; // NEW: Voice file path
+    attackVoice?: string; // New Voice path
 }
 
 export const PRESET_BOSSES: Record<string, BossSettings> = {
   'kryon_v': {
     bossName: "Kryon-V",
     images: {
-      idle: "/finalboss/kryon.png",
-      badge: "/finalboss/kryonbadge.png",
-      defeat: "/finalboss/kryonlose.png",
-      win: "/finalboss/kryonwin.png",
-      damage: "/finalboss/kryon.png"
+      idle: `${ASSETS_BASE}/finalboss/kryon.png`,
+      badge: `${ASSETS_BASE}/finalboss/kryonbadge.png`,
+      defeat: `${ASSETS_BASE}/finalboss/kryonlose.png`,
+      win: `${ASSETS_BASE}/finalboss/kryonwin.png`,
+      damage: `${ASSETS_BASE}/finalboss/kryon.png`
     },
-    badgeUrl: "/finalboss/kryonbadge.png",
+    badgeUrl: `${ASSETS_BASE}/finalboss/kryonbadge.png`,
     health: { bossHP: 1200, playerHP: 100 },
     difficulty: 'medium',
     messages: {
@@ -49,18 +51,18 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
       perfectWin: "Cálculos imposibles. Eres perfecto."
     },
     mechanics: { enablePowerUps: true, finishHimMove: true },
-    attackVoice: '/sounds/kryonvoice.mp3'
+    attackVoice: `${ASSETS_BASE}/sounds/kryonvoice.mp3`
   },
   'lythara': {
     bossName: "Lythara",
     images: {
-      idle: "/finalboss/lythara.png",
-      badge: "/finalboss/lytharabadge.png",
-      defeat: "/finalboss/lytharalose.png",
-      win: "/finalboss/lytharawin.png",
-      damage: "/finalboss/lythara.png"
+      idle: `${ASSETS_BASE}/finalboss/lythara.png`,
+      badge: `${ASSETS_BASE}/finalboss/lytharabadge.png`,
+      defeat: `${ASSETS_BASE}/finalboss/lytharalose.png`,
+      win: `${ASSETS_BASE}/finalboss/lytharawin.png`,
+      damage: `${ASSETS_BASE}/finalboss/lythara.png`
     },
-    badgeUrl: "/finalboss/lytharabadge.png",
+    badgeUrl: `${ASSETS_BASE}/finalboss/lytharabadge.png`,
     health: { bossHP: 1000, playerHP: 80 },
     difficulty: 'hard',
     messages: {
@@ -69,18 +71,18 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
       perfectWin: "Tu mana es infinito."
     },
     mechanics: { enablePowerUps: true, finishHimMove: true },
-    attackVoice: '/sounds/lytharavoice.mp3'
+    attackVoice: `${ASSETS_BASE}/sounds/lytharavoice.mp3`
   },
   'valdros': {
     bossName: "Valdros",
     images: {
-      idle: "/finalboss/valdros.png",
-      badge: "/finalboss/valdrosbadge.png",
-      defeat: "/finalboss/valdroslose.png",
-      win: "/finalboss/valdroswin.png",
-      damage: "/finalboss/valdros.png"
+      idle: `${ASSETS_BASE}/finalboss/valdros.png`,
+      badge: `${ASSETS_BASE}/finalboss/valdrosbadge.png`,
+      defeat: `${ASSETS_BASE}/finalboss/valdroslose.png`,
+      win: `${ASSETS_BASE}/finalboss/valdroswin.png`,
+      damage: `${ASSETS_BASE}/finalboss/valdros.png`
     },
-    badgeUrl: "/finalboss/valdrosbadge.png",
+    badgeUrl: `${ASSETS_BASE}/finalboss/valdrosbadge.png`,
     health: { bossHP: 2000, playerHP: 150 },
     difficulty: 'legend',
     messages: {
@@ -89,6 +91,6 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
       perfectWin: "Imposible... ni un rasguño."
     },
     mechanics: { enablePowerUps: true, finishHimMove: false },
-    attackVoice: '/sounds/valdrosvoice.mp3'
+    attackVoice: `${ASSETS_BASE}/sounds/valdrosvoice.mp3`
   }
 };

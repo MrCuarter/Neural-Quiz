@@ -9,6 +9,8 @@ import { PRESET_BOSSES } from '../../data/bossPresets';
 
 // --- CONSTANTS & TYPES ---
 
+const ASSETS_BASE = "https://assets.mistercuarter.es";
+
 type GameState = 'LOBBY' | 'ROULETTE' | 'PLAYING' | 'FINISH_IT' | 'STATS';
 type CombatState = 'IDLE' | 'PLAYER_ATTACK' | 'BOSS_ATTACK' | 'VICTORY' | 'DEFEAT' | 'REVIVE';
 
@@ -37,27 +39,27 @@ interface BattleStats {
     totalAnswers: number;
 }
 
+// Rutas remotas actualizadas (Elements)
 const PASSIVES: Record<PassiveType, ItemData> = {
-    agil: { id: 'agil', name: 'Reflejos Felinos', description: '20% Evasión.', image: '/elements/agil.png' },
-    answer: { id: 'answer', name: 'Visión Cuántica', description: '50/50 en opciones.', image: '/elements/answer.png' },
-    certero: { id: 'certero', name: 'Ojo de Halcón', description: '+Crit Chance.', image: '/elements/certero.png' },
-    escudo: { id: 'escudo', name: 'Piel de Titanio', description: '-15% Daño recibido.', image: '/elements/escudo.png' },
-    fuerza: { id: 'fuerza', name: 'Furia Berserker', description: '+20% Daño base.', image: '/elements/fuerza.png' },
-    suerte: { id: 'suerte', name: 'Fortuna', description: '+Loot Chance.', image: '/elements/suerte.png' },
-    tiempo: { id: 'tiempo', name: 'Cronometrista', description: '+5s Tiempo.', image: '/elements/tiempo.png' },
+    agil: { id: 'agil', name: 'Reflejos Felinos', description: '20% Evasión.', image: `${ASSETS_BASE}/elements/agil.png` },
+    answer: { id: 'answer', name: 'Visión Cuántica', description: '50/50 en opciones.', image: `${ASSETS_BASE}/elements/answer.png` },
+    certero: { id: 'certero', name: 'Ojo de Halcón', description: '+Crit Chance.', image: `${ASSETS_BASE}/elements/certero.png` },
+    escudo: { id: 'escudo', name: 'Piel de Titanio', description: '-15% Daño recibido.', image: `${ASSETS_BASE}/elements/escudo.png` },
+    fuerza: { id: 'fuerza', name: 'Furia Berserker', description: '+20% Daño base.', image: `${ASSETS_BASE}/elements/fuerza.png` },
+    suerte: { id: 'suerte', name: 'Fortuna', description: '+Loot Chance.', image: `${ASSETS_BASE}/elements/suerte.png` },
+    tiempo: { id: 'tiempo', name: 'Cronometrista', description: '+5s Tiempo.', image: `${ASSETS_BASE}/elements/tiempo.png` },
 };
 
 const POTIONS: Record<PotionType, ItemData> = {
-    salud: { id: 'salud', name: 'Poción de Vida', description: 'Recupera Salud.', image: '/elements/salud.png' },
-    veneno: { id: 'veneno', name: 'Veneno', description: 'Daño por turno.', image: '/elements/veneno.png' },
-    vulnerable: { id: 'vulnerable', name: 'Rompe-Guardia', description: 'Doble daño recibido.', image: '/elements/vulnerable.png' },
-    esquiva: { id: 'esquiva', name: 'Humo Ninja', description: 'Evasión garantizada.', image: '/elements/esquiva.png' },
-    fuerzatemp: { id: 'fuerzatemp', name: 'Esteroides', description: 'Daño masivo 1 turno.', image: '/elements/fuerzatemp.png' },
+    salud: { id: 'salud', name: 'Poción de Vida', description: 'Recupera Salud.', image: `${ASSETS_BASE}/elements/salud.png` },
+    veneno: { id: 'veneno', name: 'Veneno', description: 'Daño por turno.', image: `${ASSETS_BASE}/elements/veneno.png` },
+    vulnerable: { id: 'vulnerable', name: 'Rompe-Guardia', description: 'Doble daño recibido.', image: `${ASSETS_BASE}/elements/vulnerable.png` },
+    esquiva: { id: 'esquiva', name: 'Humo Ninja', description: 'Evasión garantizada.', image: `${ASSETS_BASE}/elements/esquiva.png` },
+    fuerzatemp: { id: 'fuerzatemp', name: 'Esteroides', description: 'Daño masivo 1 turno.', image: `${ASSETS_BASE}/elements/fuerzatemp.png` },
 };
 
 // Utils
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
-const normalizeText = (text: string): string => text.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
 
 // --- MAIN COMPONENT ---
 
@@ -114,7 +116,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     const timerRef = useRef<any>(null);
     const bgmRef = useRef<HTMLAudioElement | null>(null); // SINGLE SOURCE OF TRUTH FOR BGM
 
-    // --- AUDIO SYSTEM (ROBUST) ---
+    // --- AUDIO SYSTEM (REMOTE) ---
     
     const playBGM = (trackName: string) => {
         if (bgmRef.current) {
@@ -123,7 +125,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
             bgmRef.current = null;
         }
 
-        const path = `/sounds/${trackName}.mp3`;
+        const path = `${ASSETS_BASE}/sounds/${trackName}.mp3`;
         const audio = new Audio(path);
         audio.loop = true;
         audio.volume = 0.3;
@@ -145,7 +147,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     };
 
     const playSFX = (trackName: string) => {
-        const audio = new Audio(`/sounds/${trackName}.mp3`);
+        const audio = new Audio(`${ASSETS_BASE}/sounds/${trackName}.mp3`);
         audio.volume = 0.8;
         audio.play().catch(() => {}); // Fire and forget
     };
@@ -171,7 +173,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         }
 
         if (track) playBGM(track);
-        else stopBGM(); // Lobby or others
+        else stopBGM(); 
 
         return () => stopBGM();
     }, [gameState, loading, bossConfig, combatState]); // Dependencies are STABLE
@@ -185,7 +187,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 
                 // Config Boss
                 let settings = data.config.bossSettings;
-                // Fix potential legacy or custom paths here if needed, but presets are preferred
                 if (!settings) settings = PRESET_BOSSES['kryon_v']; // Fallback
                 
                 setEvaluation(data);
@@ -226,7 +227,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
             }, 1000);
         }
         return () => clearInterval(timerRef.current);
-    }, [gameState, isAnswered, timeLeft]); // combatState removed to prevent loops
+    }, [gameState, isAnswered, timeLeft]); 
 
     // --- GAME ACTIONS ---
 
@@ -298,8 +299,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
     };
 
     // --- COMBAT LOGIC CHAIN ---
-    // Linear logic to prevent loops. Calls state updates sequentially.
-
+    
     const processTurn = (correct: boolean, q: Question) => {
         // 1. Tick Effects
         setPlayerStatus(prev => prev.map(s => ({...s, turns: s.turns - 1})).filter(s => s.turns > 0));
@@ -377,10 +377,11 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
         setTimeout(() => { playSFX('hit'); setShakeScreen(true); }, 200);
         setTimeout(() => setShakeScreen(false), 500);
 
-        // --- BOSS VOICE ATTACK ---
+        // --- BOSS VOICE ATTACK (REMOTE URL) ---
         const voiceUrl = (bossConfig as any)?.attackVoice;
         if (voiceUrl) {
             setTimeout(() => {
+                // Assuming URL is already absolute from bossPresets.ts
                 const voice = new Audio(voiceUrl);
                 voice.volume = 1.0;
                 voice.play().catch(e => console.warn("Voice play prevented", e));
@@ -524,7 +525,11 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
                 <CyberCard className="max-w-md w-full border-cyan-500/50 p-8 text-center bg-black/80 backdrop-blur">
                     <h1 className="text-4xl font-cyber text-cyan-400 mb-2">{evaluation?.title}</h1>
                     <div className="flex justify-center my-6">
-                        <img src={bossConfig?.images.idle} className="w-32 h-32 object-contain animate-pulse drop-shadow-[0_0_15px_rgba(255,0,0,0.5)]" />
+                        <img 
+                            src={bossConfig?.images.idle} 
+                            crossOrigin="anonymous" 
+                            className="w-32 h-32 object-contain animate-pulse drop-shadow-[0_0_15px_rgba(255,0,0,0.5)]" 
+                        />
                     </div>
                     <input 
                         value={nickname} 
@@ -618,6 +623,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId }) => {
             <div className="absolute top-24 left-1/2 -translate-x-1/2 w-full flex justify-center z-10 pointer-events-none">
                 <img 
                     src={combatState === 'PLAYER_ATTACK' ? bossConfig?.images.damage : bossConfig?.images.idle} 
+                    crossOrigin="anonymous" // CRITICAL FOR REMOTE ASSETS
                     className={`h-[35vh] max-h-[350px] object-contain transition-all duration-100 ${isHit ? 'filter brightness-200 contrast-150 scale-105' : 'drop-shadow-[0_0_30px_rgba(255,0,0,0.2)]'}`}
                     style={isHit ? { transform: 'translate(5px, -5px) skew(10deg)' } : {}}
                     alt="Boss"
