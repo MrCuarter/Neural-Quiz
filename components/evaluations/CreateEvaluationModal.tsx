@@ -5,7 +5,7 @@ import { signInAnonymously } from 'firebase/auth';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
 import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play, Copy, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
-import { PRESET_BOSSES } from '../../data/bossPresets';
+import { PRESET_BOSSES, ASSETS_BASE } from '../../data/bossPresets';
 import { ArcadePlay } from '../pages/ArcadePlay';
 
 interface CreateEvaluationModalProps {
@@ -109,11 +109,11 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             difficulty: bossDifficulty,
             health: { bossHP, playerHP },
             images: { 
-                idle: `https://assets.mistercuarter.es/finalboss/${imageId}.png`,
-                badge: `https://assets.mistercuarter.es/finalboss/${imageId}badge.png`,
-                damage: `https://assets.mistercuarter.es/finalboss/${imageId}.png`,
-                defeat: `https://assets.mistercuarter.es/finalboss/${imageId}lose.png`,
-                win: `https://assets.mistercuarter.es/finalboss/${imageId}win.png`
+                idle: `${ASSETS_BASE}/finalboss/${imageId}.png`,
+                badge: `${ASSETS_BASE}/finalboss/${imageId}badge.png`,
+                damage: `${ASSETS_BASE}/finalboss/${imageId}.png`,
+                defeat: `${ASSETS_BASE}/finalboss/${imageId}lose.png`,
+                win: `${ASSETS_BASE}/finalboss/${imageId}win.png`
             },
             messages: { bossWins: msgBossWin, playerWins: msgPlayerWin, perfectWin: msgPerfect },
             mechanics: { enablePowerUps: powerUps, finishHimMove: finishHim }
@@ -314,7 +314,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                                     >
                                                         <div className="w-24 h-24 rounded-full border border-gray-600 overflow-hidden bg-black">
                                                             <img 
-                                                                src={`https://assets.mistercuarter.es/finalboss/${boss.imageId}badge.png`}
+                                                                src={`${ASSETS_BASE}/finalboss/${boss.imageId}badge.png`}
                                                                 className="w-full h-full object-cover" 
                                                                 alt={boss.bossName} 
                                                             />

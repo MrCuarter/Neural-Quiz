@@ -183,6 +183,7 @@ export const searchStockImages = async (query: string): Promise<ImageResult[]> =
 
 /**
  * STRICT PRIORITY: Unsplash -> Pexels -> Pixabay -> Secure GitHub Fallback
+ * Ensures errors in one provider do NOT stop the chain.
  */
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult> => {
     const query = rawQuery ? rawQuery.trim() : "";
@@ -195,26 +196,30 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
     // 1. Try Unsplash
     try {
         const result = await fetchUnsplash(query);
-        if (result.attribution?.downloadLocation) {
-            triggerDownload(result.attribution.downloadLocation);
+        if (result) {
+            if (result.attribution?.downloadLocation) {
+                triggerDownload(result.attribution.downloadLocation);
+            }
+            return result;
         }
-        return result;
     } catch (e) {
-        // Silent fail, try next
+        console.warn(`⚠️ Unsplash falló para "${query}", saltando a Pexels...`, e);
     }
 
     // 2. Try Pexels
     try {
-        return await fetchPexels(query);
+        const result = await fetchPexels(query);
+        if (result) return result;
     } catch (e) {
-        // Silent fail, try next
+        console.warn(`⚠️ Pexels falló para "${query}", saltando a Pixabay...`, e);
     }
 
     // 3. Try Pixabay
     try {
-        return await fetchPixabay(query);
+        const result = await fetchPixabay(query);
+        if (result) return result;
     } catch (e) {
-        // Silent fail, go to fallback
+        console.warn(`⚠️ Pixabay falló para "${query}", usando Fallback...`, e);
     }
 
     // 4. Fallback (Secure GitHub CDN)

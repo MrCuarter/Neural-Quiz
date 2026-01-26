@@ -14,6 +14,7 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ bossConfig, quizTitl
     const [nickname, setNickname] = useState("");
 
     // Construct Badge URL: /finalboss/[imageId]badge.png
+    // ALWAYS use ASSETS_BASE to prevent Hostinger CORS errors
     const imgId = bossConfig.imageId || "kryon"; 
     const badgeUrl = `${ASSETS_BASE}/finalboss/${imgId}badge.png`;
 
