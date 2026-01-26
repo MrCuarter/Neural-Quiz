@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
 import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink, Volume2, VolumeX } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
 import { PRESET_BOSSES, ASSETS_BASE, DIFFICULTY_SETTINGS, DifficultyStats } from '../../data/bossPresets';
 import { StudentLogin } from '../student/StudentLogin';
@@ -19,7 +19,6 @@ interface ItemData { id: string; name: string; description: string; image: strin
 interface StatusEffect { type: PotionType; turns: number; }
 interface BattleStats { totalDamage: number; maxCrit: number; dodges: number; potionsUsed: number; potionsStolen: number; correctAnswers: number; totalAnswers: number; }
 
-// USING NEW GITHUB RAW URLS DIRECTLY
 const PASSIVES: Record<PassiveType, ItemData> = {
     agil: { id: 'agil', name: 'Reflejos Felinos', description: '20% Evasión.', image: `${ASSETS_BASE}/elements/agil.png` },
     answer: { id: 'answer', name: 'Visión Cuántica', description: '50/50 en opciones.', image: `${ASSETS_BASE}/elements/answer.png` },
@@ -40,7 +39,6 @@ const POTIONS: Record<PotionType, ItemData> = {
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 
-// Helper to remove "a)", "1.", etc from question text if options are baked in
 const cleanQuestionText = (text: string): string => {
     return text.replace(/^[0-9]+\.\s*/, '').replace(/\n[a-d]\).*/gi, '').trim();
 };
@@ -66,6 +64,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const [nickname, setNickname] = useState("");
     const [score, setScore] = useState(0);
     const [streak, setStreak] = useState(0);
+    const [isMuted, setIsMuted] = useState(false);
     
     // Questions Queue
     const [playableQuestions, setPlayableQuestions] = useState<Question[]>([]);
@@ -107,12 +106,23 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         if (bgmRef.current) { bgmRef.current.pause(); bgmRef.current = null; }
         // DIRECT GITHUB RAW URL
         const audio = new Audio(`${ASSETS_BASE}/sounds/${trackName}.mp3`);
-        audio.loop = true; audio.volume = 0.3; bgmRef.current = audio;
-        audio.play().catch(() => {});
+        audio.loop = true; audio.volume = isMuted ? 0 : 0.3; 
+        bgmRef.current = audio;
+        if (!isMuted) audio.play().catch(() => {});
     };
+    
     const playSFX = (trackName: string) => {
+        if (isMuted) return;
         const audio = new Audio(`${ASSETS_BASE}/sounds/${trackName}.mp3`);
         audio.volume = 0.8; audio.play().catch(() => {});
+    };
+
+    const toggleMute = () => {
+        setIsMuted(prev => {
+            const next = !prev;
+            if (bgmRef.current) bgmRef.current.volume = next ? 0 : 0.3;
+            return next;
+        });
     };
 
     // --- EFFECT: AUDIO STATE MANAGER ---
@@ -245,7 +255,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         }
     };
 
-    // Modified to support direct click attack for single choice
     const handleAttack = (immediateOptionId?: string, isTimeout = false) => {
         clearInterval(timerRef.current);
         const currentQ = gameState === 'FINISH_IT' ? retryQueue[currentQIndex] : playableQuestions[currentQIndex];
@@ -272,8 +281,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 isRight = orderedOptions.every((opt, idx) => opt.id === currentQ.options[idx].id); 
             }
             else {
-                // Single Choice / True False logic
-                // If immediateOptionId passed, use it. Otherwise use state.
                 const answerId = immediateOptionId || selectedOptionIds[0];
                 isRight = correctIds.includes(answerId);
             }
@@ -375,18 +382,19 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
              }, 800);
         }
 
-        const voiceUrl = (bossConfig as any)?.attackVoice;
-        if (voiceUrl) {
-            setTimeout(() => {
-                const voice = new Audio(voiceUrl);
-                voice.volume = 1.0;
-                voice.play().catch(() => {});
-            }, 300);
+        if (!isMuted) {
+            const voiceUrl = (bossConfig as any)?.attackVoice;
+            if (voiceUrl) {
+                setTimeout(() => {
+                    const voice = new Audio(voiceUrl);
+                    voice.volume = 1.0;
+                    voice.play().catch(() => {});
+                }, 300);
+            }
         }
     };
 
     const checkWinConditionOrNext = (lastWasCorrect: boolean) => {
-        // Updated Logic: Check HP immediately
         if (playerHP.current <= 0) {
             setCombatState('DEFEAT'); 
             playSFX('gameover');
@@ -463,13 +471,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         const imgId = bossConfig?.imageId || "kryon";
         let suffix = "";
         
-        // Correct Logic:
-        // VICTORY (Player Wins) -> Boss Lose Image
-        // DEFEAT (Player Loses) -> Boss Win Image
         if (combatState === 'VICTORY') suffix = "lose";
         else if (combatState === 'DEFEAT') suffix = "win";
         else if (combatState === 'PLAYER_ATTACK') return `${ASSETS_BASE}/finalboss/${imgId}.png`; 
-        else suffix = ""; // Idle
+        else suffix = "";
 
         const filename = suffix ? `${imgId}${suffix}.png` : `${imgId}.png`;
         return `${ASSETS_BASE}/finalboss/${filename}`;
@@ -526,21 +531,19 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                             key={opt.id} 
                             onClick={() => {
                                 if (isMulti) {
-                                    // Toggle logic for Multi Select
                                     setSelectedOptionIds(prev => prev.includes(opt.id) ? prev.filter(id => id !== opt.id) : [...prev, opt.id]);
                                 } else {
-                                    // IMMEDIATE ATTACK for Single Select / TrueFalse
                                     handleAttack(opt.id);
                                 }
                             }}
-                            className={`p-4 rounded-lg border-2 text-left transition-all flex items-center gap-3 relative overflow-hidden group
-                                ${isSelected ? 'bg-cyan-900/40 border-cyan-400' : 'bg-gray-900/40 border-gray-700 hover:border-gray-500'}
+                            className={`p-4 rounded-lg border-2 text-left transition-all flex items-center gap-3 relative overflow-hidden group hover:scale-[1.02] active:scale-95
+                                ${isSelected ? 'bg-cyan-900/40 border-cyan-400' : 'bg-gray-900/80 border-gray-700 hover:border-gray-500'}
                             `}
                         >
-                            <div className={`w-6 h-6 rounded border flex items-center justify-center ${isSelected ? 'bg-cyan-500 border-cyan-500 text-black' : 'border-gray-500'}`}>
+                            <div className={`w-6 h-6 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-cyan-500 border-cyan-500 text-black' : 'border-gray-500'}`}>
                                 {isMulti ? (isSelected && <CheckSquare className="w-4 h-4"/>) : (isSelected && <div className="w-3 h-3 bg-black rounded-full"/>)}
                             </div>
-                            <span className="text-sm font-bold flex-1">{opt.text}</span>
+                            <span className="text-sm font-bold flex-1 text-white shadow-black drop-shadow-md">{opt.text}</span>
                             {opt.imageUrl && <img src={opt.imageUrl} crossOrigin="anonymous" className="w-12 h-12 object-cover rounded border border-gray-600" />}
                         </button>
                     );
@@ -606,139 +609,182 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const isSingleChoice = currentQ.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || currentQ.questionType === QUESTION_TYPES.TRUE_FALSE;
 
     return (
-        <div className={`min-h-screen bg-[#050505] text-white flex flex-col font-sans select-none overflow-hidden relative transition-colors duration-1000 ${shakeScreen ? 'animate-shake' : ''}`}>
+        <div className={`min-h-screen bg-[#050505] text-white flex flex-col md:flex-row overflow-hidden relative transition-colors duration-1000 ${shakeScreen ? 'animate-shake' : ''}`}>
             
-            {/* BOSS HUD */}
-            <div className="absolute top-0 left-0 w-full p-4 z-20 pointer-events-none flex justify-between items-start">
-                <div className="w-1/2 md:w-1/3">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Skull className="w-5 h-5 text-red-500" />
-                        <span className="font-cyber font-bold text-red-500 text-shadow-red">{bossConfig?.bossName}</span>
-                    </div>
-                    <div className="w-full h-6 bg-gray-900 rounded border border-red-900 overflow-hidden relative">
-                        <div className="h-full bg-red-600 transition-all duration-500 ease-out" style={{ width: `${(bossHP.current / bossHP.max) * 100}%` }} />
-                        <span className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold text-white/80">{bossHP.current}/{bossHP.max}</span>
-                    </div>
-                    <div className="flex gap-1 mt-1">
-                        {bossStatus.map((s, i) => <img key={i} src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-6 h-6 border border-red-500 rounded bg-black" title={s.type}/>)}
-                    </div>
-                </div>
-                <div className="flex flex-col items-end">
-                    <div className={`text-4xl font-black font-mono ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>{timeLeft}</div>
-                    <div className="text-xs text-gray-500 font-mono">Q: {currentQIndex + 1}</div>
-                </div>
-            </div>
+            {/* 1. MUTE TOGGLE (ABSOLUTE TOP LEFT) */}
+            <button onClick={toggleMute} className="absolute top-4 left-4 z-50 p-2 bg-black/50 rounded-full border border-gray-600 text-white hover:bg-white/20 transition-colors">
+                {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+            </button>
 
-            {/* BOSS AVATAR (CENTER) */}
-            <div className="absolute top-24 left-1/2 -translate-x-1/2 w-full flex justify-center z-10 pointer-events-none">
+            {/* 2. LEFT SIDE: BOSS AREA (35% Width on Desktop) */}
+            <div className="w-full md:w-[40%] h-[40vh] md:h-full relative flex flex-col justify-end items-center bg-gradient-to-t from-red-950/20 to-transparent">
+                
+                {/* Boss Image - Aligned Bottom */}
                 <img 
                     src={getBossImage()} 
                     crossOrigin="anonymous"
-                    className={`h-[35vh] max-h-[350px] object-contain transition-all duration-100 ${isHit ? 'filter brightness-200 contrast-150 scale-105' : 'drop-shadow-[0_0_30px_rgba(255,0,0,0.2)]'}`}
-                    style={isHit ? { transform: 'translate(5px, -5px) skew(10deg)' } : {}}
+                    className={`
+                        w-auto h-[90%] max-h-[500px] object-contain transition-all duration-100 z-10
+                        ${isHit ? 'filter brightness-200 contrast-150 scale-105' : 'drop-shadow-[0_0_50px_rgba(255,0,0,0.15)]'}
+                    `}
+                    style={isHit ? { transform: 'translate(5px, -5px) skew(5deg)' } : {}}
                     alt="Boss"
                 />
-                {combatState === 'PLAYER_ATTACK' && <div className="absolute top-10 text-6xl font-black text-yellow-400 font-cyber animate-bounce drop-shadow-lg">CRITICAL!</div>}
-                {combatLog && <div className="absolute -bottom-10 bg-red-900/80 text-white px-4 py-2 rounded font-mono font-bold animate-in fade-in slide-in-from-top-4">{combatLog}</div>}
-            </div>
 
-            {/* PLAYER INTERFACE (BOTTOM) */}
-            <div className="flex-1 flex flex-col justify-end pb-4 px-4 z-20">
-                {/* Inventory & HP */}
-                <div className="max-w-4xl mx-auto w-full flex justify-between items-end mb-4 pointer-events-auto">
-                    <div className="flex gap-2">
-                        {playerInventory.map((item, idx) => (
-                            <button key={idx} onClick={() => handleUsePotion(item, idx)} disabled={combatState !== 'IDLE'} className="w-12 h-12 bg-black/60 border border-gray-600 rounded hover:border-yellow-400 flex items-center justify-center relative group transition-all hover:scale-110">
-                                <img src={POTIONS[item].image} crossOrigin="anonymous" className="w-8 h-8" />
-                            </button>
-                        ))}
-                        {playerInventory.length < 5 && Array.from({length: 5 - playerInventory.length}).map((_, i) => (
-                            <div key={i} className="w-12 h-12 bg-black/20 border border-gray-800 rounded flex items-center justify-center opacity-30"><Backpack className="w-4 h-4"/></div>
-                        ))}
+                {/* Boss Damage Text Overlay */}
+                {combatState === 'PLAYER_ATTACK' && (
+                    <div className="absolute top-1/3 left-1/2 -translate-x-1/2 text-6xl font-black text-yellow-400 font-cyber animate-bounce drop-shadow-[0_4px_0_rgba(0,0,0,1)] z-20">
+                        CRITICAL!
                     </div>
-                    <div className="flex flex-col items-end gap-1 w-1/3">
-                        <div className="flex items-center gap-2">
-                            {passiveEffect && <img src={PASSIVES[passiveEffect].image} crossOrigin="anonymous" className="w-6 h-6 border border-purple-500 rounded-full bg-purple-900" />}
-                            <span className="font-cyber font-bold text-green-400">{nickname}</span>
-                        </div>
-                        <div className="w-full h-4 bg-gray-900 rounded border border-green-900 overflow-hidden relative">
-                            <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${(playerHP.current / playerHP.max) * 100}%` }} />
-                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-black/80">{playerHP.current}/{playerHP.max}</span>
-                        </div>
-                    </div>
-                </div>
+                )}
 
-                {/* ACTION CARD */}
-                <div className="max-w-4xl mx-auto w-full bg-black/80 backdrop-blur-md border border-gray-700 p-6 rounded-xl shadow-2xl relative pointer-events-auto">
-                    {lootDrop && (
-                        <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-yellow-500/20 border border-yellow-400 p-4 rounded-full animate-bounce flex items-center gap-2">
-                            <img src={POTIONS[lootDrop].image} crossOrigin="anonymous" className="w-8 h-8" />
-                            <div>
-                                <span className="text-yellow-300 font-bold block">¡POCIÓN ROBADA!</span>
-                                <span className="text-xs text-yellow-100">{POTIONS[lootDrop].description}</span>
+                {/* BOSS HUD (Bottom Left) */}
+                <div className="absolute bottom-6 left-6 right-6 z-20 flex flex-col gap-2">
+                    <div className="flex items-end gap-3">
+                        <div className="w-20 h-20 rounded-full border-4 border-red-600 bg-black overflow-hidden shadow-[0_0_20px_red] shrink-0">
+                            <img src={bossConfig?.badgeUrl || bossConfig?.images?.badge || bossConfig?.images?.idle} className="w-full h-full object-cover" crossOrigin="anonymous"/>
+                        </div>
+                        <div className="flex-1 pb-2">
+                            <h2 className="text-2xl font-cyber text-red-500 font-bold leading-none mb-1 text-shadow-red">{bossConfig?.bossName}</h2>
+                            {/* HP BAR */}
+                            <div className="w-full h-6 bg-gray-900 rounded-r-lg border border-red-900 overflow-hidden relative skew-x-[-15deg] origin-bottom-left">
+                                <div className="h-full bg-gradient-to-r from-red-800 to-red-500 transition-all duration-500 ease-out" style={{ width: `${(bossHP.current / bossHP.max) * 100}%` }} />
+                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white/90 skew-x-[15deg]">
+                                    {bossHP.current} / {bossHP.max}
+                                </span>
                             </div>
                         </div>
-                    )}
-
-                    {currentQ.imageUrl && (
-                        <div className="flex justify-center mb-4 relative group">
-                            <img 
-                                src={currentQ.imageUrl} 
-                                crossOrigin="anonymous" 
-                                className="max-h-32 object-contain rounded border border-gray-700 bg-black/50" 
-                            />
-                            {/* --- ATTRIBUTION OVERLAY --- */}
-                            {currentQ.imageCredit && (
-                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-max max-w-full bg-black/90 text-[9px] text-gray-300 px-2 py-1 rounded-b border border-gray-800 backdrop-blur-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">
-                                    📷 Foto por 
-                                    <a href={currentQ.imageCredit.link} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-white underline font-bold truncate">
-                                        {currentQ.imageCredit.name}
-                                    </a> 
-                                    en 
-                                    <span className="text-white font-bold">{currentQ.imageCredit.source}</span>
-                                    <ExternalLink className="w-2 h-2 ml-1 opacity-50" />
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <h3 className="text-xl md:text-2xl font-bold text-center mb-6 min-h-[40px] flex items-center justify-center">{currentQ.text}</h3>
-
-                    {/* DYNAMIC INPUT AREA */}
-                    {combatState === 'IDLE' ? (
-                        <div className="space-y-6">
-                            {renderInputArea(currentQ)}
-                            
-                            {!isSingleChoice && (
-                                <button 
-                                    onClick={() => handleAttack()} 
-                                    className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black font-cyber text-xl tracking-widest rounded shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_40px_rgba(239,68,68,0.6)] transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 border-2 border-red-400"
-                                >
-                                    <Sword className="w-6 h-6" /> ATACAR
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-40">
-                            {combatState === 'BOSS_ATTACK' ? (
-                                <>
-                                    <span className="font-cyber text-2xl animate-pulse text-red-500 mb-2">¡FALLASTE!</span>
-                                    {showCorrectAnswer ? (
-                                        <p className="text-sm text-gray-400 font-mono">
-                                            La respuesta era: <span className="text-green-400 font-bold">
-                                                {currentQ.options.find(o => currentQ.correctOptionIds?.includes(o.id) || o.id === currentQ.correctOptionId)?.text}
-                                            </span>
-                                        </p>
-                                    ) : (
-                                        <p className="text-sm text-gray-500 italic">Información clasificada.</p>
-                                    )}
-                                </>
-                            ) : (
-                                <span className="font-cyber text-2xl animate-pulse text-cyan-400">PROCESANDO COMBATE...</span>
-                            )}
-                        </div>
-                    )}
+                    </div>
+                    {/* Status Icons Row */}
+                    <div className="flex gap-1 pl-24">
+                        {bossStatus.map((s, i) => <img key={i} src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-6 h-6 border border-red-500 rounded bg-black" title={s.type}/>)}
+                    </div>
                 </div>
+            </div>
+
+            {/* 3. RIGHT SIDE: INTERACTION AREA (60% Width on Desktop) */}
+            <div className="flex-1 h-[60vh] md:h-full relative flex flex-col p-4 md:p-8 bg-black/40 backdrop-blur-sm">
+                
+                {/* TOP RIGHT: PLAYER HUD */}
+                <div className="absolute top-4 right-4 flex flex-col items-end gap-1 z-30">
+                    <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-end">
+                            <span className="font-cyber font-bold text-xl text-green-400">{nickname}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">LVL {1 + Math.floor(score/1000)}</span>
+                        </div>
+                        {passiveEffect && <img src={PASSIVES[passiveEffect].image} crossOrigin="anonymous" className="w-10 h-10 border-2 border-purple-500 rounded-full bg-purple-900/50" />}
+                    </div>
+                    {/* Player HP Bar */}
+                    <div className="w-48 h-4 bg-gray-900 rounded border border-green-900 overflow-hidden relative">
+                        <div className="h-full bg-gradient-to-r from-green-800 to-green-500 transition-all duration-300" style={{ width: `${(playerHP.current / playerHP.max) * 100}%` }} />
+                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white/90">
+                            {playerHP.current} / {playerHP.max}
+                        </span>
+                    </div>
+                </div>
+
+                {/* RIGHT EDGE: ACTIVE BUFFS/DEBUFFS (Vertical Stack) */}
+                <div className="absolute right-4 top-24 flex flex-col gap-2 z-20">
+                    {playerStatus.map((s, i) => (
+                        <div key={i} className="w-10 h-10 bg-black/60 border border-blue-500 rounded flex items-center justify-center relative group">
+                            <img src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-8 h-8"/>
+                            <span className="absolute -top-1 -right-1 bg-blue-600 text-[9px] w-4 h-4 flex items-center justify-center rounded-full text-white">{s.turns}</span>
+                        </div>
+                    ))}
+                    {/* Items Inventory - Also stacked here for easy access */}
+                    {playerInventory.map((item, idx) => (
+                        <button key={`inv-${idx}`} onClick={() => handleUsePotion(item, idx)} disabled={combatState !== 'IDLE'} className="w-10 h-10 bg-black/60 border border-yellow-500/50 rounded flex items-center justify-center hover:scale-110 transition-transform relative group">
+                            <img src={POTIONS[item].image} crossOrigin="anonymous" className="w-8 h-8" />
+                        </button>
+                    ))}
+                </div>
+
+                {/* CENTER: QUESTION CARD */}
+                <div className="flex-1 flex items-center justify-center w-full max-w-3xl mx-auto">
+                    <div className="w-full bg-black/90 border border-gray-800 p-6 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden flex flex-col gap-6">
+                        
+                        {/* Question Number Badge */}
+                        <div className="absolute top-0 left-0 bg-gray-800 px-3 py-1 rounded-br-lg text-xs font-mono text-gray-400">
+                            Q: {currentQIndex + 1}
+                        </div>
+
+                        {/* LOOT NOTIFICATION */}
+                        {lootDrop && (
+                            <div className="absolute top-4 right-1/2 translate-x-1/2 bg-yellow-500/20 border border-yellow-400 px-4 py-2 rounded-full animate-bounce flex items-center gap-2 z-50">
+                                <img src={POTIONS[lootDrop].image} crossOrigin="anonymous" className="w-6 h-6" />
+                                <span className="text-yellow-300 text-xs font-bold font-mono">¡POCIÓN ROBADA!</span>
+                                <span className="text-[10px] text-yellow-100">{POTIONS[lootDrop].description}</span>
+                            </div>
+                        )}
+
+                        {/* Image Area */}
+                        {currentQ.imageUrl && (
+                            <div className="w-full h-48 bg-black/50 rounded-lg border border-gray-800 flex items-center justify-center relative group overflow-hidden">
+                                <img src={currentQ.imageUrl} crossOrigin="anonymous" className="h-full object-contain" />
+                                {/* Attribution */}
+                                {currentQ.imageCredit && (
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-[8px] text-gray-400 px-2 py-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        📷 {currentQ.imageCredit.name} ({currentQ.imageCredit.source})
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Question Text */}
+                        <h3 className="text-xl md:text-2xl font-bold text-center text-gray-100 font-sans leading-tight">
+                            {currentQ.text}
+                        </h3>
+
+                        {/* Combat State Message */}
+                        {combatState !== 'IDLE' && (
+                            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-40 flex flex-col items-center justify-center">
+                                {combatState === 'BOSS_ATTACK' ? (
+                                    <>
+                                        <span className="font-cyber text-4xl animate-pulse text-red-500 mb-4">¡FALLASTE!</span>
+                                        {showCorrectAnswer && (
+                                            <p className="text-sm text-gray-400 font-mono bg-gray-900 px-4 py-2 rounded border border-gray-700">
+                                                Solución: <span className="text-green-400 font-bold">{currentQ.options.find(o => currentQ.correctOptionIds?.includes(o.id) || o.id === currentQ.correctOptionId)?.text}</span>
+                                            </p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <span className="font-cyber text-3xl animate-pulse text-cyan-400">PROCESANDO...</span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Options / Input Area */}
+                        {combatState === 'IDLE' && (
+                            <div className="w-full">
+                                {renderInputArea(currentQ)}
+                                
+                                {!isSingleChoice && (
+                                    <button 
+                                        onClick={() => handleAttack()} 
+                                        className="w-full mt-6 py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black font-cyber text-xl tracking-widest rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-3 border border-red-400/50"
+                                    >
+                                        <Sword className="w-6 h-6" /> ATACAR
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* BOTTOM RIGHT: TIMER */}
+                <div className="absolute bottom-8 right-8 z-10">
+                    <div className={`text-8xl font-black font-mono tracking-tighter ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-700'}`}>
+                        {timeLeft}
+                    </div>
+                </div>
+
+                {/* COMBAT LOG (Bottom Center) */}
+                {combatLog && (
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/50 text-red-100 px-6 py-2 rounded-full font-mono font-bold animate-in fade-in slide-in-from-bottom-4 shadow-lg z-30">
+                        {combatLog}
+                    </div>
+                )}
+
             </div>
         </div>
     );
