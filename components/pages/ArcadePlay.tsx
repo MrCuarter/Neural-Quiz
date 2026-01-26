@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
-import { Evaluation, Question, BossSettings, QUESTION_TYPES } from '../../types';
+import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, Square, Type, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
 import { PRESET_BOSSES } from '../../data/bossPresets';
 import { StudentLogin } from '../student/StudentLogin';
@@ -92,7 +92,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     // --- MANUAL INPUT STATES ---
     const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
     const [textInput, setTextInput] = useState("");
-    const [orderedOptions, setOrderedOptions] = useState<any[]>([]);
+    const [orderedOptions, setOrderedOptions] = useState<Option[]>([]);
 
     // Refs
     const timerRef = useRef<any>(null);
@@ -131,37 +131,58 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
     // --- INITIALIZATION ---
     useEffect(() => {
-        if (previewConfig) {
-            setBossConfig(previewConfig.bossConfig);
-            setEvaluation({ title: "MODO PREVIEW", ...previewConfig.quiz } as any);
-            setBossHP({ current: previewConfig.bossConfig.health.bossHP, max: previewConfig.bossConfig.health.bossHP });
-            setPlayerHP({ current: previewConfig.bossConfig.health.playerHP, max: previewConfig.bossConfig.health.playerHP });
-            setPlayableQuestions(shuffleArray(previewConfig.quiz.questions).slice(0, 10));
-            setLoading(false);
-            return;
-        }
-
         const init = async () => {
-            if (!evaluationId) return;
             try {
-                const data = await getEvaluation(evaluationId);
-                if (!data) throw new Error("Evaluación no encontrada");
-                let settings = data.config.bossSettings || PRESET_BOSSES['kryon_v'];
-                setEvaluation(data);
+                // 1. DETERMINE SOURCE & CAST TYPE STRICTLY
+                let rawQuestions: Question[] = [];
+                let settings: BossSettings | null = null;
+                let evalData: Evaluation | null = null;
+
+                if (previewConfig) {
+                    // MODO PREVIEW
+                    settings = previewConfig.bossConfig;
+                    rawQuestions = (previewConfig.quiz.questions || []) as Question[];
+                    evalData = { title: "MODO PREVIEW", ...previewConfig.quiz } as any;
+                } else if (evaluationId) {
+                    // MODO LIVE
+                    const data = await getEvaluation(evaluationId);
+                    if (!data) throw new Error("Evaluación no encontrada");
+                    
+                    evalData = data;
+                    settings = data.config.bossSettings || PRESET_BOSSES['kryon_v'];
+                    rawQuestions = (data.questions || []) as Question[];
+                }
+
+                if (!settings) throw new Error("Configuración de Jefe no válida");
+
+                // 2. SETUP STATE
+                setEvaluation(evalData);
                 setBossConfig(settings);
                 setBossHP({ current: settings.health.bossHP, max: settings.health.bossHP });
                 setPlayerHP({ current: settings.health.playerHP, max: settings.health.playerHP });
                 
-                const shuffled = shuffleArray(data.questions).slice(0, data.config.questionCount || 10);
+                // 3. PREPARE QUESTIONS (SHUFFLE)
+                const limitCount = evalData?.config.questionCount || 10;
+                const shuffled = shuffleArray(rawQuestions).slice(0, limitCount);
+                
                 const prepared = shuffled.map(q => ({
                     ...q,
+                    // Don't shuffle options for True/False or Order to keep logical flow if needed, 
+                    // though for Order we shuffle in state 'orderedOptions' initially.
                     options: (q.questionType !== QUESTION_TYPES.TRUE_FALSE && q.questionType !== QUESTION_TYPES.ORDER) 
                         ? shuffleArray(q.options) 
                         : q.options
                 }));
+                
                 setPlayableQuestions(prepared);
-            } catch (e: any) { setError(e.message); } finally { setLoading(false); }
+                setLoading(false);
+
+            } catch (e: any) { 
+                setError(e.message); 
+                setLoading(false);
+            }
         };
+        
         init();
     }, [evaluationId, previewConfig]);
 
@@ -212,7 +233,8 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setSelectedOptionIds([]);
         setTextInput("");
         if (q.questionType === QUESTION_TYPES.ORDER) {
-            setOrderedOptions(shuffleArray([...q.options]));
+            // CAST options to ensure types match
+            setOrderedOptions(shuffleArray([...q.options] as Option[]));
         }
     };
 
@@ -238,16 +260,13 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 // Multi Select: Must match ALL correct IDs exactly
                 const selectedSet = new Set(selectedOptionIds);
                 const correctSet = new Set(correctIds);
-                // Check sets equality
                 if (selectedSet.size === correctSet.size) {
                     isRight = [...selectedSet].every(id => correctSet.has(id));
                 }
             } 
             else if (currentQ.questionType === QUESTION_TYPES.ORDER) {
-                // Order: Compare IDs in order
+                // Order: Compare IDs in order against original (assumed correct order in data)
                 isRight = orderedOptions.every((opt, idx) => opt.id === currentQ.options[idx].id); 
-                // Note: currentQ.options is usually the "correct order" if data is structured that way.
-                // Actually, original data structure stores options in correct order usually.
             }
             else {
                 // Single Choice / TF
