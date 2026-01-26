@@ -32,8 +32,9 @@ export const EvaluationsDashboard: React.FC<EvaluationsDashboardProps> = ({ onCl
             const snap = await getDocs(q);
             const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Evaluation));
             setEvaluations(items);
-        } catch (e) {
-            console.error(e);
+        } catch (error: any) {
+            console.error("🔥 FIRESTORE ERROR COMPLETO:", error);
+            console.error("🔗 MENSAJE (Busca el link aquí):", error.message);
             toast.error("Error cargando evaluaciones");
         } finally {
             setLoading(false);

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
 import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
 import { PRESET_BOSSES } from '../../data/bossPresets';
 import { StudentLogin } from '../student/StudentLogin';
@@ -133,18 +133,15 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     useEffect(() => {
         const init = async () => {
             try {
-                // 1. DETERMINE SOURCE & CAST TYPE STRICTLY
                 let rawQuestions: Question[] = [];
                 let settings: BossSettings | null = null;
                 let evalData: Evaluation | null = null;
 
                 if (previewConfig) {
-                    // MODO PREVIEW
                     settings = previewConfig.bossConfig;
                     rawQuestions = (previewConfig.quiz.questions || []) as Question[];
                     evalData = { title: "MODO PREVIEW", ...previewConfig.quiz } as any;
                 } else if (evaluationId) {
-                    // MODO LIVE
                     const data = await getEvaluation(evaluationId);
                     if (!data) throw new Error("Evaluación no encontrada");
                     
@@ -155,20 +152,16 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
                 if (!settings) throw new Error("Configuración de Jefe no válida");
 
-                // 2. SETUP STATE
                 setEvaluation(evalData);
                 setBossConfig(settings);
                 setBossHP({ current: settings.health.bossHP, max: settings.health.bossHP });
                 setPlayerHP({ current: settings.health.playerHP, max: settings.health.playerHP });
                 
-                // 3. PREPARE QUESTIONS (SHUFFLE)
                 const limitCount = evalData?.config.questionCount || 10;
                 const shuffled = shuffleArray(rawQuestions).slice(0, limitCount);
                 
                 const prepared = shuffled.map(q => ({
                     ...q,
-                    // Don't shuffle options for True/False or Order to keep logical flow if needed, 
-                    // though for Order we shuffle in state 'orderedOptions' initially.
                     options: (q.questionType !== QUESTION_TYPES.TRUE_FALSE && q.questionType !== QUESTION_TYPES.ORDER) 
                         ? shuffleArray(q.options) 
                         : q.options
@@ -191,7 +184,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         if ((gameState === 'PLAYING' || gameState === 'FINISH_IT') && combatState === 'IDLE' && timeLeft > 0) {
             timerRef.current = setInterval(() => {
                 setTimeLeft(prev => {
-                    if (prev <= 1) { handleAttack(true); return 0; } // Auto-submit on time up
+                    if (prev <= 1) { handleAttack(true); return 0; } 
                     return prev - 1;
                 });
             }, 1000);
@@ -199,7 +192,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         return () => clearInterval(timerRef.current);
     }, [gameState, combatState, timeLeft]);
 
-    // --- GAME ACTIONS ---
+    // ... (Game Actions methods unchanged) ...
     const handleStart = (name: string) => {
         setNickname(name);
         setGameState('ROULETTE');
@@ -238,26 +231,22 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         }
     };
 
-    // --- BATTLE LOGIC ---
     const handleAttack = (isTimeout = false) => {
         clearInterval(timerRef.current);
         const currentQ = gameState === 'FINISH_IT' ? retryQueue[currentQIndex] : playableQuestions[currentQIndex];
         let isRight = false;
 
-        // Validation Logic
         if (isTimeout) {
             isRight = false;
         } else {
             const correctIds = currentQ.correctOptionIds || (currentQ.correctOptionId ? [currentQ.correctOptionId] : []);
             
             if (currentQ.questionType === QUESTION_TYPES.FILL_GAP || currentQ.questionType === 'Short Answer') {
-                // Short Answer Validation
                 const validAnswers = currentQ.options.map(o => o.text.trim().toLowerCase());
                 const playerText = textInput.trim().toLowerCase();
                 isRight = validAnswers.includes(playerText);
             } 
             else if (currentQ.questionType === QUESTION_TYPES.MULTI_SELECT) {
-                // Multi Select: Must match ALL correct IDs exactly
                 const selectedSet = new Set(selectedOptionIds);
                 const correctSet = new Set(correctIds);
                 if (selectedSet.size === correctSet.size) {
@@ -265,11 +254,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 }
             } 
             else if (currentQ.questionType === QUESTION_TYPES.ORDER) {
-                // Order: Compare IDs in order against original (assumed correct order in data)
                 isRight = orderedOptions.every((opt, idx) => opt.id === currentQ.options[idx].id); 
             }
             else {
-                // Single Choice / TF
                 isRight = correctIds.includes(selectedOptionIds[0]);
             }
         }
@@ -364,13 +351,12 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
     const checkWinConditionOrNext = (lastWasCorrect: boolean) => {
         if (playerHP.current <= 0) {
-            setCombatState('DEFEAT'); // Boss Wins logic here (Image update)
+            setCombatState('DEFEAT'); 
             playSFX('gameover');
             setTimeout(() => finishGame('LOSE'), 1500);
             return;
         }
         if (bossHP.current <= 0) {
-            // Boss Defeated Logic
             const hasPending = retryQueue.length > 0 || incorrectQuestions.length > 0;
             if (!hasPending || gameState === 'FINISH_IT') {
                 setCombatState('VICTORY');
@@ -383,7 +369,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             return;
         }
 
-        // Next Question
         if (gameState === 'FINISH_IT') {
             if (!lastWasCorrect) {
                 setCombatState('REVIVE');
@@ -436,17 +421,15 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         else if (potion === 'fuerzatemp') setPlayerStatus(p => [...p, {type: 'fuerzatemp', turns: 1}]);
     };
 
-    // --- HELPER: GET CURRENT BOSS IMAGE ---
     const getBossImage = () => {
-        if (combatState === 'VICTORY') return bossConfig?.images.defeat; // Boss loses -> Defeat img
-        if (combatState === 'DEFEAT') return bossConfig?.images.win;     // Boss wins -> Win img (Laughing)
+        if (combatState === 'VICTORY') return bossConfig?.images.defeat; 
+        if (combatState === 'DEFEAT') return bossConfig?.images.win;     
         if (combatState === 'PLAYER_ATTACK') return bossConfig?.images.damage || bossConfig?.images.idle;
         return bossConfig?.images.idle;
     };
 
-    // --- HELPER: RENDER INPUT ---
+    // ... (renderInputArea unchanged) ...
     const renderInputArea = (q: Question) => {
-        // 1. TEXT INPUT (Short Answer)
         if (q.questionType === QUESTION_TYPES.FILL_GAP || q.questionType === 'Short Answer') {
             return (
                 <div className="w-full">
@@ -462,8 +445,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 </div>
             );
         }
-
-        // 2. ORDERING
         if (q.questionType === QUESTION_TYPES.ORDER) {
             const moveItem = (fromIdx: number, toIdx: number) => {
                 const list = [...orderedOptions];
@@ -486,8 +467,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 </div>
             );
         }
-
-        // 3. MULTIPLE CHOICE / MULTI SELECT
         const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
@@ -519,11 +498,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         );
     };
 
-    // --- RENDERS ---
     if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-cyan-500"><Loader2 className="animate-spin w-12 h-12" /></div>;
     if (error) return <div className="min-h-screen bg-black flex items-center justify-center text-red-500"><AlertTriangle className="w-12 h-12 mb-4" /> {error}</div>;
 
-    // ROULETTE
     if (gameState === 'ROULETTE') {
         const items = Object.values(PASSIVES);
         const RouletteInner = () => {
@@ -544,12 +521,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         return <RouletteInner />;
     }
 
-    // LOBBY (Login)
     if (gameState === 'LOBBY') {
         return <StudentLogin bossConfig={bossConfig!} quizTitle={evaluation?.title || "Quiz"} onJoin={handleStart} />;
     }
 
-    // STATS / GAME OVER
     if (gameState === 'STATS') {
         return (
             <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6">
@@ -559,7 +534,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                         <h2 className={`text-5xl font-black font-cyber mb-2 ${combatState === 'VICTORY' ? 'text-green-400' : 'text-red-500'}`}>{combatState === 'VICTORY' ? "MISIÓN CUMPLIDA" : "GAME OVER"}</h2>
                         <p className="text-gray-400 font-mono italic">"{combatState === 'VICTORY' ? bossConfig?.messages.playerWins : bossConfig?.messages.bossWins}"</p>
                     </div>
-                    {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-4 mb-8">
                         <div className="bg-black/40 p-4 rounded border border-gray-700"><div className="text-xs text-gray-500 uppercase">Daño Total</div><div className="text-2xl font-mono text-white">{battleStats.totalDamage}</div></div>
                         <div className="bg-black/40 p-4 rounded border border-gray-700"><div className="text-xs text-gray-500 uppercase">Golpe Crítico</div><div className="text-2xl font-mono text-yellow-400">{battleStats.maxCrit}</div></div>
@@ -649,8 +623,24 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                     )}
 
                     {currentQ.imageUrl && (
-                        <div className="flex justify-center mb-4">
-                            <img src={currentQ.imageUrl} className="max-h-32 object-contain rounded border border-gray-600" />
+                        <div className="flex justify-center mb-4 relative group">
+                            <img 
+                                src={currentQ.imageUrl} 
+                                crossOrigin="anonymous" 
+                                className="max-h-32 object-contain rounded border border-gray-700 bg-black/50" 
+                            />
+                            {/* --- ATTRIBUTION OVERLAY --- */}
+                            {currentQ.imageCredit && (
+                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-max max-w-full bg-black/90 text-[9px] text-gray-300 px-2 py-1 rounded-b border border-gray-800 backdrop-blur-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">
+                                    📷 Foto por 
+                                    <a href={currentQ.imageCredit.link} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-white underline font-bold truncate">
+                                        {currentQ.imageCredit.name}
+                                    </a> 
+                                    en 
+                                    <span className="text-white font-bold">{currentQ.imageCredit.source}</span>
+                                    <ExternalLink className="w-2 h-2 ml-1 opacity-50" />
+                                </div>
+                            )}
                         </div>
                     )}
 
