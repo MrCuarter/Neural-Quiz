@@ -1,13 +1,13 @@
-
 // data/bossPresets.ts
 
-export const ASSETS_BASE = "https://assets.mistercuarter.es";
+// CONFIGURACIÓN CDN GITHUB RAW
+export const ASSETS_BASE = "https://raw.githubusercontent.com/MrCuarter/neuralquiz-assets/main";
 
 export interface DifficultyStats {
     hpMult: number;
     dmgMult: number;
     dodgeChance: number; // 0.0 - 1.0
-    potionChance: number; // 0.0 - 1.0 (Probabilidad de que el boss se cure/use items)
+    potionChance: number; // 0.0 - 1.0
 }
 
 export const DIFFICULTY_SETTINGS: Record<string, DifficultyStats> = {
@@ -27,8 +27,8 @@ export interface BossImageConfig {
 
 export interface BossSettings {
     bossName: string;
-    imageId: string; // ID limpio para construir URLs (ej: "kryon")
-    images: BossImageConfig; // Legacy/Fallback objects
+    imageId: string; 
+    images: BossImageConfig;
     health: {
         bossHP: number;
         playerHP: number;

@@ -1,4 +1,3 @@
-
 import { getSafeImageUrl } from "./imageProxyService";
 
 // Helper to safely get environment variables
@@ -27,8 +26,8 @@ const KEYS = {
     PIXABAY: getEnv("VITE_PIXABAY_API_KEY")
 };
 
-// --- SECURE ASSETS CONFIG ---
-const FALLBACK_BASE_URL = 'https://assets.mistercuarter.es/images/';
+// --- SECURE ASSETS CONFIG (GITHUB RAW) ---
+const FALLBACK_BASE_URL = 'https://raw.githubusercontent.com/MrCuarter/neuralquiz-assets/main/images/';
 const FALLBACK_FILES = [
   'hombrepensando4.png',
   'mujerpensando.png',
@@ -73,7 +72,7 @@ export const triggerDownload = async (downloadLocation?: string | null) => {
     }
 };
 
-// --- FALLBACK GENERATOR ---
+// --- FALLBACK GENERATOR (DIRECT GITHUB LINK) ---
 const getRandomFallback = (): ImageResult => {
     const filename = FALLBACK_FILES[Math.floor(Math.random() * FALLBACK_FILES.length)];
     const finalUrl = `${FALLBACK_BASE_URL}${filename}`;
@@ -104,7 +103,7 @@ const fetchUnsplash = async (query: string): Promise<ImageResult> => {
 
     const photo = data.results[0];
     return {
-        url: photo.urls.regular, // Hotlinking allowed by Unsplash
+        url: photo.urls.regular, 
         alt: photo.alt_description || query,
         attribution: {
             sourceName: 'Unsplash',
@@ -183,7 +182,7 @@ export const searchStockImages = async (query: string): Promise<ImageResult[]> =
 // --- ROBUST WATERFALL SEARCH (For AI) ---
 
 /**
- * STRICT PRIORITY: Unsplash -> Pexels -> Pixabay -> Secure Fallback (CDN)
+ * STRICT PRIORITY: Unsplash -> Pexels -> Pixabay -> Secure GitHub Fallback
  */
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult> => {
     const query = rawQuery ? rawQuery.trim() : "";
@@ -201,7 +200,6 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
         }
         return result;
     } catch (e) {
-        console.error('❌ Falló Unsplash. Motivo:', e);
         // Silent fail, try next
     }
 
@@ -209,7 +207,6 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
     try {
         return await fetchPexels(query);
     } catch (e) {
-        console.error('❌ Falló Pexels. Motivo:', e);
         // Silent fail, try next
     }
 
@@ -217,12 +214,10 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
     try {
         return await fetchPixabay(query);
     } catch (e) {
-        console.error('❌ Falló Pixabay. Motivo:', e);
         // Silent fail, go to fallback
     }
 
-    // 4. Fallback (Secure CDN)
-    console.warn('⚠️ Todas las APIs fallaron. Cambiando a CDN local.');
-    console.warn(`[ImageService] 🏳️ All providers failed for "${query}". Using Secure Fallback.`);
+    // 4. Fallback (Secure GitHub CDN)
+    console.warn(`[ImageService] 🏳️ All providers failed for "${query}". Using GitHub Fallback.`);
     return getRandomFallback();
 };

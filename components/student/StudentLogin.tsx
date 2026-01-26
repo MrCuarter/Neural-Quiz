@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { BossSettings } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';

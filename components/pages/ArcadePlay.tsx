@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
 import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
@@ -20,6 +19,7 @@ interface ItemData { id: string; name: string; description: string; image: strin
 interface StatusEffect { type: PotionType; turns: number; }
 interface BattleStats { totalDamage: number; maxCrit: number; dodges: number; potionsUsed: number; potionsStolen: number; correctAnswers: number; totalAnswers: number; }
 
+// USING NEW GITHUB RAW URLS DIRECTLY
 const PASSIVES: Record<PassiveType, ItemData> = {
     agil: { id: 'agil', name: 'Reflejos Felinos', description: '20% Evasión.', image: `${ASSETS_BASE}/elements/agil.png` },
     answer: { id: 'answer', name: 'Visión Cuántica', description: '50/50 en opciones.', image: `${ASSETS_BASE}/elements/answer.png` },
@@ -105,6 +105,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     // --- AUDIO SYSTEM ---
     const playBGM = (trackName: string) => {
         if (bgmRef.current) { bgmRef.current.pause(); bgmRef.current = null; }
+        // DIRECT GITHUB RAW URL
         const audio = new Audio(`${ASSETS_BASE}/sounds/${trackName}.mp3`);
         audio.loop = true; audio.volume = 0.3; bgmRef.current = audio;
         audio.play().catch(() => {});
@@ -144,7 +145,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 if (previewConfig) {
                     settings = previewConfig.bossConfig;
                     rawQuestions = (previewConfig.quiz.questions || []) as Question[];
-                    // Merge extra config for preview if passed (e.g. showCorrectAnswer)
                     const baseConfig = previewConfig.evaluationConfig || {};
                     evalData = { 
                         title: "MODO PREVIEW", 
@@ -162,7 +162,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
                 if (!settings) throw new Error("Configuración de Jefe no válida");
 
-                // APPLY DIFFICULTY STATS
                 const diffKey = settings.difficulty || 'medium';
                 const diffStats = DIFFICULTY_SETTINGS[diffKey] || DIFFICULTY_SETTINGS['medium'];
                 setDifficultyStats(diffStats);
@@ -170,7 +169,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 setEvaluation(evalData);
                 setBossConfig(settings);
                 
-                // Initialize HP with multipliers
                 const initialBossHP = Math.round(settings.health.bossHP * diffStats.hpMult);
                 setBossHP({ current: initialBossHP, max: initialBossHP });
                 setPlayerHP({ current: settings.health.playerHP, max: settings.health.playerHP });
@@ -180,7 +178,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 
                 const prepared = shuffled.map(q => ({
                     ...q,
-                    text: cleanQuestionText(q.text), // Cleanup Text
+                    text: cleanQuestionText(q.text),
                     options: (q.questionType !== QUESTION_TYPES.TRUE_FALSE && q.questionType !== QUESTION_TYPES.ORDER) 
                         ? shuffleArray(q.options) 
                         : q.options
@@ -211,7 +209,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         return () => clearInterval(timerRef.current);
     }, [gameState, combatState, timeLeft]);
 
-    // ... (Game Actions methods unchanged) ...
     const handleStart = (name: string) => {
         setNickname(name);
         setGameState('ROULETTE');
@@ -241,11 +238,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setLootDrop(null);
         setCombatLog(null);
         
-        // Reset Inputs
         setSelectedOptionIds([]);
         setTextInput("");
         if (q.questionType === QUESTION_TYPES.ORDER) {
-            // CAST options to ensure types match
             setOrderedOptions(shuffleArray([...q.options] as Option[]));
         }
     };
@@ -294,14 +289,11 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setBossStatus(p => p.map(s => ({...s, turns: s.turns-1})).filter(s => s.turns > 0));
 
         if (correct) {
-            // DIFFICULTY: Boss can dodge
             const bossDodgeRoll = Math.random();
             if (bossDodgeRoll < difficultyStats.dodgeChance) {
                 setCombatLog("¡EL JEFE ESQUIVÓ TU ATAQUE!");
                 playSFX('miss');
-                setStreak(0); // Optional: reset streak on dodge? Keep it for fairness.
-                // Boss attacks anyway because turn passed? No, usually player turn wasted.
-                // Let's make boss attack after dodge to be punishing in Legend
+                setStreak(0); 
                 setTimeout(() => processPlayerMiss(q), 1000);
             } else {
                 processPlayerAttack();
@@ -360,7 +352,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             return;
         }
 
-        // DIFFICULTY: Damage Multiplier
         let damage = Math.ceil(playerHP.max * 0.2 * difficultyStats.dmgMult);
         
         if (passiveEffect === 'escudo') damage = Math.ceil(damage * 0.85);
@@ -371,7 +362,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setTimeout(() => { playSFX('hit'); setShakeScreen(true); }, 200);
         setTimeout(() => setShakeScreen(false), 500);
 
-        // DIFFICULTY: Boss Potion Logic
         if (Math.random() < difficultyStats.potionChance && bossHP.current < bossHP.max * 0.5) {
              const heal = Math.ceil(bossHP.max * 0.1);
              setTimeout(() => {
@@ -392,7 +382,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     };
 
     const checkWinConditionOrNext = (lastWasCorrect: boolean) => {
-        // Immediate Game Over check
         if (playerHP.current <= 0) {
             setCombatState('DEFEAT'); 
             playSFX('gameover');
@@ -465,20 +454,19 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     };
 
     const getBossImage = () => {
-        // Construct Dynamic URL using Image ID from config
         const imgId = bossConfig?.imageId || "kryon";
         let suffix = "";
         
         if (combatState === 'VICTORY') suffix = "lose";
         else if (combatState === 'DEFEAT') suffix = "win";
-        else if (combatState === 'PLAYER_ATTACK') return `${ASSETS_BASE}/finalboss/${imgId}.png`; // Usually same or damage variant
+        else if (combatState === 'PLAYER_ATTACK') return `${ASSETS_BASE}/finalboss/${imgId}.png`; 
         else suffix = "";
 
         const filename = suffix ? `${imgId}${suffix}.png` : `${imgId}.png`;
         return `${ASSETS_BASE}/finalboss/${filename}`;
     };
 
-    // ... (renderInputArea unchanged) ...
+    // ... (renderInputArea) ...
     const renderInputArea = (q: Question) => {
         if (q.questionType === QUESTION_TYPES.FILL_GAP || q.questionType === 'Short Answer') {
             return (
@@ -563,7 +551,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             return (
                 <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
                     <h2 className="text-3xl font-cyber text-purple-400 mb-8 animate-pulse">SISTEMA RPG INICIANDO...</h2>
-                    <img src={items[idx].image} className="w-40 h-40 object-contain border-4 border-purple-500 rounded-xl p-4 bg-gray-900 shadow-[0_0_50px_purple]" />
+                    <img src={items[idx].image} crossOrigin="anonymous" className="w-40 h-40 object-contain border-4 border-purple-500 rounded-xl p-4 bg-gray-900 shadow-[0_0_50px_purple]" />
                     <p className="mt-6 text-xl text-white font-mono">{items[idx].name}</p>
                 </div>
             );
@@ -600,7 +588,6 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const currentQ = gameState === 'FINISH_IT' ? retryQueue[currentQIndex] : playableQuestions[currentQIndex];
     if (!currentQ) return null;
 
-    // Check Config for Correct Answer Feedback
     // @ts-ignore
     const showCorrectAnswer = evaluation?.config?.showCorrectAnswer ?? true;
 
@@ -619,7 +606,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                         <span className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold text-white/80">{bossHP.current}/{bossHP.max}</span>
                     </div>
                     <div className="flex gap-1 mt-1">
-                        {bossStatus.map((s, i) => <img key={i} src={POTIONS[s.type].image} className="w-6 h-6 border border-red-500 rounded bg-black" title={s.type}/>)}
+                        {bossStatus.map((s, i) => <img key={i} src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-6 h-6 border border-red-500 rounded bg-black" title={s.type}/>)}
                     </div>
                 </div>
                 <div className="flex flex-col items-end">
@@ -648,7 +635,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                     <div className="flex gap-2">
                         {playerInventory.map((item, idx) => (
                             <button key={idx} onClick={() => handleUsePotion(item, idx)} disabled={combatState !== 'IDLE'} className="w-12 h-12 bg-black/60 border border-gray-600 rounded hover:border-yellow-400 flex items-center justify-center relative group transition-all hover:scale-110">
-                                <img src={POTIONS[item].image} className="w-8 h-8" />
+                                <img src={POTIONS[item].image} crossOrigin="anonymous" className="w-8 h-8" />
                             </button>
                         ))}
                         {playerInventory.length < 5 && Array.from({length: 5 - playerInventory.length}).map((_, i) => (
@@ -657,7 +644,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                     </div>
                     <div className="flex flex-col items-end gap-1 w-1/3">
                         <div className="flex items-center gap-2">
-                            {passiveEffect && <img src={PASSIVES[passiveEffect].image} className="w-6 h-6 border border-purple-500 rounded-full bg-purple-900" />}
+                            {passiveEffect && <img src={PASSIVES[passiveEffect].image} crossOrigin="anonymous" className="w-6 h-6 border border-purple-500 rounded-full bg-purple-900" />}
                             <span className="font-cyber font-bold text-green-400">{nickname}</span>
                         </div>
                         <div className="w-full h-4 bg-gray-900 rounded border border-green-900 overflow-hidden relative">
@@ -671,7 +658,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 <div className="max-w-4xl mx-auto w-full bg-black/80 backdrop-blur-md border border-gray-700 p-6 rounded-xl shadow-2xl relative pointer-events-auto">
                     {lootDrop && (
                         <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-yellow-500/20 border border-yellow-400 p-4 rounded-full animate-bounce flex items-center gap-2">
-                            <img src={POTIONS[lootDrop].image} className="w-8 h-8" />
+                            <img src={POTIONS[lootDrop].image} crossOrigin="anonymous" className="w-8 h-8" />
                             <span className="text-yellow-300 font-bold">¡LOOT!</span>
                         </div>
                     )}
