@@ -4,9 +4,10 @@ import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
 import { createEvaluation, auth } from '../../services/firebaseService';
 import { signInAnonymously } from 'firebase/auth';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Skull, Heart, Sword, Edit3, Image as ImageIcon } from 'lucide-react';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Copy, Check, ExternalLink, Shield, AlertCircle, Skull, Heart, Sword, Edit3, Image as ImageIcon, Calculator, Play } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES } from '../../data/bossPresets';
+import { ArcadePlay } from '../pages/ArcadePlay';
 
 interface CreateEvaluationModalProps {
     isOpen: boolean;
@@ -20,6 +21,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [isLoading, setIsLoading] = useState(false);
     const [createdUrl, setCreatedUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [isPreviewMode, setIsPreviewMode] = useState(false);
 
     // Form State
     const [title, setTitle] = useState("");
@@ -39,11 +41,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [bossHP, setBossHP] = useState(1000);
     const [playerHP, setPlayerHP] = useState(100);
     
-    // Boss Images (Only used if Custom)
+    // Boss Images
     const [imgIdle, setImgIdle] = useState("");
     const [imgDamage, setImgDamage] = useState("");
     const [imgDefeat, setImgDefeat] = useState("");
     const [imgWin, setImgWin] = useState("");
+    const [imgBadge, setImgBadge] = useState("");
 
     // Boss Messages
     const [msgBossWin, setMsgBossWin] = useState("");
@@ -80,10 +83,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             setBossName("Mi Jefe Personalizado");
             setBossHP(1000);
             setPlayerHP(100);
-            setImgIdle("");
-            setImgDamage("");
-            setImgDefeat("");
-            setImgWin("");
+            setImgIdle(""); setImgBadge(""); setImgDamage(""); setImgDefeat(""); setImgWin("");
             setMsgBossWin("¡Has perdido!");
             setMsgPlayerWin("¡Has ganado!");
             setMsgPerfect("¡Victoria perfecta!");
@@ -95,6 +95,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                 setBossHP(p.health.bossHP);
                 setPlayerHP(p.health.playerHP);
                 setImgIdle(p.images.idle);
+                setImgBadge(p.images.badge || p.images.idle);
                 setImgDamage(p.images.damage || p.images.idle);
                 setImgDefeat(p.images.defeat);
                 setImgWin(p.images.win);
@@ -107,8 +108,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
     const handleCountChange = (val: number) => {
         setQuestionCount(val);
-        if (val > quiz.questions.length) setCountWarning(true);
-        else setCountWarning(false);
+        setCountWarning(val > quiz.questions.length);
     };
 
     const applyDifficultyPreset = (diff: 'easy' | 'medium' | 'hard' | 'legend') => {
@@ -119,6 +119,15 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             case 'hard': setBossHP(2000); setPlayerHP(50); break;
             case 'legend': setBossHP(5000); setPlayerHP(1); break;
         }
+    };
+
+    // Math HUD Helper
+    const calculateBalance = () => {
+        const avgPlayerDmg = 100; // Base damage
+        const avgBossDmg = Math.ceil(playerHP * 0.2); // 20% of max HP logic
+        const hitsToKillBoss = Math.ceil(bossHP / avgPlayerDmg);
+        const hitsToDie = Math.ceil(playerHP / avgBossDmg);
+        return { hitsToKillBoss, hitsToDie };
     };
 
     const handleSave = async () => {
@@ -146,7 +155,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                     bossName,
                     difficulty: bossDifficulty,
                     health: { bossHP, playerHP },
-                    images: { idle: imgIdle, damage: imgDamage, defeat: imgDefeat, win: imgWin },
+                    images: { idle: imgIdle, badge: imgBadge, damage: imgDamage, defeat: imgDefeat, win: imgWin },
                     messages: { bossWins: msgBossWin, playerWins: msgPlayerWin, perfectWin: msgPerfect },
                     mechanics: { enablePowerUps: powerUps, finishHimMove: finishHim }
                 };
@@ -199,6 +208,31 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     };
 
     if (!isOpen) return null;
+
+    if (isPreviewMode) {
+        // Construct a mock config for preview
+        const previewConfig = {
+            quiz: { ...quiz, questions: quiz.questions.slice(0, 10) },
+            bossConfig: {
+                bossName, difficulty: bossDifficulty, health: { bossHP, playerHP },
+                images: { idle: imgIdle, badge: imgBadge, damage: imgDamage, defeat: imgDefeat, win: imgWin },
+                messages: { bossWins: msgBossWin, playerWins: msgPlayerWin, perfectWin: msgPerfect },
+                mechanics: { enablePowerUps: powerUps, finishHimMove: finishHim }
+            }
+        };
+        
+        return (
+            <div className="fixed inset-0 z-[70] bg-black">
+                <ArcadePlay previewConfig={previewConfig as any} />
+                <button 
+                    onClick={() => setIsPreviewMode(false)} 
+                    className="fixed top-4 right-4 z-[80] bg-red-600 text-white px-4 py-2 rounded font-bold hover:bg-red-500"
+                >
+                    CERRAR PRUEBA
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
@@ -267,11 +301,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                     </div>
 
                                     <div className="md:col-span-3 space-y-4">
-                                        <div className="flex gap-4">
+                                        <div className="flex gap-4 items-end">
                                             <div className="flex-1">
                                                 <CyberInput type="number" label="CANTIDAD PREGUNTAS" value={questionCount} onChange={(e) => handleCountChange(parseInt(e.target.value))} min={1} />
                                                 {countWarning && <div className="flex items-center gap-1 text-[10px] text-yellow-500 mt-1"><AlertCircle className="w-3 h-3" /> Máximo disponible: {quiz.questions.length}</div>}
                                             </div>
+                                            <button onClick={() => handleCountChange(quiz.questions.length)} className="h-10 px-3 bg-gray-800 border border-gray-600 rounded text-xs hover:bg-gray-700">SET COMPLETO</button>
                                             {gameMode === 'time_attack' && (
                                                 <div className="flex-1 animate-in slide-in-from-left-2">
                                                     <CyberInput type="number" label="TIEMPO TOTAL (SEG)" value={timeLimit} onChange={(e) => setTimeLimit(parseInt(e.target.value))} min={30} />
@@ -300,7 +335,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                                         className={`relative p-2 rounded border-2 transition-all flex flex-col items-center gap-2 group overflow-hidden ${selectedPreset === key ? 'border-red-500 bg-red-900/40' : 'border-gray-700 bg-black/40 hover:border-gray-500'}`}
                                                     >
                                                         <div className="w-12 h-12 rounded-full border border-gray-600 overflow-hidden bg-black">
-                                                            <img src={boss.images.idle} className="w-full h-full object-cover" alt={boss.bossName} />
+                                                            {/* USE BADGE IMAGE INSTEAD OF IDLE FOR SELECTOR */}
+                                                            <img src={boss.images.badge || boss.images.idle} className="w-full h-full object-cover" alt={boss.bossName} />
                                                         </div>
                                                         <span className={`text-[10px] font-bold font-cyber text-center ${selectedPreset === key ? 'text-red-300' : 'text-gray-400'}`}>{boss.bossName}</span>
                                                         {selectedPreset === key && <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>}
@@ -366,15 +402,27 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                             </div>
                                         )}
 
-                                        {/* Health Stats */}
-                                        <div className="grid grid-cols-2 gap-4 bg-black/20 p-2 rounded">
-                                            <div className="flex flex-col gap-1">
+                                        {/* Health Stats & Math HUD */}
+                                        <div className="grid grid-cols-2 gap-4 bg-black/20 p-2 rounded relative overflow-hidden">
+                                            <div className="flex flex-col gap-1 relative z-10">
                                                 <label className="text-[10px] font-mono text-red-400 uppercase flex items-center gap-1"><Shield className="w-3 h-3"/> VIDA JEFE</label>
                                                 <input type="number" value={bossHP} onChange={(e) => setBossHP(parseInt(e.target.value))} className="bg-transparent border-b border-red-500 text-2xl font-black text-white w-full focus:outline-none text-center" />
                                             </div>
-                                            <div className="flex flex-col gap-1">
+                                            <div className="flex flex-col gap-1 relative z-10">
                                                 <label className="text-[10px] font-mono text-green-400 uppercase flex items-center gap-1"><Heart className="w-3 h-3"/> VIDA JUGADOR</label>
                                                 <input type="number" value={playerHP} onChange={(e) => setPlayerHP(parseInt(e.target.value))} className="bg-transparent border-b border-green-500 text-2xl font-black text-white w-full focus:outline-none text-center" />
+                                            </div>
+                                            
+                                            {/* MATH HUD */}
+                                            <div className="col-span-2 mt-2 pt-2 border-t border-gray-800 text-[10px] font-mono text-gray-400 flex justify-between items-center bg-gray-900/50 p-2 rounded">
+                                                <div className="flex items-center gap-1 text-green-300">
+                                                    <Calculator className="w-3 h-3" />
+                                                    <span>Para ganar: Aprox. <strong>{calculateBalance().hitsToKillBoss}</strong> aciertos.</span>
+                                                </div>
+                                                <div className="flex items-center gap-1 text-red-300">
+                                                    <Skull className="w-3 h-3" />
+                                                    <span>Mueres si fallas: Aprox. <strong>{calculateBalance().hitsToDie}</strong> veces.</span>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -386,6 +434,16 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                         </div>
 
                                         <CyberCheckbox label="ACTIVAR GOLPE DE GRACIA (Repasar fallos al final)" checked={finishHim} onChange={setFinishHim} warning={finishHim} />
+                                        
+                                        {/* TEST BATTLE BUTTON */}
+                                        <div className="pt-2">
+                                            <button 
+                                                onClick={() => setIsPreviewMode(true)}
+                                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 text-white font-bold py-3 rounded shadow-lg hover:shadow-red-500/30 transition-all transform hover:scale-[1.02]"
+                                            >
+                                                <Sword className="w-5 h-5" /> ⚔️ PROBAR BATALLA
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 

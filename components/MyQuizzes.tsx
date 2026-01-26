@@ -2,10 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { Quiz } from '../types';
 import { getUserQuizzes, deleteQuizFromFirestore, saveQuizToFirestore } from '../services/firebaseService';
-import { CyberButton, CyberCard, CyberInput, CyberSelect, CyberCheckbox } from './ui/CyberUI';
-import { ArrowLeft, Edit, Trash2, Calendar, Hash, Search, Filter, Loader2, Sparkles, Merge, CheckSquare, Rocket } from 'lucide-react';
+import { CyberButton, CyberCard, CyberInput, CyberSelect } from './ui/CyberUI';
+import { ArrowLeft, Edit, Trash2, Calendar, Hash, Search, Filter, Loader2, Sparkles, Merge, CheckSquare, Rocket, BarChart2 } from 'lucide-react';
 import { useToast } from './ui/Toast';
-import { CreateEvaluationModal } from './evaluations/CreateEvaluationModal'; // NEW IMPORT
+import { CreateEvaluationModal } from './evaluations/CreateEvaluationModal';
+import { EvaluationsDashboard } from './evaluations/EvaluationsDashboard';
 
 interface MyQuizzesProps {
     user: any;
@@ -25,6 +26,7 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
     // Evaluation State
     const [showEvalModal, setShowEvalModal] = useState(false);
     const [evalTargetQuiz, setEvalTargetQuiz] = useState<Quiz | null>(null);
+    const [showDashboard, setShowDashboard] = useState(false);
 
     const toast = useToast();
 
@@ -131,6 +133,10 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
         return 0;
     });
 
+    if (showDashboard) {
+        return <EvaluationsDashboard onClose={() => setShowDashboard(false)} />;
+    }
+
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 w-full pb-20 pt-8">
             
@@ -150,10 +156,13 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
                     </CyberButton>
                     <h2 className="text-3xl font-cyber text-cyan-400">MIS QUIZES</h2>
                 </div>
-                <div>
+                <div className="flex gap-2">
+                    <CyberButton onClick={() => setShowDashboard(true)} variant="neural" className="text-xs h-9">
+                        <BarChart2 className="w-4 h-4 mr-2" /> GESTIONAR EXÁMENES
+                    </CyberButton>
                     {!mergeMode ? (
                         <CyberButton onClick={() => setMergeMode(true)} variant="secondary" className="text-xs h-9">
-                            <Merge className="w-4 h-4 mr-2" /> FUSIONAR QUIZZES
+                            <Merge className="w-4 h-4 mr-2" /> FUSIONAR
                         </CyberButton>
                     ) : (
                         <div className="flex gap-2">
@@ -267,7 +276,6 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
                                             </div>
                                             {!mergeMode && (
                                                 <div className="flex gap-2">
-                                                    {/* NEW LAUNCH BUTTON */}
                                                     <button
                                                         onClick={(e) => handleLaunchEvaluation(quiz, e)}
                                                         className="text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 px-2 py-1 rounded flex items-center gap-1 transition-all shadow-lg hover:shadow-green-500/20"

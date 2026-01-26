@@ -80,6 +80,7 @@ export interface BossImageConfig {
     damage?: string; // Taking damage (optional)
     defeat: string; // Boss HP 0
     win: string;    // Player HP 0
+    badge?: string; // Boss Avatar for selection/intro
 }
 
 export interface BossSettings {
