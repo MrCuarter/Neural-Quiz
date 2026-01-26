@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
 import { createEvaluation, auth } from '../../services/firebaseService';
@@ -51,7 +50,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [speedPoints, setSpeedPoints] = useState(true);
     const [powerUps, setPowerUps] = useState(false);
     const [showRanking, setShowRanking] = useState(true);
-    const [showCorrectAnswer, setShowCorrectAnswer] = useState(true); // NEW
+    const [showCorrectAnswer, setShowCorrectAnswer] = useState(true);
 
     const [msgHigh, setMsgHigh] = useState("¡Impresionante! Eres un maestro.");
     const [msgMed, setMsgMed] = useState("¡Buen trabajo! Vas por buen camino.");
@@ -102,15 +101,6 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         setCountWarning(val > quiz.questions.length);
     };
 
-    // Calculate hit points based on difficulty multipliers logic (visual only here, logic is in ArcadePlay)
-    const calculateBalance = () => {
-        const avgPlayerDmg = 100; 
-        const avgBossDmg = Math.ceil(playerHP * 0.2); 
-        const hitsToKillBoss = Math.ceil(bossHP / avgPlayerDmg);
-        const hitsToDie = Math.ceil(playerHP / avgBossDmg);
-        return { hitsToKillBoss, hitsToDie };
-    };
-
     const buildBossConfig = (): BossSettings | undefined => {
         if (gameMode !== 'final_boss') return undefined;
         return {
@@ -118,7 +108,6 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             imageId: imageId,
             difficulty: bossDifficulty,
             health: { bossHP, playerHP },
-            // Legacy image object for backward compatibility or immediate preview
             images: { 
                 idle: `https://assets.mistercuarter.es/finalboss/${imageId}.png`,
                 badge: `https://assets.mistercuarter.es/finalboss/${imageId}badge.png`,
@@ -205,12 +194,10 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     if (!isOpen) return null;
 
     if (isPreviewMode) {
-        // Construct a mock config for preview
         const bossSettings = buildBossConfig();
         const previewConfig = {
             quiz: { ...quiz, questions: quiz.questions.slice(0, 10) },
             bossConfig: bossSettings,
-            // Inject showCorrectAnswer into config context if supported by Play
             evaluationConfig: { showCorrectAnswer } 
         };
         
@@ -325,7 +312,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                                         onClick={() => handleSelectPreset(key)}
                                                         className={`relative p-2 rounded border-2 transition-all flex flex-col items-center gap-2 group overflow-hidden ${selectedPreset === key ? 'border-red-500 bg-red-900/40' : 'border-gray-700 bg-black/40 hover:border-gray-500'}`}
                                                     >
-                                                        <div className="w-12 h-12 rounded-full border border-gray-600 overflow-hidden bg-black">
+                                                        <div className="w-24 h-24 rounded-full border border-gray-600 overflow-hidden bg-black">
                                                             <img 
                                                                 src={`https://assets.mistercuarter.es/finalboss/${boss.imageId}badge.png`}
                                                                 className="w-full h-full object-cover" 
@@ -404,7 +391,6 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                             </div>
                         </>
                     ) : (
-                        // SUCCESS STATE
                         <div className="flex flex-col items-center justify-center py-8 space-y-6 text-center animate-in zoom-in-95 duration-500">
                             <div className="p-4 bg-green-500/20 rounded-full border border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)] animate-bounce">
                                 <Rocket className="w-12 h-12 text-green-400" />
@@ -453,7 +439,6 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
                 </div>
 
-                {/* Footer Actions */}
                 {!createdUrl && (
                     <div className="mt-4 pt-4 border-t border-gray-800 flex justify-end gap-3 shrink-0">
                         <CyberButton variant="ghost" onClick={onClose} disabled={isLoading}>CANCELAR</CyberButton>

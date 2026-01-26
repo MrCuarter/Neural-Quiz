@@ -201,7 +201,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         if ((gameState === 'PLAYING' || gameState === 'FINISH_IT') && combatState === 'IDLE' && timeLeft > 0) {
             timerRef.current = setInterval(() => {
                 setTimeLeft(prev => {
-                    if (prev <= 1) { handleAttack(true); return 0; } 
+                    if (prev <= 1) { handleAttack(undefined, true); return 0; } 
                     return prev - 1;
                 });
             }, 1000);
@@ -245,7 +245,8 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         }
     };
 
-    const handleAttack = (isTimeout = false) => {
+    // Modified to support direct click attack for single choice
+    const handleAttack = (immediateOptionId?: string, isTimeout = false) => {
         clearInterval(timerRef.current);
         const currentQ = gameState === 'FINISH_IT' ? retryQueue[currentQIndex] : playableQuestions[currentQIndex];
         let isRight = false;
@@ -271,7 +272,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 isRight = orderedOptions.every((opt, idx) => opt.id === currentQ.options[idx].id); 
             }
             else {
-                isRight = correctIds.includes(selectedOptionIds[0]);
+                // Single Choice / True False logic
+                // If immediateOptionId passed, use it. Otherwise use state.
+                const answerId = immediateOptionId || selectedOptionIds[0];
+                isRight = correctIds.includes(answerId);
             }
         }
 
@@ -382,12 +386,14 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     };
 
     const checkWinConditionOrNext = (lastWasCorrect: boolean) => {
+        // Updated Logic: Check HP immediately
         if (playerHP.current <= 0) {
             setCombatState('DEFEAT'); 
             playSFX('gameover');
             setTimeout(() => finishGame('LOSE'), 1500);
             return;
         }
+        
         if (bossHP.current <= 0) {
             const hasPending = retryQueue.length > 0 || incorrectQuestions.length > 0;
             if (!hasPending || gameState === 'FINISH_IT') {
@@ -457,10 +463,13 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         const imgId = bossConfig?.imageId || "kryon";
         let suffix = "";
         
+        // Correct Logic:
+        // VICTORY (Player Wins) -> Boss Lose Image
+        // DEFEAT (Player Loses) -> Boss Win Image
         if (combatState === 'VICTORY') suffix = "lose";
         else if (combatState === 'DEFEAT') suffix = "win";
         else if (combatState === 'PLAYER_ATTACK') return `${ASSETS_BASE}/finalboss/${imgId}.png`; 
-        else suffix = "";
+        else suffix = ""; // Idle
 
         const filename = suffix ? `${imgId}${suffix}.png` : `${imgId}.png`;
         return `${ASSETS_BASE}/finalboss/${filename}`;
@@ -505,7 +514,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 </div>
             );
         }
+        
         const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
+        
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                 {q.options.map((opt, i) => {
@@ -515,9 +526,11 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                             key={opt.id} 
                             onClick={() => {
                                 if (isMulti) {
+                                    // Toggle logic for Multi Select
                                     setSelectedOptionIds(prev => prev.includes(opt.id) ? prev.filter(id => id !== opt.id) : [...prev, opt.id]);
                                 } else {
-                                    setSelectedOptionIds([opt.id]);
+                                    // IMMEDIATE ATTACK for Single Select / TrueFalse
+                                    handleAttack(opt.id);
                                 }
                             }}
                             className={`p-4 rounded-lg border-2 text-left transition-all flex items-center gap-3 relative overflow-hidden group
@@ -528,7 +541,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                                 {isMulti ? (isSelected && <CheckSquare className="w-4 h-4"/>) : (isSelected && <div className="w-3 h-3 bg-black rounded-full"/>)}
                             </div>
                             <span className="text-sm font-bold flex-1">{opt.text}</span>
-                            {opt.imageUrl && <img src={opt.imageUrl} className="w-12 h-12 object-cover rounded border border-gray-600" />}
+                            {opt.imageUrl && <img src={opt.imageUrl} crossOrigin="anonymous" className="w-12 h-12 object-cover rounded border border-gray-600" />}
                         </button>
                     );
                 })}
@@ -590,6 +603,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
     // @ts-ignore
     const showCorrectAnswer = evaluation?.config?.showCorrectAnswer ?? true;
+    const isSingleChoice = currentQ.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || currentQ.questionType === QUESTION_TYPES.TRUE_FALSE;
 
     return (
         <div className={`min-h-screen bg-[#050505] text-white flex flex-col font-sans select-none overflow-hidden relative transition-colors duration-1000 ${shakeScreen ? 'animate-shake' : ''}`}>
@@ -659,7 +673,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                     {lootDrop && (
                         <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-yellow-500/20 border border-yellow-400 p-4 rounded-full animate-bounce flex items-center gap-2">
                             <img src={POTIONS[lootDrop].image} crossOrigin="anonymous" className="w-8 h-8" />
-                            <span className="text-yellow-300 font-bold">¡LOOT!</span>
+                            <div>
+                                <span className="text-yellow-300 font-bold block">¡POCIÓN ROBADA!</span>
+                                <span className="text-xs text-yellow-100">{POTIONS[lootDrop].description}</span>
+                            </div>
                         </div>
                     )}
 
@@ -692,12 +709,14 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                         <div className="space-y-6">
                             {renderInputArea(currentQ)}
                             
-                            <button 
-                                onClick={() => handleAttack()} 
-                                className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black font-cyber text-xl tracking-widest rounded shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_40px_rgba(239,68,68,0.6)] transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 border-2 border-red-400"
-                            >
-                                <Sword className="w-6 h-6" /> ATACAR
-                            </button>
+                            {!isSingleChoice && (
+                                <button 
+                                    onClick={() => handleAttack()} 
+                                    className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black font-cyber text-xl tracking-widest rounded shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_40px_rgba(239,68,68,0.6)] transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 border-2 border-red-400"
+                                >
+                                    <Sword className="w-6 h-6" /> ATACAR
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-40">

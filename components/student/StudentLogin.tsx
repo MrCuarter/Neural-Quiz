@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BossSettings } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
 import { Rocket, Skull } from 'lucide-react';
@@ -17,18 +17,31 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ bossConfig, quizTitl
     const imgId = bossConfig.imageId || "kryon"; 
     const badgeUrl = `${ASSETS_BASE}/finalboss/${imgId}badge.png`;
 
+    useEffect(() => {
+        if (bossConfig.attackVoice) {
+            try {
+                const audio = new Audio(bossConfig.attackVoice);
+                audio.volume = 0.5;
+                audio.play().catch(e => {
+                    // Browser prevented autoplay (interaction needed)
+                    console.log("Autoplay prevented:", e);
+                });
+            } catch (e) {}
+        }
+    }, [bossConfig]);
+
     return (
         <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-white bg-[url('/bg-grid.png')]">
             <CyberCard className="max-w-md w-full border-cyan-500/50 p-8 text-center bg-black/80 backdrop-blur relative overflow-hidden">
                 {/* Boss Badge Background Glow */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-red-500/20 blur-[50px] rounded-full pointer-events-none"></div>
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-red-500/20 blur-[60px] rounded-full pointer-events-none"></div>
 
-                <h1 className="text-3xl md:text-4xl font-cyber text-cyan-400 mb-6 leading-tight relative z-10 text-shadow-cyan">
+                <h1 className="text-3xl md:text-4xl font-cyber text-cyan-400 mb-6 leading-tight relative z-10 text-shadow-cyan text-balance">
                     {quizTitle}
                 </h1>
 
                 <div className="flex justify-center mb-8 relative z-10 group">
-                    <div className="w-40 h-40 rounded-full border-4 border-red-500/50 p-1 bg-black/50 relative overflow-hidden shadow-[0_0_30px_rgba(239,68,68,0.4)] group-hover:shadow-[0_0_50px_rgba(239,68,68,0.6)] transition-all">
+                    <div className="w-64 h-64 rounded-full border-4 border-red-500/50 p-1 bg-black/50 relative overflow-hidden shadow-[0_0_30px_rgba(239,68,68,0.4)] group-hover:shadow-[0_0_50px_rgba(239,68,68,0.6)] transition-all">
                         <img 
                             src={badgeUrl} 
                             crossOrigin="anonymous"
