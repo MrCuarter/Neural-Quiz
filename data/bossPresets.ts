@@ -1,7 +1,21 @@
 
 // data/bossPresets.ts
 
-const ASSETS_BASE = "https://assets.mistercuarter.es";
+export const ASSETS_BASE = "https://assets.mistercuarter.es";
+
+export interface DifficultyStats {
+    hpMult: number;
+    dmgMult: number;
+    dodgeChance: number; // 0.0 - 1.0
+    potionChance: number; // 0.0 - 1.0 (Probabilidad de que el boss se cure/use items)
+}
+
+export const DIFFICULTY_SETTINGS: Record<string, DifficultyStats> = {
+    'easy': { hpMult: 0.8, dmgMult: 0.8, dodgeChance: 0, potionChance: 0 },
+    'medium': { hpMult: 1.0, dmgMult: 1.0, dodgeChance: 0.05, potionChance: 0.1 },
+    'hard': { hpMult: 1.2, dmgMult: 1.2, dodgeChance: 0.15, potionChance: 0.25 },
+    'legend': { hpMult: 1.5, dmgMult: 1.5, dodgeChance: 0.25, potionChance: 0.40 }
+};
 
 export interface BossImageConfig {
     idle: string;
@@ -13,7 +27,8 @@ export interface BossImageConfig {
 
 export interface BossSettings {
     bossName: string;
-    images: BossImageConfig;
+    imageId: string; // ID limpio para construir URLs (ej: "kryon")
+    images: BossImageConfig; // Legacy/Fallback objects
     health: {
         bossHP: number;
         playerHP: number;
@@ -28,13 +43,14 @@ export interface BossSettings {
         enablePowerUps: boolean;
         finishHimMove: boolean;
     };
-    badgeUrl?: string; // Legacy support
-    attackVoice?: string; // New Voice path
+    badgeUrl?: string; 
+    attackVoice?: string; 
 }
 
 export const PRESET_BOSSES: Record<string, BossSettings> = {
   'kryon_v': {
     bossName: "Kryon-V",
+    imageId: "kryon",
     images: {
       idle: `${ASSETS_BASE}/finalboss/kryon.png`,
       badge: `${ASSETS_BASE}/finalboss/kryonbadge.png`,
@@ -55,6 +71,7 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
   },
   'lythara': {
     bossName: "Lythara",
+    imageId: "lythara",
     images: {
       idle: `${ASSETS_BASE}/finalboss/lythara.png`,
       badge: `${ASSETS_BASE}/finalboss/lytharabadge.png`,
@@ -75,6 +92,7 @@ export const PRESET_BOSSES: Record<string, BossSettings> = {
   },
   'valdros': {
     bossName: "Valdros",
+    imageId: "valdros",
     images: {
       idle: `${ASSETS_BASE}/finalboss/valdros.png`,
       badge: `${ASSETS_BASE}/finalboss/valdrosbadge.png`,

@@ -5,12 +5,10 @@ import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../.
 import { CyberButton, CyberCard } from '../ui/CyberUI';
 import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
-import { PRESET_BOSSES } from '../../data/bossPresets';
+import { PRESET_BOSSES, ASSETS_BASE, DIFFICULTY_SETTINGS, DifficultyStats } from '../../data/bossPresets';
 import { StudentLogin } from '../student/StudentLogin';
 
 // --- CONSTANTS & TYPES ---
-
-const ASSETS_BASE = "https://assets.mistercuarter.es";
 
 type GameState = 'LOBBY' | 'ROULETTE' | 'PLAYING' | 'FINISH_IT' | 'STATS';
 type CombatState = 'IDLE' | 'PLAYER_ATTACK' | 'BOSS_ATTACK' | 'VICTORY' | 'DEFEAT' | 'REVIVE';
@@ -42,11 +40,16 @@ const POTIONS: Record<PotionType, ItemData> = {
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 
+// Helper to remove "a)", "1.", etc from question text if options are baked in
+const cleanQuestionText = (text: string): string => {
+    return text.replace(/^[0-9]+\.\s*/, '').replace(/\n[a-d]\).*/gi, '').trim();
+};
+
 // --- MAIN COMPONENT ---
 
 interface ArcadePlayProps {
     evaluationId?: string;
-    previewConfig?: { quiz: any; bossConfig: BossSettings }; // For Preview Mode
+    previewConfig?: { quiz: any; bossConfig: BossSettings; evaluationConfig?: any }; 
 }
 
 export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewConfig }) => {
@@ -55,6 +58,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const [error, setError] = useState<string | null>(null);
     const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
     const [bossConfig, setBossConfig] = useState<BossSettings | null>(null);
+    const [difficultyStats, setDifficultyStats] = useState<DifficultyStats>(DIFFICULTY_SETTINGS['medium']);
 
     // --- STATE: GAMEPLAY ---
     const [gameState, setGameState] = useState<GameState>('LOBBY');
@@ -140,7 +144,13 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 if (previewConfig) {
                     settings = previewConfig.bossConfig;
                     rawQuestions = (previewConfig.quiz.questions || []) as Question[];
-                    evalData = { title: "MODO PREVIEW", ...previewConfig.quiz } as any;
+                    // Merge extra config for preview if passed (e.g. showCorrectAnswer)
+                    const baseConfig = previewConfig.evaluationConfig || {};
+                    evalData = { 
+                        title: "MODO PREVIEW", 
+                        config: { ...baseConfig, ...previewConfig.quiz.config }, 
+                        ...previewConfig.quiz 
+                    } as any;
                 } else if (evaluationId) {
                     const data = await getEvaluation(evaluationId);
                     if (!data) throw new Error("Evaluación no encontrada");
@@ -152,9 +162,17 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
                 if (!settings) throw new Error("Configuración de Jefe no válida");
 
+                // APPLY DIFFICULTY STATS
+                const diffKey = settings.difficulty || 'medium';
+                const diffStats = DIFFICULTY_SETTINGS[diffKey] || DIFFICULTY_SETTINGS['medium'];
+                setDifficultyStats(diffStats);
+
                 setEvaluation(evalData);
                 setBossConfig(settings);
-                setBossHP({ current: settings.health.bossHP, max: settings.health.bossHP });
+                
+                // Initialize HP with multipliers
+                const initialBossHP = Math.round(settings.health.bossHP * diffStats.hpMult);
+                setBossHP({ current: initialBossHP, max: initialBossHP });
                 setPlayerHP({ current: settings.health.playerHP, max: settings.health.playerHP });
                 
                 const limitCount = evalData?.config.questionCount || 10;
@@ -162,6 +180,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 
                 const prepared = shuffled.map(q => ({
                     ...q,
+                    text: cleanQuestionText(q.text), // Cleanup Text
                     options: (q.questionType !== QUESTION_TYPES.TRUE_FALSE && q.questionType !== QUESTION_TYPES.ORDER) 
                         ? shuffleArray(q.options) 
                         : q.options
@@ -275,7 +294,18 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setBossStatus(p => p.map(s => ({...s, turns: s.turns-1})).filter(s => s.turns > 0));
 
         if (correct) {
-            processPlayerAttack();
+            // DIFFICULTY: Boss can dodge
+            const bossDodgeRoll = Math.random();
+            if (bossDodgeRoll < difficultyStats.dodgeChance) {
+                setCombatLog("¡EL JEFE ESQUIVÓ TU ATAQUE!");
+                playSFX('miss');
+                setStreak(0); // Optional: reset streak on dodge? Keep it for fairness.
+                // Boss attacks anyway because turn passed? No, usually player turn wasted.
+                // Let's make boss attack after dodge to be punishing in Legend
+                setTimeout(() => processPlayerMiss(q), 1000);
+            } else {
+                processPlayerAttack();
+            }
         } else {
             processPlayerMiss(q);
         }
@@ -330,7 +360,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             return;
         }
 
-        let damage = Math.ceil(playerHP.max * 0.2);
+        // DIFFICULTY: Damage Multiplier
+        let damage = Math.ceil(playerHP.max * 0.2 * difficultyStats.dmgMult);
+        
         if (passiveEffect === 'escudo') damage = Math.ceil(damage * 0.85);
         if (playerStatus.some(s => s.type === 'vulnerable')) damage *= 2;
 
@@ -338,6 +370,16 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setCombatState('BOSS_ATTACK');
         setTimeout(() => { playSFX('hit'); setShakeScreen(true); }, 200);
         setTimeout(() => setShakeScreen(false), 500);
+
+        // DIFFICULTY: Boss Potion Logic
+        if (Math.random() < difficultyStats.potionChance && bossHP.current < bossHP.max * 0.5) {
+             const heal = Math.ceil(bossHP.max * 0.1);
+             setTimeout(() => {
+                 setBossHP(prev => ({ ...prev, current: Math.min(prev.max, prev.current + heal) }));
+                 setCombatLog(`¡El Jefe se curó ${heal} HP!`);
+                 playSFX('potion');
+             }, 800);
+        }
 
         const voiceUrl = (bossConfig as any)?.attackVoice;
         if (voiceUrl) {
@@ -350,6 +392,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     };
 
     const checkWinConditionOrNext = (lastWasCorrect: boolean) => {
+        // Immediate Game Over check
         if (playerHP.current <= 0) {
             setCombatState('DEFEAT'); 
             playSFX('gameover');
@@ -422,10 +465,17 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     };
 
     const getBossImage = () => {
-        if (combatState === 'VICTORY') return bossConfig?.images.defeat; 
-        if (combatState === 'DEFEAT') return bossConfig?.images.win;     
-        if (combatState === 'PLAYER_ATTACK') return bossConfig?.images.damage || bossConfig?.images.idle;
-        return bossConfig?.images.idle;
+        // Construct Dynamic URL using Image ID from config
+        const imgId = bossConfig?.imageId || "kryon";
+        let suffix = "";
+        
+        if (combatState === 'VICTORY') suffix = "lose";
+        else if (combatState === 'DEFEAT') suffix = "win";
+        else if (combatState === 'PLAYER_ATTACK') return `${ASSETS_BASE}/finalboss/${imgId}.png`; // Usually same or damage variant
+        else suffix = "";
+
+        const filename = suffix ? `${imgId}${suffix}.png` : `${imgId}.png`;
+        return `${ASSETS_BASE}/finalboss/${filename}`;
     };
 
     // ... (renderInputArea unchanged) ...
@@ -550,6 +600,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const currentQ = gameState === 'FINISH_IT' ? retryQueue[currentQIndex] : playableQuestions[currentQIndex];
     if (!currentQ) return null;
 
+    // Check Config for Correct Answer Feedback
+    // @ts-ignore
+    const showCorrectAnswer = evaluation?.config?.showCorrectAnswer ?? true;
+
     return (
         <div className={`min-h-screen bg-[#050505] text-white flex flex-col font-sans select-none overflow-hidden relative transition-colors duration-1000 ${shakeScreen ? 'animate-shake' : ''}`}>
             
@@ -659,8 +713,23 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center justify-center h-20">
-                            <span className="font-cyber text-2xl animate-pulse text-cyan-400">PROCESANDO COMBATE...</span>
+                        <div className="flex flex-col items-center justify-center h-40">
+                            {combatState === 'BOSS_ATTACK' ? (
+                                <>
+                                    <span className="font-cyber text-2xl animate-pulse text-red-500 mb-2">¡FALLASTE!</span>
+                                    {showCorrectAnswer ? (
+                                        <p className="text-sm text-gray-400 font-mono">
+                                            La respuesta era: <span className="text-green-400 font-bold">
+                                                {currentQ.options.find(o => currentQ.correctOptionIds?.includes(o.id) || o.id === currentQ.correctOptionId)?.text}
+                                            </span>
+                                        </p>
+                                    ) : (
+                                        <p className="text-sm text-gray-500 italic">Información clasificada.</p>
+                                    )}
+                                </>
+                            ) : (
+                                <span className="font-cyber text-2xl animate-pulse text-cyan-400">PROCESANDO COMBATE...</span>
+                            )}
                         </div>
                     )}
                 </div>

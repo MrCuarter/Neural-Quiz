@@ -85,6 +85,7 @@ export interface BossImageConfig {
 
 export interface BossSettings {
     bossName: string;
+    imageId?: string; // Added to fix type error
     images: BossImageConfig;
     health: {
         bossHP: number;
@@ -100,6 +101,8 @@ export interface BossSettings {
         enablePowerUps: boolean;
         finishHimMove: boolean; // "Golpe de Gracia" (Retry failed questions at the end to kill boss)
     };
+    badgeUrl?: string; // Added
+    attackVoice?: string; // Added
 }
 
 // --- EVALUATION (ARCADE MODE) ---
@@ -114,6 +117,7 @@ export interface EvaluationConfig {
     allowSpeedPoints: boolean; // More points for faster answers
     allowPowerUps: boolean; // Enable items/jokers
     showRanking: boolean; // Show leaderboard to student
+    showCorrectAnswer?: boolean; // Added
     feedbackMessages: {
         high: string; // > 90%
         medium: string; // 60-90%

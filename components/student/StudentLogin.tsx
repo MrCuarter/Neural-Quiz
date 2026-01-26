@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { BossSettings } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
 import { Rocket, Skull } from 'lucide-react';
+import { ASSETS_BASE } from '../../data/bossPresets';
 
 interface StudentLoginProps {
     bossConfig: BossSettings;
@@ -12,6 +13,10 @@ interface StudentLoginProps {
 
 export const StudentLogin: React.FC<StudentLoginProps> = ({ bossConfig, quizTitle, onJoin }) => {
     const [nickname, setNickname] = useState("");
+
+    // Construct Badge URL: /finalboss/[imageId]badge.png
+    const imgId = bossConfig.imageId || "kryon"; 
+    const badgeUrl = `${ASSETS_BASE}/finalboss/${imgId}badge.png`;
 
     return (
         <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-white bg-[url('/bg-grid.png')]">
@@ -26,10 +31,14 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ bossConfig, quizTitl
                 <div className="flex justify-center mb-8 relative z-10 group">
                     <div className="w-40 h-40 rounded-full border-4 border-red-500/50 p-1 bg-black/50 relative overflow-hidden shadow-[0_0_30px_rgba(239,68,68,0.4)] group-hover:shadow-[0_0_50px_rgba(239,68,68,0.6)] transition-all">
                         <img 
-                            src={bossConfig.images.badge || bossConfig.images.idle} 
+                            src={badgeUrl} 
                             crossOrigin="anonymous"
                             className="w-full h-full object-cover rounded-full transition-transform duration-500 group-hover:scale-110"
                             alt="Boss Badge"
+                            onError={(e) => {
+                                // Fallback if badge fails
+                                (e.target as HTMLImageElement).src = bossConfig.images.idle;
+                            }}
                         />
                         <div className="absolute inset-0 rounded-full shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] pointer-events-none"></div>
                     </div>
