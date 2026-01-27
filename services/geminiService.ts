@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 import { validateQuizQuestions } from "../utils/validation";
@@ -136,6 +135,41 @@ interface GenParams {
 // gemini-2.0-flash is the current standard for speed and low cost ($0.10/1M input tokens)
 const MODEL_NAME = "gemini-2.0-flash"; 
 
+/**
+ * CLEANER FUNCTION FOR AI RESPONSE
+ * Removes Markdown code blocks and extracts the JSON object/array.
+ */
+function cleanAIResponse(text: string): string {
+  if (!text) return "{}";
+  // 1. Eliminar bloques de código markdown ```json y ```
+  let clean = text.replace(/```json/g, '').replace(/```/g, '');
+  
+  // 2. Buscar dónde empieza el primer corchete [ o llave {
+  const firstBracket = clean.indexOf('[');
+  const firstBrace = clean.indexOf('{');
+  
+  let start = -1;
+  // Determinamos cuál aparece primero (o si solo aparece uno)
+  if (firstBracket !== -1 && firstBrace !== -1) {
+      start = Math.min(firstBracket, firstBrace);
+  } else if (firstBracket !== -1) {
+      start = firstBracket;
+  } else if (firstBrace !== -1) {
+      start = firstBrace;
+  }
+
+  // 3. Buscar dónde termina el último corchete ] o llave }
+  const lastBracket = clean.lastIndexOf(']');
+  const lastBrace = clean.lastIndexOf('}');
+  const end = Math.max(lastBracket, lastBrace);
+
+  if (start !== -1 && end !== -1) {
+      clean = clean.substring(start, end + 1);
+  }
+  
+  return clean.trim();
+}
+
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
     const ai = getAI();
@@ -166,8 +200,15 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
     const text = response.text;
     if (!text) throw new Error("Empty response from AI");
 
+    const cleanedText = cleanAIResponse(text);
+
     let data;
-    try { data = JSON.parse(text); } catch (e) { throw new Error("AI returned malformed JSON."); }
+    try { 
+        data = JSON.parse(cleanedText); 
+    } catch (e) { 
+        console.error("Failed to parse AI response:", text);
+        throw new Error("AI returned malformed JSON."); 
+    }
     
     return {
         questions: validateQuizQuestions(data.questions || []),
@@ -185,7 +226,9 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
             contents: prompt,
             config: { responseMimeType: "application/json", responseSchema: quizRootSchema }
         });
-        return JSON.parse(response.text || "{}").questions || [];
+        
+        const cleanedText = cleanAIResponse(response.text || "{}");
+        return JSON.parse(cleanedText).questions || [];
     });
 };
 
@@ -207,7 +250,9 @@ export const generateQuizCategories = async (questionTexts: string[], count: num
             contents: prompt,
             config: { responseMimeType: "application/json", responseSchema: {type: Type.ARRAY, items: {type: Type.STRING}} }
         });
-        return JSON.parse(response.text || "[]");
+        
+        const cleanedText = cleanAIResponse(response.text || "[]");
+        return JSON.parse(cleanedText);
     });
 };
 
