@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { QuizEditor } from './components/QuizEditor';
@@ -14,10 +13,11 @@ import { JeopardyBoard } from './components/game/JeopardyBoard';
 import { HexConquestGame } from './components/game/HexConquestGame'; 
 import { PublicQuizLanding } from './components/PublicQuizLanding'; 
 import { CommunityPage } from './components/CommunityPage'; 
-import { ArcadePlay } from './components/pages/ArcadePlay'; // NEW IMPORT
+import { ArcadePlay } from './components/pages/ArcadePlay'; 
+import { LandingV2 } from './components/pages/LandingV2'; // NEW IMPORT
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2 } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2, LayoutTemplate } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
@@ -28,8 +28,8 @@ import { searchImage } from './services/imageService';
 import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
-// Types - Add 'arcade_play' to ViewState
-type ViewState = 'home' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play';
+// Types - Added 'landing_v2'
+type ViewState = 'home' | 'landing_v2' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -154,8 +154,14 @@ const NeuralApp: React.FC = () => {
               return; // Stop further checks
           }
       }
+      
+      // 2. NEW HOME ROUTE (/new-home)
+      if (path.startsWith('/new-home')) {
+          setView('landing_v2');
+          return;
+      }
 
-      // 2. SHARE ID QUERY PARAM (?shareId=...)
+      // 3. SHARE ID QUERY PARAM (?shareId=...)
       const shareId = params.get('shareId');
       if (shareId) {
           setSharedQuizId(shareId);
@@ -302,12 +308,11 @@ const NeuralApp: React.FC = () => {
       setView('game_lobby');
   };
 
+  // ... (processContextFiles, handleDrag, handleDrop, handleContextFileInput remain unchanged) ...
   const processContextFiles = async (files: FileList | null) => {
       if (!files || files.length === 0) return;
-      
       let combinedText = "";
       let count = 0;
-
       for (let i = 0; i < files.length; i++) {
           const file = files[i];
           try {
@@ -324,390 +329,64 @@ const NeuralApp: React.FC = () => {
                  toast.warning(`Skipped ${file.name}: Binary files need manual OCR or copy-paste.`);
              }
           } catch (e: any) {
-             console.error("Error reading file", file.name, e);
              toast.error(`${t.alert_read_error} ${file.name}: ${e.message}`);
           }
       }
-
       if (combinedText) {
-          setGenParams(prev => ({
-              ...prev,
-              context: (prev.context + combinedText).trim()
-          }));
+          setGenParams(prev => ({ ...prev, context: (prev.context + combinedText).trim() }));
           toast.success(`${count} document(s) added to context!`);
       }
   };
-
   const handleDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true); else if (e.type === 'dragleave') setDragActive(false); };
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) processContextFiles(e.dataTransfer.files); };
   const handleContextFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { processContextFiles(e.target.files); };
 
+  // ... (handleCreateAI, performAnalysis, etc. remain unchanged) ...
   const handleCreateAI = async () => {
-    if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) {
-      toast.warning(t.alert_topic);
-      return;
-    }
-    
-    setIsGenerating(true);
-    setGenProgress(0);
-    setIsGenSuccess(false);
-    
+    if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) { toast.warning(t.alert_topic); return; }
+    setIsGenerating(true); setGenProgress(0); setIsGenSuccess(false);
     setGenerationStatus(getRandomMessage('start', language)); 
-    
-    const funnyMessageInterval = setInterval(() => {
-        setGenerationStatus(getRandomMessage('generate_ai', language));
-    }, 3000);
-
+    const funnyMessageInterval = setInterval(() => { setGenerationStatus(getRandomMessage('generate_ai', language)); }, 3000);
     const qCount = parseInt(String(genParams.count)) || 5;
-    const estimatedDurationMs = qCount * 2000;
-    const tickIntervalMs = 100;
-    const ticks = estimatedDurationMs / tickIntervalMs;
-    const incrementPerTick = 90 / ticks;
-
-    const progressTimer = setInterval(() => {
-        setGenProgress(prev => {
-            if (prev >= 90) return prev + 0.05 < 99 ? prev + 0.05 : 99;
-            return prev + incrementPerTick;
-        });
-    }, tickIntervalMs);
-
+    const progressTimer = setInterval(() => { setGenProgress(prev => { if (prev >= 90) return prev + 0.05 < 99 ? prev + 0.05 : 99; return prev + (90 / (qCount * 20)); }); }, 100);
     try {
       const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
       const selectedLang = langMap[language] || 'Spanish';
       const urlList = genParams.urls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
       const includeFeedback = PLATFORMS_WITH_FEEDBACK.includes(targetPlatform as ExportFormat);
-      
-      const aiResult = await generateQuizQuestions({
-        topic: genParams.topic, 
-        count: Number(genParams.count) || 5, 
-        types: genParams.types, 
-        age: genParams.age, 
-        context: genParams.context, 
-        urls: urlList, 
-        language: selectedLang, 
-        includeFeedback,
-        tone: genParams.tone // Pass Tone
-      });
-      
+      const aiResult = await generateQuizQuestions({ topic: genParams.topic, count: Number(genParams.count) || 5, types: genParams.types, age: genParams.age, context: genParams.context, urls: urlList, language: selectedLang, includeFeedback, tone: genParams.tone });
       const generatedQs = aiResult.questions;
-      
-      clearInterval(progressTimer);
-      setGenProgress(100);
-      
-      clearInterval(funnyMessageInterval);
-      setGenerationStatus("Buscando imágenes (Anti-Spoiler)...");
-
+      clearInterval(progressTimer); setGenProgress(100); clearInterval(funnyMessageInterval); setGenerationStatus("Buscando imágenes (Anti-Spoiler)...");
       const enhancedQuestions = await Promise.all(generatedQs.map(async (gq: any) => {
-          const qObj = {
-              ...gq,
-              id: uuid(),
-              correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []),
-          };
-
-          // 1. Image Search for Main Question
-          if (!qObj.imageUrl) {
-              const query = qObj.imageSearchQuery; 
-              console.log('🤖 IA Smart Search:', query); 
-              const imageResult = await searchImage(query, qObj.fallback_category);
-              
-              if (imageResult) {
-                  qObj.imageUrl = imageResult.url;
-                  if (imageResult.attribution) {
-                      qObj.imageCredit = {
-                          name: imageResult.attribution.authorName,
-                          link: imageResult.attribution.authorUrl,
-                          source: imageResult.attribution.sourceName as 'Unsplash' | 'Pexels' | 'Pixabay'
-                      };
-                  }
-              }
-          }
-
-          // 2. Image Search for Options (The 5% feature)
-          // We check if the AI generated 'imageSearchQuery' for any option
-          if (qObj.options && Array.isArray(qObj.options)) {
-              for (const opt of qObj.options) {
-                  if (opt.imageSearchQuery && !opt.imageUrl) {
-                      console.log('🤖 Option Smart Search:', opt.imageSearchQuery);
-                      const optImgResult = await searchImage(opt.imageSearchQuery, 'default');
-                      if (optImgResult) {
-                          opt.imageUrl = optImgResult.url;
-                      }
-                      // Remove temp field before saving
-                      delete opt.imageSearchQuery;
-                  }
-              }
-          }
-
+          const qObj = { ...gq, id: uuid(), correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []) };
+          if (!qObj.imageUrl) { const query = qObj.imageSearchQuery; const imageResult = await searchImage(query, qObj.fallback_category); if (imageResult) { qObj.imageUrl = imageResult.url; if (imageResult.attribution) { qObj.imageCredit = { name: imageResult.attribution.authorName, link: imageResult.attribution.authorUrl, source: imageResult.attribution.sourceName as 'Unsplash' | 'Pexels' | 'Pixabay' }; } } }
+          if (qObj.options && Array.isArray(qObj.options)) { for (const opt of qObj.options) { if (opt.imageSearchQuery && !opt.imageUrl) { const optImgResult = await searchImage(opt.imageSearchQuery, 'default'); if (optImgResult) { opt.imageUrl = optImgResult.url; } delete opt.imageSearchQuery; } } }
           return qObj;
       }));
-
-      setQuiz({
-        title: genParams.topic || 'AI Generated Quiz', 
-        description: `Generated for ${genParams.age} - ${targetPlatform}`, 
-        questions: enhancedQuestions, 
-        tags: aiResult.tags || ['AI Generated', targetPlatform] 
-      });
-      
+      setQuiz({ title: genParams.topic || 'AI Generated Quiz', description: `Generated for ${genParams.age} - ${targetPlatform}`, questions: enhancedQuestions, tags: aiResult.tags || ['AI Generated', targetPlatform] });
       setIsGenSuccess(true);
-      
-      setTimeout(() => {
-          toast.success("Quiz Generated Successfully!");
-          setView('create_manual');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          setIsGenSuccess(false);
-          setGenProgress(0);
-      }, 1000);
-
-    } catch (e: any) {
-      console.error(e);
-      toast.error(`${t.alert_fail} (${e.message})`);
-      clearInterval(progressTimer);
-      setGenProgress(0);
-    } finally {
-      clearInterval(funnyMessageInterval); 
-      setIsGenerating(false);
-    }
+      setTimeout(() => { toast.success("Quiz Generated Successfully!"); setView('create_manual'); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGenSuccess(false); setGenProgress(0); }, 1000);
+    } catch (e: any) { console.error(e); toast.error(`${t.alert_fail} (${e.message})`); clearInterval(progressTimer); setGenProgress(0); } finally { clearInterval(funnyMessageInterval); setIsGenerating(false); }
   };
 
-  // ... (Conversion functions unchanged) ...
-  const clearAnalysisInterval = () => {
-      if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-      }
-  };
-
+  const clearAnalysisInterval = () => { if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; } };
   interface ImageInput { data: string; mimeType: string; }
-
   const performAnalysis = async (content: string, sourceName: string, isAlreadyStructured: boolean = false, preParsedQuestions: Question[] = [], imageInput?: ImageInput) => {
-    setView('convert_analysis');
-    setAnalysisProgress(0);
-    setAnalysisStatus(getRandomMessage('start', language));
-    const MIN_DURATION = 8000; 
-    const startTime = Date.now();
-    let currentVirtualProgress = 0;
-    clearAnalysisInterval();
-    
-    const processingPromise = (async () => {
-        try {
-            if (isAlreadyStructured && preParsedQuestions.length > 0) {
-                 return preParsedQuestions;
-            } else {
-                const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
-                const selectedLang = langMap[language] || 'Spanish';
-                const generatedQs = await parseRawTextToQuiz(content, selectedLang, imageInput);
-                return generatedQs;
-            }
-        } catch (e) {
-            throw e;
-        }
-    })();
-
-    progressIntervalRef.current = window.setInterval(() => {
-       const elapsed = Date.now() - startTime;
-       let targetP = 0;
-       if (elapsed < MIN_DURATION) { targetP = (elapsed / MIN_DURATION) * 80; } else { const extraTime = elapsed - MIN_DURATION; const creep = 19 * (1 - Math.exp(-extraTime / 10000)); targetP = 80 + creep; }
-       if (targetP > currentVirtualProgress) { currentVirtualProgress = targetP; }
-       setAnalysisProgress(currentVirtualProgress);
-       if (elapsed > 1000 && elapsed < 1200) { setAnalysisStatus(getDetectionMessage(sourceName, content, language)); } else if (elapsed > 4000 && elapsed < 4200) { setAnalysisStatus(getRandomMessage('detect_generic', language)); } else if (elapsed > 6000 && elapsed < 6200) { setAnalysisStatus(getRandomMessage('progress', language)); }
-    }, 100);
-
-    try {
-        const questions = await processingPromise;
-        if (questions.length === 0) throw new Error(t.alert_no_questions);
-        
-        const elapsedNow = Date.now() - startTime;
-        if (elapsedNow < MIN_DURATION) { await new Promise(r => setTimeout(r, MIN_DURATION - elapsedNow)); }
-        
-        clearAnalysisInterval();
-        setAnalysisProgress(100);
-        setAnalysisStatus(getRandomMessage('success', language));
-        
-        const missingAnswers = questions.some(q => (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.filter(o => o.text.trim() !== "").length < 2);
-        
-        if (missingAnswers) {
-             setTempQuestions(questions);
-             setTempQuizInfo({ title: sourceName, desc: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI' });
-             setTimeout(() => setShowMissingAnswersModal(true), 1000);
-        } else {
-             setQuiz({ title: sourceName, description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI', questions: questions, tags: ['Imported', isAlreadyStructured ? 'Template' : 'AI'] });
-             toast.success("Analysis Complete!");
-             setTimeout(() => { setView('create_manual'); }, 1500); 
-        }
-    } catch (error: any) {
-        clearAnalysisInterval();
-        setAnalysisProgress(0);
-        setAnalysisStatus(getRandomMessage('error', language));
-        console.error(error);
-        toast.error(`Analysis Failed: ${error.message}`);
-        setTimeout(() => { setView('convert_upload'); }, 4000);
-    }
+    setView('convert_analysis'); setAnalysisProgress(0); setAnalysisStatus(getRandomMessage('start', language)); const MIN_DURATION = 8000; const startTime = Date.now(); let currentVirtualProgress = 0; clearAnalysisInterval();
+    const processingPromise = (async () => { try { if (isAlreadyStructured && preParsedQuestions.length > 0) { return preParsedQuestions; } else { const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' }; const selectedLang = langMap[language] || 'Spanish'; const generatedQs = await parseRawTextToQuiz(content, selectedLang, imageInput); return generatedQs; } } catch (e) { throw e; } })();
+    progressIntervalRef.current = window.setInterval(() => { const elapsed = Date.now() - startTime; let targetP = 0; if (elapsed < MIN_DURATION) { targetP = (elapsed / MIN_DURATION) * 80; } else { const extraTime = elapsed - MIN_DURATION; const creep = 19 * (1 - Math.exp(-extraTime / 10000)); targetP = 80 + creep; } if (targetP > currentVirtualProgress) { currentVirtualProgress = targetP; } setAnalysisProgress(currentVirtualProgress); if (elapsed > 1000 && elapsed < 1200) { setAnalysisStatus(getDetectionMessage(sourceName, content, language)); } else if (elapsed > 4000 && elapsed < 4200) { setAnalysisStatus(getRandomMessage('detect_generic', language)); } else if (elapsed > 6000 && elapsed < 6200) { setAnalysisStatus(getRandomMessage('progress', language)); } }, 100);
+    try { const questions = await processingPromise; if (questions.length === 0) throw new Error(t.alert_no_questions); const elapsedNow = Date.now() - startTime; if (elapsedNow < MIN_DURATION) { await new Promise(r => setTimeout(r, MIN_DURATION - elapsedNow)); } clearAnalysisInterval(); setAnalysisProgress(100); setAnalysisStatus(getRandomMessage('success', language)); const missingAnswers = questions.some(q => (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.filter(o => o.text.trim() !== "").length < 2); if (missingAnswers) { setTempQuestions(questions); setTempQuizInfo({ title: sourceName, desc: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI' }); setTimeout(() => setShowMissingAnswersModal(true), 1000); } else { setQuiz({ title: sourceName, description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI', questions: questions, tags: ['Imported', isAlreadyStructured ? 'Template' : 'AI'] }); toast.success("Analysis Complete!"); setTimeout(() => { setView('create_manual'); }, 1500); } } catch (error: any) { clearAnalysisInterval(); setAnalysisProgress(0); setAnalysisStatus(getRandomMessage('error', language)); console.error(error); toast.error(`Analysis Failed: ${error.message}`); setTimeout(() => { setView('convert_upload'); }, 4000); }
   };
-
-  const handleGenerateMissingAnswers = async () => {
-      setIsGeneratingAnswers(true);
-      try {
-          const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
-          const enhancedQuestions = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish');
-          setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: enhancedQuestions, tags: ['AI Repair'] });
-          setShowMissingAnswersModal(false);
-          setView('create_manual');
-          toast.success("Answers generated successfully!");
-      } catch (e) {
-          toast.error("Error generating answers. Please check quota.");
-      } finally {
-          setIsGeneratingAnswers(false);
-      }
-  };
-
-  const handleSkipMissingAnswers = () => {
-      setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: tempQuestions });
-      setShowMissingAnswersModal(false);
-      setView('create_manual');
-  };
-
-  // --- CONVERSION HANDLERS ---
-  const handleFileProcessing = async (file: File) => {
-      if (!file) return;
-      const fileName = file.name;
-      const fileType = file.type;
-
-      try {
-          if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                  const data = e.target?.result;
-                  if (fileName.endsWith('.csv')) {
-                      // Attempt structured parse first for CSV
-                      const wb = XLSX.read(data, { type: 'binary' });
-                      const detectedQuestions = detectAndParseStructure(wb);
-                      if (detectedQuestions && detectedQuestions.length > 0) {
-                          performAnalysis("", fileName, true, detectedQuestions);
-                      } else {
-                          // Fallback to text analysis
-                          performAnalysis(data as string, fileName);
-                      }
-                  } else {
-                      const wb = XLSX.read(data, { type: 'binary' });
-                      const detectedQuestions = detectAndParseStructure(wb);
-                      if (detectedQuestions && detectedQuestions.length > 0) {
-                          performAnalysis("", fileName, true, detectedQuestions);
-                      } else {
-                          toast.error(t.alert_no_valid_csv);
-                      }
-                  }
-              };
-              if (fileName.endsWith('.csv')) reader.readAsText(file);
-              else reader.readAsBinaryString(file);
-              return;
-          }
-
-          if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-              const text = await extractTextFromPDF(file);
-              performAnalysis(text, fileName);
-              return;
-          }
-
-          if (fileType.startsWith('image/')) {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                  const base64 = e.target?.result as string;
-                  const base64Data = base64.split(',')[1];
-                  performAnalysis("Extract questions from this image", fileName, false, [], {
-                      data: base64Data,
-                      mimeType: fileType
-                  });
-              };
-              reader.readAsDataURL(file);
-              return;
-          }
-
-          if (fileType.startsWith('text/') || fileName.endsWith('.json') || fileName.endsWith('.md') || fileName.endsWith('.txt')) {
-              const text = await file.text();
-              performAnalysis(text, fileName);
-              return;
-          }
-
-          toast.error(t.alert_read_error || "Unsupported file type");
-
-      } catch (e: any) {
-          console.error(e);
-          toast.error(`${t.alert_read_error}: ${e.message}`);
-      }
-  };
-
-  const handleConvertDrag = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.type === 'dragenter' || e.type === 'dragover') {
-          setDragActive(true);
-      } else if (e.type === 'dragleave') {
-          setDragActive(false);
-      }
-  };
-
-  const handleConvertDrop = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragActive(false);
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-          handleFileProcessing(e.dataTransfer.files[0]);
-      }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-          handleFileProcessing(e.target.files[0]);
-      }
-  };
-
-  const handlePasteAnalysis = () => {
-      if (!textToConvert.trim()) {
-          toast.warning(t.alert_paste_first);
-          return;
-      }
-      performAnalysis(textToConvert, "Pasted Text");
-  };
-
-  const handleUrlAnalysis = async () => {
-      if (!urlToConvert.trim()) {
-          toast.warning(t.alert_valid_url);
-          return;
-      }
-      
-      const url = urlToConvert.trim();
-      setView('convert_analysis');
-      setAnalysisProgress(10);
-      setAnalysisStatus("Analyzing URL...");
-
-      try {
-          const structuredResult = await analyzeUrl(url);
-          
-          if (structuredResult) {
-              setAnalysisProgress(100);
-              setQuiz(structuredResult.quiz);
-              
-              if (structuredResult.report.missing.options || structuredResult.report.missing.correct) {
-                   setTempQuestions(structuredResult.quiz.questions);
-                   setTempQuizInfo({ title: structuredResult.quiz.title, desc: structuredResult.quiz.description });
-                   setTimeout(() => setShowMissingAnswersModal(true), 1000);
-              } else {
-                   toast.success("Quiz imported successfully!");
-                   setTimeout(() => setView('create_manual'), 1000);
-              }
-              return;
-          }
-
-          setAnalysisStatus("Fetching content for AI analysis...");
-          const content = await fetchUrlContent(url);
-          await performAnalysis(content, "URL Import");
-
-      } catch (e: any) {
-          console.error(e);
-          toast.error(`URL Analysis failed: ${e.message}`);
-          setView('convert_upload');
-      }
-  };
+  const handleGenerateMissingAnswers = async () => { setIsGeneratingAnswers(true); try { const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' }; const enhancedQuestions = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish'); setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: enhancedQuestions, tags: ['AI Repair'] }); setShowMissingAnswersModal(false); setView('create_manual'); toast.success("Answers generated successfully!"); } catch (e) { toast.error("Error generating answers. Please check quota."); } finally { setIsGeneratingAnswers(false); } };
+  const handleSkipMissingAnswers = () => { setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: tempQuestions }); setShowMissingAnswersModal(false); setView('create_manual'); };
+  
+  // ... (handleFileProcessing, handleConvertDrag, etc. remain unchanged) ...
+  const handleFileProcessing = async (file: File) => { if (!file) return; const fileName = file.name; const fileType = file.type; try { if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) { const reader = new FileReader(); reader.onload = (e) => { const data = e.target?.result; if (fileName.endsWith('.csv')) { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { performAnalysis(data as string, fileName); } } else { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { toast.error(t.alert_no_valid_csv); } } }; if (fileName.endsWith('.csv')) reader.readAsText(file); else reader.readAsBinaryString(file); return; } if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) { const text = await extractTextFromPDF(file); performAnalysis(text, fileName); return; } if (fileType.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => { const base64 = e.target?.result as string; const base64Data = base64.split(',')[1]; performAnalysis("Extract questions from this image", fileName, false, [], { data: base64Data, mimeType: fileType }); }; reader.readAsDataURL(file); return; } if (fileType.startsWith('text/') || fileName.endsWith('.json') || fileName.endsWith('.md') || fileName.endsWith('.txt')) { const text = await file.text(); performAnalysis(text, fileName); return; } toast.error(t.alert_read_error || "Unsupported file type"); } catch (e: any) { console.error(e); toast.error(`${t.alert_read_error}: ${e.message}`); } };
+  const handleConvertDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') { setDragActive(true); } else if (e.type === 'dragleave') { setDragActive(false); } };
+  const handleConvertDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { handleFileProcessing(e.dataTransfer.files[0]); } };
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files.length > 0) { handleFileProcessing(e.target.files[0]); } };
+  const handlePasteAnalysis = () => { if (!textToConvert.trim()) { toast.warning(t.alert_paste_first); return; } performAnalysis(textToConvert, "Pasted Text"); };
+  const handleUrlAnalysis = async () => { if (!urlToConvert.trim()) { toast.warning(t.alert_valid_url); return; } const url = urlToConvert.trim(); setView('convert_analysis'); setAnalysisProgress(10); setAnalysisStatus("Analyzing URL..."); try { const structuredResult = await analyzeUrl(url); if (structuredResult) { setAnalysisProgress(100); setQuiz(structuredResult.quiz); if (structuredResult.report.missing.options || structuredResult.report.missing.correct) { setTempQuestions(structuredResult.quiz.questions); setTempQuizInfo({ title: structuredResult.quiz.title, desc: structuredResult.quiz.description }); setTimeout(() => setShowMissingAnswersModal(true), 1000); } else { toast.success("Quiz imported successfully!"); setTimeout(() => setView('create_manual'), 1000); } return; } setAnalysisStatus("Fetching content for AI analysis..."); const content = await fetchUrlContent(url); await performAnalysis(content, "URL Import"); } catch (e: any) { console.error(e); toast.error(`URL Analysis failed: ${e.message}`); setView('convert_upload'); } };
 
   const renderMissingAnswersModal = () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -726,10 +405,26 @@ const NeuralApp: React.FC = () => {
       </div>
   );
 
-  // If in Arcade Play Mode, render only that component (full screen experience)
   if (view === 'arcade_play' && arcadeEvalId) {
       return (
           <ArcadePlay evaluationId={arcadeEvalId} />
+      );
+  }
+
+  // --- NEW: LANDING V2 RENDER ---
+  if (view === 'landing_v2') {
+      return (
+          <div className="flex flex-col bg-[#020617] text-white overflow-x-hidden min-h-screen">
+              <Header 
+                language={language} 
+                setLanguage={setLanguage} 
+                onHelp={() => handleSafeExit('help')} 
+                onMyQuizzes={() => handleSafeExit('my_quizzes')}
+                onHome={() => handleSafeExit('home')}
+              />
+              <LandingV2 onNavigate={(targetView: string) => setView(targetView as ViewState)} />
+              <Footer onPrivacy={() => setView('privacy')} onTerms={() => setView('terms')} />
+          </div>
       );
   }
 
@@ -748,9 +443,20 @@ const NeuralApp: React.FC = () => {
       <main className="min-h-screen flex flex-col p-4 md:p-8 relative z-10 w-full max-w-[1920px] mx-auto">
         <Stepper />
 
-        {/* HOME VIEW */}
+        {/* HOME VIEW (CLASSIC) */}
         {view === 'home' && (
-          <div className="flex flex-col items-center justify-center space-y-12 animate-in fade-in duration-700 py-12">
+          <div className="flex flex-col items-center justify-center space-y-12 animate-in fade-in duration-700 py-12 relative">
+            
+            {/* TEMPORARY BUTTON TO SWITCH TO V2 */}
+            <div className="absolute top-0 right-0 md:top-4 md:right-4 z-50">
+                <button 
+                    onClick={() => setView('landing_v2')}
+                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform"
+                >
+                    <LayoutTemplate className="w-4 h-4" /> 🛠️ VER NUEVA LANDING
+                </button>
+            </div>
+
             <div className="text-center space-y-6 max-w-4xl relative">
               <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
               <h2 className="text-sm md:text-base font-mono text-cyan-400 tracking-[0.3em] uppercase">{t.app_subtitle}</h2>
@@ -842,6 +548,7 @@ const NeuralApp: React.FC = () => {
             </div>
         )}
 
+        {/* ... (Existing views logic: create_ai, create_manual, convert_upload, etc.) ... */}
         {view === 'create_ai' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
                 {/* ... existing create_ai content ... */}
@@ -857,8 +564,7 @@ const NeuralApp: React.FC = () => {
                 </div>
 
                 <CyberCard className="border-cyan-500/20 p-8 space-y-8">
-                    
-                    {/* 1. PLATFORM */}
+                    {/* ... (Create AI Card Content) ... */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-cyan-400">
                             <ArrowLeft className="w-4 h-4 rotate-180" />
@@ -1046,8 +752,8 @@ const NeuralApp: React.FC = () => {
                         isSaving={isSaving} 
                         user={user} 
                         t={t}
-                        onPlay={handlePlayFromEditor} // Connect Play
-                        currentLanguage={language} // NEW PROP
+                        onPlay={handlePlayFromEditor} 
+                        currentLanguage={language} 
                     />
                     <div ref={exportSectionRef} className="mt-12 pt-12 border-t border-gray-800">
                         <ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} initialTargetPlatform={targetPlatform} />
