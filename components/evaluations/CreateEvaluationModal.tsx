@@ -3,7 +3,7 @@ import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
 import { createEvaluation, auth } from '../../services/firebaseService';
 import { signInAnonymously } from 'firebase/auth';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play, Copy, CheckCircle2 } from 'lucide-react';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play, Copy, CheckCircle2, Code, LayoutDashboard } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES, ASSETS_BASE } from '../../data/bossPresets';
 import { ArcadePlay } from '../pages/ArcadePlay';
@@ -13,13 +13,15 @@ interface CreateEvaluationModalProps {
     onClose: () => void;
     quiz: Quiz;
     user: any;
+    onGoToDashboard?: () => void; // New prop for redirection
 }
 
-export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ isOpen, onClose, quiz, user }) => {
+export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ isOpen, onClose, quiz, user, onGoToDashboard }) => {
     const toast = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [createdUrl, setCreatedUrl] = useState<string | null>(null);
-    const [copied, setCopied] = useState(false);
+    const [copiedLink, setCopiedLink] = useState(false);
+    const [copiedEmbed, setCopiedEmbed] = useState(false);
     const [isPreviewMode, setIsPreviewMode] = useState(false);
 
     // Form State
@@ -64,7 +66,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             setStartDate(now.toISOString().slice(0, 16));
             setEndDate("");
             setCreatedUrl(null);
-            setCopied(false);
+            setCopiedLink(false);
+            setCopiedEmbed(false);
             setQuestionCount(quiz.questions.length);
             setCountWarning(false);
             handleSelectPreset('kryon_v');
@@ -182,13 +185,23 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         setIsPreviewMode(true);
     };
 
-    const copyToClipboard = () => {
-        if (createdUrl) {
-            navigator.clipboard.writeText(createdUrl);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-            toast.info("Enlace copiado");
+    const copyToClipboard = (text: string, isEmbed: boolean) => {
+        navigator.clipboard.writeText(text);
+        if (isEmbed) {
+            setCopiedEmbed(true);
+            setTimeout(() => setCopiedEmbed(false), 2000);
+        } else {
+            setCopiedLink(true);
+            setTimeout(() => setCopiedLink(false), 2000);
         }
+        toast.info("Copiado al portapapeles");
+    };
+
+    const handleFinalize = () => {
+        if (onGoToDashboard) {
+            onGoToDashboard();
+        } 
+        onClose();
     };
 
     if (!isOpen) return null;
@@ -403,35 +416,61 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                 </p>
                             </div>
 
-                            <div className="w-full bg-black/50 p-4 rounded-lg border border-gray-700 flex flex-col gap-3">
-                                <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest text-left">ENLACE DE ACCESO</label>
-                                <div className="flex gap-2">
-                                    <input 
-                                        readOnly 
-                                        value={createdUrl} 
-                                        className="flex-1 bg-black/80 border border-gray-600 rounded p-3 text-cyan-300 font-mono text-sm focus:outline-none"
-                                        onClick={(e) => (e.target as HTMLInputElement).select()}
-                                    />
-                                    <button 
-                                        onClick={copyToClipboard}
-                                        className={`p-3 rounded border transition-all ${copied ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-cyan-500 hover:text-cyan-400'}`}
-                                    >
-                                        {copied ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                                    </button>
+                            <div className="w-full space-y-4">
+                                {/* ENLACE DIRECTO */}
+                                <div className="bg-black/50 p-4 rounded-lg border border-gray-700 flex flex-col gap-2">
+                                    <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest text-left flex items-center gap-2">
+                                        <Rocket className="w-3 h-3" /> ENLACE DE ACCESO
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            readOnly 
+                                            value={createdUrl} 
+                                            className="flex-1 bg-black/80 border border-gray-600 rounded p-3 text-cyan-300 font-mono text-sm focus:outline-none"
+                                            onClick={(e) => (e.target as HTMLInputElement).select()}
+                                        />
+                                        <button 
+                                            onClick={() => copyToClipboard(createdUrl, false)}
+                                            className={`p-3 rounded border transition-all ${copiedLink ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-cyan-500 hover:text-cyan-400'}`}
+                                        >
+                                            {copiedLink ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* EMBED CODE */}
+                                <div className="bg-black/50 p-4 rounded-lg border border-gray-700 flex flex-col gap-2">
+                                    <label className="text-xs font-mono text-purple-400 uppercase tracking-widest text-left flex items-center gap-2">
+                                        <Code className="w-3 h-3" /> CÓDIGO EMBEBIBLE (IFRAME)
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            readOnly 
+                                            value={`<iframe src="${createdUrl}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>`} 
+                                            className="flex-1 bg-black/80 border border-gray-600 rounded p-3 text-purple-300 font-mono text-xs focus:outline-none truncate"
+                                            onClick={(e) => (e.target as HTMLInputElement).select()}
+                                        />
+                                        <button 
+                                            onClick={() => copyToClipboard(`<iframe src="${createdUrl}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>`, true)}
+                                            className={`p-3 rounded border transition-all ${copiedEmbed ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-purple-500 hover:text-purple-400'}`}
+                                        >
+                                            {copiedEmbed ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="flex gap-4 w-full">
+                            <div className="flex flex-col sm:flex-row gap-4 w-full pt-4">
                                 <a 
                                     href={`https://wa.me/?text=${encodeURIComponent("¡Reto Arcade listo! Entra aquí: " + createdUrl)}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex-1 py-3 bg-[#25D366]/20 border border-[#25D366]/50 text-[#25D366] rounded font-bold hover:bg-[#25D366]/30 transition-all flex items-center justify-center gap-2"
+                                    className="flex-1 py-4 bg-[#25D366]/20 border border-[#25D366]/50 text-[#25D366] rounded font-bold hover:bg-[#25D366]/30 transition-all flex items-center justify-center gap-2"
                                 >
                                     WhatsApp
                                 </a>
-                                <CyberButton onClick={onClose} variant="neural" className="flex-1">
-                                    FINALIZAR
+                                <CyberButton onClick={handleFinalize} variant="neural" className="flex-1 h-auto text-sm">
+                                    <LayoutDashboard className="w-4 h-4 mr-2" /> 📂 IR A MIS ACTIVIDADES
                                 </CyberButton>
                             </div>
                         </div>
