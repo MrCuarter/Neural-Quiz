@@ -3,7 +3,7 @@ import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
 import { createEvaluation, auth } from '../../services/firebaseService';
 import { signInAnonymously } from 'firebase/auth';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play, Copy, CheckCircle2, Code, LayoutDashboard } from 'lucide-react';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play, Copy, CheckCircle2, Code, LayoutDashboard, School } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES, ASSETS_BASE } from '../../data/bossPresets';
 import { ArcadePlay } from '../pages/ArcadePlay';
@@ -462,12 +462,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
                             <div className="flex flex-col sm:flex-row gap-4 w-full pt-4">
                                 <a 
-                                    href={`https://wa.me/?text=${encodeURIComponent("¡Reto Arcade listo! Entra aquí: " + createdUrl)}`}
+                                    href={`https://classroom.google.com/share?url=${encodeURIComponent(createdUrl)}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex-1 py-4 bg-[#25D366]/20 border border-[#25D366]/50 text-[#25D366] rounded font-bold hover:bg-[#25D366]/30 transition-all flex items-center justify-center gap-2"
+                                    className="flex-1 py-4 bg-emerald-900/30 border border-emerald-500/50 text-emerald-300 rounded font-bold hover:bg-emerald-900/50 transition-all flex items-center justify-center gap-2 hover:scale-105"
                                 >
-                                    WhatsApp
+                                    <School className="w-5 h-5" /> Compartir en Classroom
                                 </a>
                                 <CyberButton onClick={handleFinalize} variant="neural" className="flex-1 h-auto text-sm">
                                     <LayoutDashboard className="w-4 h-4 mr-2" /> 📂 IR A MIS ACTIVIDADES

@@ -92,7 +92,8 @@ const NeuralApp: React.FC = () => {
     age: string;
     context: string;
     urls: string; 
-    tone: string; // NEW PARAMETER
+    tone: string;
+    language: string; // NEW PARAMETER
   }>({
     topic: '',
     count: 5,
@@ -100,7 +101,8 @@ const NeuralApp: React.FC = () => {
     age: 'Universal',
     context: '',
     urls: '',
-    tone: 'Neutral'
+    tone: 'Neutral',
+    language: 'Spanish' // Default
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState(''); 
@@ -350,8 +352,7 @@ const NeuralApp: React.FC = () => {
     const qCount = parseInt(String(genParams.count)) || 5;
     const progressTimer = setInterval(() => { setGenProgress(prev => { if (prev >= 90) return prev + 0.05 < 99 ? prev + 0.05 : 99; return prev + (90 / (qCount * 20)); }); }, 100);
     try {
-      const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' };
-      const selectedLang = langMap[language] || 'Spanish';
+      const selectedLang = genParams.language || 'Spanish'; 
       const urlList = genParams.urls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
       const includeFeedback = PLATFORMS_WITH_FEEDBACK.includes(targetPlatform as ExportFormat);
       const aiResult = await generateQuizQuestions({ topic: genParams.topic, count: Number(genParams.count) || 5, types: genParams.types, age: genParams.age, context: genParams.context, urls: urlList, language: selectedLang, includeFeedback, tone: genParams.tone });
@@ -605,14 +606,33 @@ const NeuralApp: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* AGE & TONE */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* AGE & TONE & LANGUAGE */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="space-y-2">
                             <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">EDAD / NIVEL</label>
                             <CyberSelect 
                                 options={['Universal', 'Primary (6-12)', 'Secondary (12-16)', 'High School (16-18)', 'University', 'Professional'].map(v => ({ value: v, label: v }))}
                                 value={genParams.age} 
                                 onChange={(e) => setGenParams({...genParams, age: e.target.value})}
+                                className="h-12"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">IDIOMA</label>
+                             <CyberSelect 
+                                options={[
+                                    { value: 'Spanish', label: '🇪🇸 Español' },
+                                    { value: 'English', label: '🇬🇧 English' },
+                                    { value: 'French', label: '🇫🇷 Français' },
+                                    { value: 'German', label: '🇩🇪 Deutsch' },
+                                    { value: 'Italian', label: '🇮🇹 Italiano' },
+                                    { value: 'Portuguese', label: '🇵🇹 Português' },
+                                    { value: 'Catalan', label: '🏴 Catalan' },
+                                    { value: 'Basque', label: '🏴 Euskera' },
+                                    { value: 'Galician', label: '🏴 Galego' }
+                                ]}
+                                value={genParams.language} 
+                                onChange={(e) => setGenParams({...genParams, language: e.target.value})}
                                 className="h-12"
                             />
                         </div>

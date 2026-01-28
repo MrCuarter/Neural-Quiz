@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
@@ -39,6 +38,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiTopic, setAiTopic] = useState('');
   const [aiCount, setAiCount] = useState(3);
+  const [aiLanguage, setAiLanguage] = useState('Spanish'); // Added Language State
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   
@@ -457,7 +457,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       const platformTypes = PLATFORM_SPECS[targetPlatform].types;
       
       const aiResult = await generateQuizQuestions({
-        topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: 'Spanish'
+        topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: aiLanguage
       });
       
       const newQuestions: Question[] = aiResult.questions.map((gq: any) => {
@@ -687,6 +687,24 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
               <div className="flex items-center gap-2 mb-4 text-purple-400 font-cyber"><Bot className="w-5 h-5" /><h3>{t.ai_modal_title}</h3></div>
               <div className="flex flex-col md:flex-row gap-4 items-end">
                   <div className="flex-1 w-full"><CyberInput label={t.topic_label} placeholder={t.gen_placeholder} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}/></div>
+                  <div className="w-full md:w-40">
+                      <CyberSelect 
+                          label="IDIOMA" 
+                          options={[
+                              { value: 'Spanish', label: '🇪🇸 Español' },
+                              { value: 'English', label: '🇬🇧 English' },
+                              { value: 'French', label: '🇫🇷 Français' },
+                              { value: 'German', label: '🇩🇪 Deutsch' },
+                              { value: 'Italian', label: '🇮🇹 Italiano' },
+                              { value: 'Portuguese', label: '🇵🇹 Português' },
+                              { value: 'Catalan', label: '🏴 Catalan' },
+                              { value: 'Basque', label: '🏴 Euskera' },
+                              { value: 'Galician', label: '🏴 Galego' }
+                          ]}
+                          value={aiLanguage} 
+                          onChange={(e) => setAiLanguage(e.target.value)} 
+                      />
+                  </div>
                   <div className="w-24"><CyberInput type="number" label="#" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value))} min={1} max={10}/></div>
                   <CyberButton onClick={handleAiGenerate} isLoading={isGenerating} disabled={!aiTopic}>{t.ai_modal_add}</CyberButton>
                   <CyberButton variant="ghost" onClick={() => setShowAiModal(false)}>{t.ai_modal_close}</CyberButton>
