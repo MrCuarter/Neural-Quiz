@@ -12,7 +12,8 @@ import {
     Skull,
     Trophy,
     Timer,
-    ArrowRight
+    ArrowRight,
+    LogIn
 } from 'lucide-react';
 import { ASSETS_BASE } from '../../data/bossPresets';
 
@@ -47,11 +48,11 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                         </h1>
                         
                         <p className="text-lg md:text-xl text-gray-400 font-light leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                            El <span className="text-cyan-200 font-bold">Hub Universal</span> para tus evaluaciones. Crea con IA en segundos, gestiona tu biblioteca global y exporta a Kahoot, Gimkit o juega aquí mismo.
+                            El <span className="text-cyan-200 font-bold">Hub Universal</span> que convierte tu clase en un videojuego. Crea con IA en segundos y gestiona tu biblioteca global. Pero no te limites a evaluar: desafía a tus alumnos con Raids cooperativas en vivo y Campañas RPG de largo recorrido. Exporta si quieres, pero la verdadera aventura empieza aquí.
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
-                            {user ? (
+                            {user && (
                                 <>
                                     <CyberButton 
                                         onClick={() => onNavigate('teacher_hub')} 
@@ -67,21 +68,8 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                                         <LayoutGrid className="w-5 h-5 mr-2" /> 📂 MIS QUIZZES
                                     </CyberButton>
                                 </>
-                            ) : (
-                                <CyberButton 
-                                    onClick={onLoginReq} 
-                                    className="h-14 text-lg px-8 bg-yellow-600 hover:bg-yellow-500 border-none shadow-[0_0_20px_rgba(234,179,8,0.4)] text-black font-bold"
-                                >
-                                    <Lock className="w-5 h-5 mr-2" /> INICIAR SESIÓN PARA GUARDAR TU PROGRESO
-                                </CyberButton>
                             )}
                         </div>
-                        
-                        {!user && (
-                            <p className="text-xs text-gray-500 font-mono pt-2">
-                                * Puedes explorar sin cuenta, pero no podrás guardar ni gestionar clases.
-                            </p>
-                        )}
                     </div>
 
                     {/* RIGHT: GENIALLY EMBED WITH PROTECTIVE OVERLAY */}
@@ -275,9 +263,22 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
             {/* --- FOOTER CTA --- */}
             <section className="py-16 text-center border-t border-gray-900 bg-gray-950/50">
                 <h3 className="text-2xl font-cyber text-white mb-6">¿LISTO PARA TOMAR EL CONTROL?</h3>
-                <CyberButton onClick={() => onNavigate(user ? 'teacher_hub' : 'create_menu')} className="h-16 px-10 text-xl">
-                    EMPEZAR AHORA
-                </CyberButton>
+                <div className="flex justify-center">
+                    <CyberButton 
+                        onClick={user ? () => onNavigate('teacher_hub') : onLoginReq} 
+                        className="h-16 px-10 text-xl shadow-[0_0_30px_rgba(6,182,212,0.4)]"
+                    >
+                        {user ? (
+                            <>
+                                <MonitorPlay className="w-6 h-6 mr-3" /> IR AL CENTRO DE MANDO
+                            </>
+                        ) : (
+                            <>
+                                <LogIn className="w-6 h-6 mr-3" /> INICIAR SESIÓN
+                            </>
+                        )}
+                    </CyberButton>
+                </div>
             </section>
 
         </div>
