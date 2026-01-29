@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid, Home, MonitorPlay } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
-import { auth, signInWithGoogle, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
+import { auth, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
+import { AuthModal } from './auth/AuthModal';
 
 interface HeaderProps {
   language: Language;
@@ -10,12 +11,13 @@ interface HeaderProps {
   onHelp: () => void;
   onMyQuizzes: () => void;
   onHome: () => void;
-  onTeacherHub: () => void; // New Callback
+  onTeacherHub: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes, onHome, onTeacherHub }) => {
   const [user, setUser] = useState<any>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     if (!auth || !onAuthStateChanged) {
@@ -33,10 +35,6 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
     }
   }, []);
 
-  const handleLogin = async () => {
-      try { await signInWithGoogle(); } catch (e) { alert("Error al iniciar sesión."); }
-  };
-
   const handleLogout = async () => {
       await logoutFirebase();
   };
@@ -50,6 +48,9 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
 
   return (
     <header className="sticky top-0 z-40 bg-[#020617]/90 backdrop-blur-md border-b border-gray-800 transition-colors duration-300">
+      
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center h-auto sm:h-16 py-3 sm:py-0 gap-3 sm:gap-0">
         
         {/* SECCIÓN IZQUIERDA: LOGO GRÁFICO + TEXTO */}
@@ -93,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                     </div>
                  ) : (
                     <button 
-                        onClick={handleLogin}
+                        onClick={() => setIsAuthModalOpen(true)}
                         className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/20 border border-blue-500/50 rounded hover:bg-blue-900/40 text-blue-200 transition-all group"
                     >
                         <LogIn className="w-3 h-3" />
