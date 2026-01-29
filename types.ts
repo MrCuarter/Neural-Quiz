@@ -1,4 +1,6 @@
 
+// ... existing imports
+
 export interface Option {
   id: string;
   text: string;
@@ -95,6 +97,49 @@ export interface TeacherProfile {
     };
 }
 
+// --- CAMPAIGN MODE (NEW FASE 4) ---
+export type CampaignTheme = 'cyberpunk' | 'fantasy' | 'space' | 'arcade' | 'kids';
+
+export interface CampaignMission {
+    id: string;
+    quizId: string;
+    title: string; // Denormalized for display
+    unlockDate?: string; // ISO String
+    status: 'locked' | 'active' | 'finished';
+    multiplier: number; // 1.0, 1.5, 2.0 (Difficulty factor)
+}
+
+export interface Campaign {
+    id?: string;
+    teacherId: string;
+    title: string;
+    description: string;
+    imageUrl?: string;
+    theme: CampaignTheme;
+    
+    // Economy
+    resourceName: string; // 'Gold', 'Credits', 'XP'
+    resourceEmoji: string; // '🪙', '💎', '✨'
+    goalAmount: number;
+    currentAmount: number;
+    
+    publicId: string; // UUID for public access
+    missions: CampaignMission[];
+    
+    createdAt?: any;
+}
+
+export interface CampaignLog {
+    id?: string;
+    campaignId: string;
+    timestamp: any;
+    studentAlias: string;
+    realName?: string; // Optional, only visible to teacher
+    action: 'quiz_completed' | 'loot_found' | 'manual_event';
+    amount: number; // Positive or negative
+    message: string;
+}
+
 // --- BOSS BATTLE CONFIG ---
 export interface BossImageConfig {
     idle: string;   // Normal state
@@ -152,6 +197,10 @@ export interface EvaluationConfig {
         totalBossHP: number; // Calculated based on students
         timeLimitMinutes: number;
     };
+    
+    // CAMPAIGN INTEGRATION
+    campaignId?: string; // If this evaluation belongs to a campaign
+    missionId?: string; // Specifically which mission
 }
 
 export interface Evaluation {
@@ -180,6 +229,10 @@ export interface EvaluationAttempt {
     timestamp: any; // ServerTimestamp
     answersSummary?: { correct: number; incorrect: number; total: number };
     isFinished?: boolean; // For Raid mode to know if student is still playing
+    
+    // CAMPAIGN DATA
+    lootFound?: number; // Number of chests/items found
+    resourcesEarned?: number; // Total campaign currency earned
 }
 
 // --- GAME TYPES ---

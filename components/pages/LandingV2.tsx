@@ -2,20 +2,17 @@
 import React from 'react';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
 import { 
-    ArrowRight, 
-    Upload, 
-    Zap, 
-    Globe, 
-    Gamepad2, 
-    Layers, 
-    Repeat, 
     Sparkles, 
-    Users,
-    Swords,
     MonitorPlay,
     LayoutGrid,
     Lock,
-    Trophy
+    FolderOpen,
+    Radio,
+    ShieldCheck,
+    Skull,
+    Trophy,
+    Timer,
+    ArrowRight
 } from 'lucide-react';
 import { ASSETS_BASE } from '../../data/bossPresets';
 
@@ -30,7 +27,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
     return (
         <div className="min-h-screen bg-[#020617] text-white flex flex-col font-sans selection:bg-cyan-500/30">
             
-            {/* --- HERO SECTION: THE PROMISE --- */}
+            {/* --- HERO SECTION: THE PROMISE (GENIALLY) --- */}
             <section className="relative pt-20 pb-20 md:pt-32 md:pb-32 px-6 overflow-hidden">
                 {/* Background Glows */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none" />
@@ -107,205 +104,167 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                 </div>
             </section>
 
-            {/* --- FEATURES SECTION: BENTO GRID --- */}
-            <section className="py-20 px-6 bg-black/40 border-y border-gray-900">
-                <div className="max-w-7xl mx-auto space-y-12">
-                    <div className="text-center">
-                        <h2 className="text-3xl md:text-4xl font-cyber text-white mb-4">TU NAVAJA SUIZA EDUCATIVA</h2>
-                        <p className="text-gray-400 font-mono">Cuatro motores, una sola plataforma. Control total sobre tus datos.</p>
+            {/* --- SECTION 1: TEACHER HUB (CENTRO DE MANDO) --- */}
+            <section className="py-24 px-6 bg-[#030508] relative">
+                <div className="max-w-7xl mx-auto space-y-12 relative z-10">
+                    <div className="text-center space-y-4">
+                        <h2 className="text-3xl md:text-5xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+                            TU CENTRO DE MANDO
+                        </h2>
+                        <p className="text-gray-400 font-mono max-w-2xl mx-auto">
+                            Gestiona todo tu ecosistema educativo desde una única interfaz unificada.
+                        </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 grid-rows-2 gap-4 h-auto md:h-[600px]">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         
-                        {/* CARD 1: CONVERSION (Large Left) */}
+                        {/* CARD 1: QUIZ MANAGEMENT */}
                         <div 
-                            onClick={() => onNavigate('convert_upload')}
-                            className="md:col-span-2 md:row-span-1 group relative bg-gradient-to-br from-gray-900 to-black border border-gray-800 hover:border-pink-500/50 rounded-2xl p-8 transition-all cursor-pointer overflow-hidden"
+                            onClick={() => onNavigate(user ? 'my_quizzes' : 'create_menu')}
+                            className="group relative bg-gray-900/40 backdrop-blur-sm border border-cyan-500/20 hover:border-cyan-400 p-8 rounded-2xl transition-all cursor-pointer hover:bg-gray-900/60 hover:-translate-y-2 shadow-lg"
                         >
-                            <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-40 transition-opacity">
-                                <Repeat className="w-32 h-32 text-pink-500" />
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-cyan-500/10 transition-colors"></div>
+                            
+                            <div className="w-14 h-14 bg-cyan-950/50 rounded-xl border border-cyan-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                <FolderOpen className="w-7 h-7 text-cyan-400" />
                             </div>
-                            <div className="relative z-10">
-                                <div className="w-12 h-12 bg-pink-900/30 rounded-lg flex items-center justify-center border border-pink-500/30 mb-4">
-                                    <Upload className="w-6 h-6 text-pink-400" />
-                                </div>
-                                <h3 className="text-2xl font-bold font-cyber text-white mb-2 group-hover:text-pink-300">CONVERSIÓN TOTAL</h3>
-                                <p className="text-gray-400 text-sm max-w-md">
-                                    Importa desde cualquier fuente: Kahoots públicos, PDFs de editoriales o Excel. La IA estructura los datos y te permite exportar a más de 15 plataformas.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* CARD 2: GENERATOR (Right Top) */}
-                        <div 
-                            onClick={() => onNavigate('create_menu')}
-                            className="md:col-span-1 md:row-span-1 group relative bg-gray-900/50 border border-gray-800 hover:border-cyan-500/50 rounded-2xl p-8 transition-all cursor-pointer overflow-hidden"
-                        >
-                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-cyan-500/10 blur-2xl rounded-full"></div>
-                            <div className="w-12 h-12 bg-cyan-900/30 rounded-lg flex items-center justify-center border border-cyan-500/30 mb-4">
-                                <Sparkles className="w-6 h-6 text-cyan-400" />
-                            </div>
-                            <h3 className="text-xl font-bold font-cyber text-white mb-2">NEURAL QUIZ</h3>
-                            <p className="text-gray-400 text-xs">
-                                IA + Edición Manual. Crea quizzes en segundos desde un tema o pule cada detalle a mano.
+                            
+                            <h3 className="text-xl font-bold font-cyber text-white mb-3 group-hover:text-cyan-300">
+                                GESTIÓN DE QUIZZES
+                            </h3>
+                            <p className="text-sm text-gray-400 leading-relaxed">
+                                Organiza tu biblioteca, edita con IA y mantén el control total de tus contenidos. Importa, fusiona y exporta en segundos.
                             </p>
                         </div>
 
-                        {/* CARD 3: ARCADE (Large Bottom Right) */}
+                        {/* CARD 2: LIVE ACTIVITIES */}
+                        <div 
+                            onClick={() => onNavigate(user ? 'teacher_hub' : 'create_menu')}
+                            className="group relative bg-gray-900/40 backdrop-blur-sm border border-purple-500/20 hover:border-purple-400 p-8 rounded-2xl transition-all cursor-pointer hover:bg-gray-900/60 hover:-translate-y-2 shadow-lg"
+                        >
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-purple-500/10 transition-colors"></div>
+                            
+                            <div className="w-14 h-14 bg-purple-950/50 rounded-xl border border-purple-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                <Radio className="w-7 h-7 text-purple-400" />
+                            </div>
+                            
+                            <h3 className="text-xl font-bold font-cyber text-white mb-3 group-hover:text-purple-300">
+                                ACTIVIDADES & DIRECTO
+                            </h3>
+                            <p className="text-sm text-gray-400 leading-relaxed">
+                                Lanza modos en vivo como Raids o asigna Quests para casa. Sincronización en tiempo real y dashboards de control.
+                            </p>
+                        </div>
+
+                        {/* CARD 3: CLASS MANAGEMENT */}
+                        <div 
+                            onClick={() => onNavigate(user ? 'classes_manager' : 'create_menu')}
+                            className="group relative bg-gray-900/40 backdrop-blur-sm border border-green-500/20 hover:border-green-400 p-8 rounded-2xl transition-all cursor-pointer hover:bg-gray-900/60 hover:-translate-y-2 shadow-lg"
+                        >
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-green-500/10 transition-colors"></div>
+                            
+                            <div className="w-14 h-14 bg-green-950/50 rounded-xl border border-green-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                <ShieldCheck className="w-7 h-7 text-green-400" />
+                            </div>
+                            
+                            <h3 className="text-xl font-bold font-cyber text-white mb-3 group-hover:text-green-300">
+                                GESTIÓN DE CLASES
+                            </h3>
+                            <p className="text-sm text-gray-400 leading-relaxed">
+                                Crea listas de alumnos, asigna alias de combate y sigue su evolución con métricas detalladas y persistencia de datos.
+                            </p>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            {/* --- SECTION 2: NEURAL ARCADE --- */}
+            <section className="py-24 px-6 bg-gradient-to-b from-gray-900 to-black relative overflow-hidden">
+                {/* Background Decor */}
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
+                
+                <div className="max-w-7xl mx-auto space-y-16 relative z-10">
+                    <div className="text-center space-y-4">
+                        <div className="inline-block px-4 py-1 rounded-full border border-pink-500/50 bg-pink-900/20 text-pink-400 text-xs font-mono tracking-widest mb-2">
+                            GAME ENGINE V3.0
+                        </div>
+                        <h2 className="text-4xl md:text-6xl font-black font-cyber text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
+                            MODOS ARCADE
+                        </h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        
+                        {/* CARD A: FINAL BOSS */}
                         <div 
                             onClick={() => onNavigate('game_lobby')}
-                            className="md:col-span-2 md:row-span-1 group relative bg-gray-900/50 border border-gray-800 hover:border-yellow-500/50 rounded-2xl p-0 transition-all cursor-pointer overflow-hidden flex flex-col md:flex-row"
+                            className="group relative h-96 rounded-2xl overflow-hidden border border-red-900/50 cursor-pointer transition-all hover:scale-[1.02] hover:border-red-500"
                         >
-                            <div className="p-8 flex-1 relative z-10">
-                                <div className="w-12 h-12 bg-yellow-900/30 rounded-lg flex items-center justify-center border border-yellow-500/30 mb-4">
-                                    <Swords className="w-6 h-6 text-yellow-400" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-red-950 via-gray-900/80 to-transparent z-10"></div>
+                            <img 
+                                src={`${ASSETS_BASE}/finalboss/kryon.png`} 
+                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity group-hover:scale-110 duration-700"
+                                alt="Boss"
+                            />
+                            
+                            <div className="absolute bottom-0 left-0 right-0 p-8 z-20 space-y-3">
+                                <div className="flex items-center gap-2 text-red-400 font-cyber font-bold text-2xl">
+                                    <Skull className="w-6 h-6" /> FINAL BOSS
                                 </div>
-                                <h3 className="text-2xl font-bold font-cyber text-white mb-2 group-hover:text-yellow-300">NEURAL ARCADE</h3>
-                                <p className="text-gray-400 text-sm">
-                                    Gamificación Nativa. Lanza una <strong>Boss Battle</strong> épica o un <strong>Jeopardy</strong> directamente desde tu panel. Sin exportar.
+                                <p className="text-gray-300 text-sm leading-relaxed border-l-2 border-red-500 pl-3">
+                                    Cooperativo en Vivo. Toda la clase une fuerzas para derrotar a enemigos colosales proyectados en la pizarra.
                                 </p>
-                            </div>
-                            {/* Visual Representation of Boss */}
-                            <div className="w-full md:w-1/3 h-48 md:h-full bg-gradient-to-t from-red-900/20 to-transparent relative">
-                                <img 
-                                    src={`${ASSETS_BASE}/finalboss/kryon.png`} 
-                                    alt="Kryon Boss" 
-                                    className="absolute bottom-0 right-0 md:right-4 h-[110%] w-auto object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.5)] transition-transform group-hover:scale-105"
-                                />
+                                <div className="pt-2 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0">
+                                    <span className="text-xs font-mono text-red-300 flex items-center gap-1">
+                                        LANZAR AHORA <ArrowRight className="w-3 h-3" />
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* CARD 4: COMMUNITY (Left Bottom) */}
+                        {/* CARD B: JEOPARDY */}
                         <div 
-                            onClick={() => onNavigate('community')}
-                            className="md:col-span-1 md:row-span-1 group relative bg-gray-900/50 border border-gray-800 hover:border-purple-500/50 rounded-2xl p-8 transition-all cursor-pointer overflow-hidden"
+                            onClick={() => onNavigate('game_lobby')}
+                            className="group relative h-96 rounded-2xl overflow-hidden border border-purple-900/50 cursor-pointer transition-all hover:scale-[1.02] hover:border-purple-500"
                         >
-                            <div className="absolute top-0 right-0 p-4 opacity-20">
-                                <Users className="w-20 h-20 text-purple-500" />
-                            </div>
-                            <div className="w-12 h-12 bg-purple-900/30 rounded-lg flex items-center justify-center border border-purple-500/30 mb-4">
-                                <Globe className="w-6 h-6 text-purple-400" />
-                            </div>
-                            <h3 className="text-xl font-bold font-cyber text-white mb-2">COMUNIDAD VIVA</h3>
-                            <p className="text-gray-400 text-xs">
-                                Accede a miles de quizzes creados por otros docentes, adáptalos y compártelos.
-                            </p>
-                        </div>
-
-                    </div>
-                </div>
-            </section>
-
-            {/* --- GAME MODES SHOWCASE (BOSS BATTLE) --- */}
-            <section className="py-20 px-6 relative overflow-hidden bg-gradient-to-b from-black to-red-950/20">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-red-900/10 blur-[100px] rounded-full pointer-events-none" />
-                
-                <div className="max-w-5xl mx-auto relative z-10 text-center">
-                    <h2 className="text-4xl md:text-5xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600 mb-8">
-                        ARCADE: MODO JEFE FINAL
-                    </h2>
-                    
-                    <div className="bg-gradient-to-br from-red-950/80 to-black border border-red-500/30 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
-                        {/* Animated Background Grid */}
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-                        <div className="absolute top-0 left-0 w-full h-1 bg-red-500/50"></div>
-
-                        <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 relative z-10">
-                            <div className="text-left flex-1 space-y-6">
-                                <div className="inline-block px-3 py-1 bg-red-600 text-white text-xs font-bold font-mono rounded uppercase">
-                                    SOLO / ASÍNCRONO
+                            <div className="absolute inset-0 bg-gradient-to-t from-purple-950 via-gray-900/80 to-transparent z-10"></div>
+                            {/* Abstract BG for Jeopardy */}
+                            <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(168,85,247,0.1)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px] opacity-30"></div>
+                            
+                            <div className="absolute bottom-0 left-0 right-0 p-8 z-20 space-y-3">
+                                <div className="flex items-center gap-2 text-purple-400 font-cyber font-bold text-2xl">
+                                    <Trophy className="w-6 h-6" /> JEOPARDY
                                 </div>
-                                <h3 className="text-4xl font-black font-cyber text-red-500 tracking-wide drop-shadow-md">
-                                    BOSS BATTLE RPG
-                                </h3>
-                                <p className="text-gray-300 text-lg leading-relaxed">
-                                    Transforma el examen en una batalla épica. El alumno debe responder correctamente para bajar la vida a Lythara y sus esbirros. ¡Sistema de loot y niveles!
+                                <p className="text-gray-300 text-sm leading-relaxed border-l-2 border-purple-500 pl-3">
+                                    El clásico concurso de TV reimaginado. Tableros interactivos para repasar por categorías y dificultad.
                                 </p>
-                                <div className="flex gap-4 pt-4">
-                                    <CyberButton 
-                                        onClick={() => onNavigate('game_lobby')} 
-                                        className="h-12 bg-red-600 hover:bg-red-500 border-none shadow-[0_0_20px_rgba(220,38,38,0.4)]"
-                                    >
-                                        <Gamepad2 className="w-5 h-5 mr-2" /> LANZAR PARTIDA
-                                    </CyberButton>
-                                </div>
-                            </div>
-                            
-                            {/* Boss Visual (Lythara) */}
-                            <div className="w-64 h-64 md:w-80 md:h-80 relative shrink-0">
-                                <div className="absolute inset-0 bg-red-500/20 rounded-full blur-3xl animate-pulse"></div>
-                                <img 
-                                    src={`${ASSETS_BASE}/finalboss/lythara.png`} 
-                                    className="relative w-full h-full object-contain drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]"
-                                    alt="Lythara Boss"
-                                />
-                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 border border-red-500 text-red-500 text-xs px-3 py-1 rounded font-mono">
-                                    HP: 10000 / 10000
+                                <div className="pt-2 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0">
+                                    <span className="text-xs font-mono text-purple-300 flex items-center gap-1">
+                                        LANZAR AHORA <ArrowRight className="w-3 h-3" />
+                                    </span>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </section>
 
-            {/* --- GAME MODES SHOWCASE (JEOPARDY) --- */}
-            <section className="py-20 px-6 relative overflow-hidden bg-gradient-to-b from-black to-purple-950/20 border-t border-gray-900">
-                
-                <div className="max-w-5xl mx-auto relative z-10 text-center">
-                    <h2 className="text-4xl md:text-5xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600 mb-8">
-                        ARCADE: MODO TV
-                    </h2>
-                    
-                    <div className="bg-gradient-to-br from-purple-950/80 to-black border border-purple-500/30 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
-                        
-                        {/* Fake Grid Background */}
-                        <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'linear-gradient(#a855f7 1px, transparent 1px), linear-gradient(90deg, #a855f7 1px, transparent 1px)', backgroundSize: '40px 40px'}}></div>
-
-                        <div className="flex flex-col-reverse md:flex-row items-center gap-8 md:gap-12 relative z-10">
+                        {/* CARD C: THE ESCAPE (COMING SOON) */}
+                        <div className="group relative h-96 rounded-2xl overflow-hidden border border-gray-800 bg-black/60 cursor-not-allowed">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-green-900/10 via-black to-black opacity-50"></div>
                             
-                            {/* Visual Board Mockup */}
-                            <div className="w-full md:w-1/2 relative">
-                                <div className="bg-black/80 border-4 border-purple-500 rounded-lg p-2 shadow-[0_0_30px_rgba(168,85,247,0.4)] aspect-video flex flex-col gap-1">
-                                    {/* Mock Categories */}
-                                    <div className="grid grid-cols-4 gap-1 text-[8px] font-mono text-center text-purple-300 font-bold mb-1">
-                                        <div className="bg-purple-900/50 p-1">HISTORIA</div>
-                                        <div className="bg-purple-900/50 p-1">CIENCIA</div>
-                                        <div className="bg-purple-900/50 p-1">ARTE</div>
-                                        <div className="bg-purple-900/50 p-1">CINE</div>
-                                    </div>
-                                    {/* Mock Cells */}
-                                    <div className="grid grid-cols-4 gap-1 flex-1">
-                                        {[...Array(12)].map((_, i) => (
-                                            <div key={i} className="bg-purple-900/20 border border-purple-500/30 flex items-center justify-center text-purple-400 font-cyber text-xs">
-                                                {Math.floor(i / 4 + 1) * 100}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                            <div className="absolute top-4 right-4 bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1 rounded text-[10px] font-mono font-bold tracking-widest animate-pulse">
+                                EN DESARROLLO
                             </div>
 
-                            <div className="text-left flex-1 space-y-6">
-                                <div className="inline-block px-3 py-1 bg-purple-600 text-white text-xs font-bold font-mono rounded uppercase">
-                                    GRUPAL / CLASE
+                            <div className="absolute bottom-0 left-0 right-0 p-8 z-20 space-y-3 opacity-60 group-hover:opacity-80 transition-opacity">
+                                <div className="flex items-center gap-2 text-gray-400 font-cyber font-bold text-2xl">
+                                    <Timer className="w-6 h-6" /> THE ESCAPE
                                 </div>
-                                <h3 className="text-4xl font-black font-cyber text-purple-400 tracking-wide drop-shadow-md">
-                                    JEOPARDY NEURAL
-                                </h3>
-                                <p className="text-gray-300 text-lg leading-relaxed">
-                                    El clásico concurso de televisión llevado al aula. Equipos, rebotes, apuestas y "Chaos Mode" con poderes especiales. Ideal para repasar en la pizarra digital.
+                                <p className="text-gray-500 text-sm leading-relaxed border-l-2 border-gray-700 pl-3">
+                                    Un modo de supervivencia contrarreloj. Los estudiantes deben responder para huir de la amenaza inminente.
                                 </p>
-                                <div className="flex gap-4 pt-4">
-                                    <CyberButton 
-                                        onClick={() => onNavigate('game_lobby')} 
-                                        variant="secondary"
-                                        className="h-12 border-purple-500 text-purple-400 hover:bg-purple-900/30"
-                                    >
-                                        <Trophy className="w-5 h-5 mr-2" /> JUGAR DEMO
-                                    </CyberButton>
-                                </div>
                             </div>
-                            
                         </div>
+
                     </div>
                 </div>
             </section>
@@ -321,24 +280,3 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
         </div>
     );
 };
-
-// Helper Icon
-const RocketIcon = (props: any) => (
-    <svg 
-        {...props}
-        xmlns="http://www.w3.org/2000/svg" 
-        width="24" 
-        height="24" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth="2" 
-        strokeLinecap="round" 
-        strokeLinejoin="round"
-    >
-        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
-        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
-        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
-        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
-    </svg>
-);

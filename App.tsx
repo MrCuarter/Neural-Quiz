@@ -18,10 +18,12 @@ import { ArcadePlay } from './components/pages/ArcadePlay';
 import { LandingV2 } from './components/pages/LandingV2'; 
 import { TeacherHub } from './components/pages/TeacherHub'; 
 import { ClassesManager } from './components/pages/ClassesManager'; 
-import { RaidDashboard } from './components/pages/live/RaidDashboard'; // NEW
+import { RaidDashboard } from './components/pages/live/RaidDashboard'; 
+import { CampaignManager } from './components/pages/campaign/CampaignManager'; // NEW
+import { PublicCampaignView } from './components/pages/campaign/PublicCampaignView'; // NEW
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2, LayoutTemplate } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2, LayoutTemplate, Download } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
@@ -33,7 +35,7 @@ import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
 // Types
-type ViewState = 'home' | 'landing_v2' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play' | 'raid_dashboard';
+type ViewState = 'home' | 'landing_v2' | 'teacher_hub' | 'classes_manager' | 'campaign_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'export_step' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'public_campaign' | 'community' | 'arcade_play' | 'raid_dashboard';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -72,7 +74,8 @@ const Stepper: React.FC = () => {
 
 // --- MAIN APP COMPONENT (Inner) ---
 const NeuralApp: React.FC = () => {
-  const [view, setView] = useState<ViewState>('home');
+  // SET LANDING_V2 AS DEFAULT INITIAL STATE
+  const [view, setView] = useState<ViewState>('landing_v2');
   const [quiz, setQuiz] = useState<Quiz>(initialQuiz);
   const [isClassroomMode, setIsClassroomMode] = useState(false);
   const [language, setLanguage] = useState<Language>('es');
@@ -86,7 +89,8 @@ const NeuralApp: React.FC = () => {
   // URL Parsing State
   const [sharedQuizId, setSharedQuizId] = useState<string | null>(null);
   const [arcadeEvalId, setArcadeEvalId] = useState<string | null>(null); 
-  const [raidDashboardId, setRaidDashboardId] = useState<string | null>(null); // NEW
+  const [raidDashboardId, setRaidDashboardId] = useState<string | null>(null);
+  const [publicCampaignId, setPublicCampaignId] = useState<string | null>(null);
 
   // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
@@ -98,7 +102,7 @@ const NeuralApp: React.FC = () => {
     context: string;
     urls: string; 
     tone: string;
-    language: string; // NEW PARAMETER
+    language: string; 
   }>({
     topic: '',
     count: 5,
@@ -125,7 +129,6 @@ const NeuralApp: React.FC = () => {
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const exportSectionRef = useRef<HTMLDivElement>(null);
   const progressIntervalRef = useRef<number | null>(null);
 
   const [showMissingAnswersModal, setShowMissingAnswersModal] = useState(false);
@@ -171,14 +174,24 @@ const NeuralApp: React.FC = () => {
               return;
           }
       }
+
+      // 3. PUBLIC CAMPAIGN ROUTE (/c/:id)
+      if (path.startsWith('/c/')) {
+          const campId = path.split('/c/')[1];
+          if (campId && campId.length > 0) {
+              setPublicCampaignId(campId);
+              setView('public_campaign');
+              return;
+          }
+      }
       
-      // 3. NEW HOME ROUTE (/new-home)
-      if (path.startsWith('/new-home')) {
+      // 4. LEGACY HOME ROUTE CHECK (Optional, just ensures landing_v2 is default if root)
+      if (path === '/' || path.startsWith('/new-home')) {
           setView('landing_v2');
           return;
       }
 
-      // 4. SHARE ID QUERY PARAM (?shareId=...)
+      // 5. SHARE ID QUERY PARAM (?shareId=...)
       const shareId = params.get('shareId');
       if (shareId) {
           setSharedQuizId(shareId);
@@ -224,10 +237,6 @@ const NeuralApp: React.FC = () => {
     const newMode = !isClassroomMode;
     setIsClassroomMode(newMode);
     localStorage.setItem('neuralQuizTheme', newMode ? 'classroom' : 'cyber');
-  };
-
-  const scrollToExport = () => {
-    exportSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handlePlatformChange = (platformKey: string) => {
@@ -303,7 +312,6 @@ const NeuralApp: React.FC = () => {
   const handleLoginRequest = async () => {
       try {
           await signInWithGoogle();
-          // Stay on view, Header will update
       } catch (e) {
           toast.error("Login failed");
       }
@@ -334,7 +342,6 @@ const NeuralApp: React.FC = () => {
       setView('game_lobby');
   };
 
-  // ... (processContextFiles, handleDrag, handleDrop, handleContextFileInput remain unchanged) ...
   const processContextFiles = async (files: FileList | null) => {
       if (!files || files.length === 0) return;
       let combinedText = "";
@@ -367,7 +374,6 @@ const NeuralApp: React.FC = () => {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) processContextFiles(e.dataTransfer.files); };
   const handleContextFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { processContextFiles(e.target.files); };
 
-  // ... (handleCreateAI, performAnalysis, etc. remain unchanged) ...
   const handleCreateAI = async () => {
     if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) { toast.warning(t.alert_topic); return; }
     setIsGenerating(true); setGenProgress(0); setIsGenSuccess(false);
@@ -405,7 +411,6 @@ const NeuralApp: React.FC = () => {
   const handleGenerateMissingAnswers = async () => { setIsGeneratingAnswers(true); try { const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' }; const enhancedQuestions = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish'); setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: enhancedQuestions, tags: ['AI Repair'] }); setShowMissingAnswersModal(false); setView('create_manual'); toast.success("Answers generated successfully!"); } catch (e) { toast.error("Error generating answers. Please check quota."); } finally { setIsGeneratingAnswers(false); } };
   const handleSkipMissingAnswers = () => { setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: tempQuestions }); setShowMissingAnswersModal(false); setView('create_manual'); };
   
-  // ... (handleFileProcessing, handleConvertDrag, etc. remain unchanged) ...
   const handleFileProcessing = async (file: File) => { if (!file) return; const fileName = file.name; const fileType = file.type; try { if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) { const reader = new FileReader(); reader.onload = (e) => { const data = e.target?.result; if (fileName.endsWith('.csv')) { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { performAnalysis(data as string, fileName); } } else { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { toast.error(t.alert_no_valid_csv); } } }; if (fileName.endsWith('.csv')) reader.readAsText(file); else reader.readAsBinaryString(file); return; } if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) { const text = await extractTextFromPDF(file); performAnalysis(text, fileName); return; } if (fileType.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => { const base64 = e.target?.result as string; const base64Data = base64.split(',')[1]; performAnalysis("Extract questions from this image", fileName, false, [], { data: base64Data, mimeType: fileType }); }; reader.readAsDataURL(file); return; } if (fileType.startsWith('text/') || fileName.endsWith('.json') || fileName.endsWith('.md') || fileName.endsWith('.txt')) { const text = await file.text(); performAnalysis(text, fileName); return; } toast.error(t.alert_read_error || "Unsupported file type"); } catch (e: any) { console.error(e); toast.error(`${t.alert_read_error}: ${e.message}`); } };
   const handleConvertDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') { setDragActive(true); } else if (e.type === 'dragleave') { setDragActive(false); } };
   const handleConvertDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { handleFileProcessing(e.dataTransfer.files[0]); } };
@@ -443,7 +448,12 @@ const NeuralApp: React.FC = () => {
       );
   }
 
-  // --- NEW: LANDING V2 RENDER ---
+  // --- PUBLIC CAMPAIGN VIEW ---
+  if (view === 'public_campaign' && publicCampaignId) {
+      return <PublicCampaignView publicId={publicCampaignId} />;
+  }
+
+  // --- NEW: LANDING V2 RENDER (DEFAULT) ---
   if (view === 'landing_v2') {
       return (
           <div className="flex flex-col bg-[#020617] text-white overflow-x-hidden min-h-screen">
@@ -452,7 +462,7 @@ const NeuralApp: React.FC = () => {
                 setLanguage={setLanguage} 
                 onHelp={() => handleSafeExit('help')} 
                 onMyQuizzes={() => handleSafeExit('my_quizzes')}
-                onHome={() => handleSafeExit('home')}
+                onHome={() => handleSafeExit('landing_v2')} // Go to self
                 onTeacherHub={() => handleSafeExit('teacher_hub')}
               />
               <LandingV2 
@@ -472,7 +482,7 @@ const NeuralApp: React.FC = () => {
         setLanguage={setLanguage} 
         onHelp={() => handleSafeExit('help')} 
         onMyQuizzes={() => handleSafeExit('my_quizzes')}
-        onHome={() => handleSafeExit('home')}
+        onHome={() => handleSafeExit('landing_v2')}
         onTeacherHub={() => handleSafeExit('teacher_hub')}
       />
       
@@ -481,20 +491,9 @@ const NeuralApp: React.FC = () => {
       <main className="min-h-screen flex flex-col p-4 md:p-8 relative z-10 w-full max-w-[1920px] mx-auto">
         <Stepper />
 
-        {/* HOME VIEW (CLASSIC) */}
+        {/* HOME VIEW (CLASSIC) - KEPT AS FALLBACK OR LEGACY */}
         {view === 'home' && (
           <div className="flex flex-col items-center justify-center space-y-12 animate-in fade-in duration-700 py-12 relative">
-            
-            {/* TEMPORARY BUTTON TO SWITCH TO V2 */}
-            <div className="absolute top-0 right-0 md:top-4 md:right-4 z-50">
-                <button 
-                    onClick={() => setView('landing_v2')}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform"
-                >
-                    <LayoutTemplate className="w-4 h-4" /> 🛠️ VER NUEVA LANDING
-                </button>
-            </div>
-
             <div className="text-center space-y-6 max-w-4xl relative">
               <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
               <h2 className="text-sm md:text-base font-mono text-cyan-400 tracking-[0.3em] uppercase">{t.app_subtitle}</h2>
@@ -565,24 +564,28 @@ const NeuralApp: React.FC = () => {
             />
         )}
 
-        {/* --- CLASSES MANAGER (NEW) --- */}
+        {/* --- CLASSES MANAGER --- */}
         {view === 'classes_manager' && (
             <ClassesManager onBack={() => setView('teacher_hub')} />
         )}
 
-        {/* ... rest of the app ... */}
+        {/* --- CAMPAIGN MANAGER --- */}
+        {view === 'campaign_manager' && (
+            <CampaignManager onBack={() => setView('teacher_hub')} />
+        )}
+
         {/* --- AUXILIARY VIEWS --- */}
-        {view === 'community' && <CommunityPage onBack={() => setView('home')} onPlay={(q) => handlePlayFromEditor(q)} onImport={handleImportCommunityQuiz} />}
-        {view === 'help' && <HelpView onBack={() => setView('home')} t={t} />}
-        {view === 'privacy' && <PrivacyView onBack={() => setView('home')} />}
-        {view === 'terms' && <TermsView onBack={() => setView('home')} />}
-        {view === 'my_quizzes' && <MyQuizzes user={user} onBack={() => setView('home')} onEdit={handleLoadQuiz} onCreate={() => setView('create_menu')} />}
-        {view === 'public_view' && sharedQuizId && <PublicQuizLanding quizId={sharedQuizId} currentUser={user} onPlay={launchPublicGame} onBack={() => setView('home')} onLoginReq={signInWithGoogle} />}
+        {view === 'community' && <CommunityPage onBack={() => setView('landing_v2')} onPlay={(q) => handlePlayFromEditor(q)} onImport={handleImportCommunityQuiz} />}
+        {view === 'help' && <HelpView onBack={() => setView('landing_v2')} t={t} />}
+        {view === 'privacy' && <PrivacyView onBack={() => setView('landing_v2')} />}
+        {view === 'terms' && <TermsView onBack={() => setView('landing_v2')} />}
+        {view === 'my_quizzes' && <MyQuizzes user={user} onBack={() => setView('landing_v2')} onEdit={handleLoadQuiz} onCreate={() => setView('create_menu')} />}
+        {view === 'public_view' && sharedQuizId && <PublicQuizLanding quizId={sharedQuizId} currentUser={user} onPlay={launchPublicGame} onBack={() => setView('landing_v2')} onLoginReq={signInWithGoogle} />}
 
         {/* --- CREATION FLOW --- */}
         {view === 'create_menu' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
-                <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
+                <CyberButton variant="ghost" onClick={() => setView('landing_v2')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
                 <h2 className="text-3xl font-cyber text-center mb-8">{t.select_protocol}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <button onClick={() => setView('create_ai')} className="group relative overflow-hidden bg-black/40 border border-gray-800 hover:border-purple-500 rounded-xl p-8 text-left transition-all duration-300">
@@ -808,16 +811,18 @@ const NeuralApp: React.FC = () => {
             </div>
         )}
 
+        {/* --- VIEW: MANUAL EDITOR (Creation & Edit) --- */}
         {view === 'create_manual' && (
             <>
                 <div className="max-w-6xl mx-auto w-full mb-6">
-                    <CyberButton variant="ghost" onClick={() => handleSafeExit('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
+                    <CyberButton variant="ghost" onClick={() => handleSafeExit('landing_v2')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
                 </div>
                 <div className="max-w-6xl mx-auto w-full">
+                    {/* Only Editor here, no export panel */}
                     <QuizEditor 
                         quiz={quiz} 
                         setQuiz={setQuiz} 
-                        onExport={() => scrollToExport()} 
+                        onExport={() => setView('export_step')} // NEW ACTION
                         onSave={handleSaveQuiz} 
                         isSaving={isSaving} 
                         user={user} 
@@ -825,17 +830,53 @@ const NeuralApp: React.FC = () => {
                         onPlay={handlePlayFromEditor} 
                         currentLanguage={language} 
                     />
-                    <div ref={exportSectionRef} className="mt-12 pt-12 border-t border-gray-800">
-                        <ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} initialTargetPlatform={targetPlatform} />
-                    </div>
                 </div>
             </>
+        )}
+
+        {/* --- NEW VIEW: EXPORT STEP --- */}
+        {view === 'export_step' && (
+            <div className="max-w-6xl mx-auto w-full animate-in slide-in-from-right-10 duration-500 space-y-12 pb-20">
+                <div className="mb-6">
+                    <CyberButton variant="ghost" onClick={() => setView('create_manual')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> VOLVER AL EDITOR</CyberButton>
+                </div>
+
+                {/* 1. EXPORT PANEL (Top Priority) */}
+                <ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} initialTargetPlatform={targetPlatform} />
+
+                <div className="h-px bg-gray-800 w-full" />
+
+                {/* 2. READ-ONLY / QUICK EDIT REVIEW */}
+                <div className="opacity-90">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-purple-900/30 rounded border border-purple-500/50">
+                            <BrainCircuit className="w-6 h-6 text-purple-400" />
+                        </div>
+                        <div>
+                            <h3 className="font-cyber text-xl font-bold text-white">REVISIÓN DE CONTENIDO</h3>
+                            <p className="text-xs text-gray-400 font-mono">Puedes realizar ajustes finales aquí antes de descargar.</p>
+                        </div>
+                    </div>
+                    
+                    <QuizEditor 
+                        quiz={quiz} 
+                        setQuiz={setQuiz} 
+                        onExport={() => {}} // No-op here, already on export page
+                        onSave={handleSaveQuiz} 
+                        isSaving={isSaving} 
+                        user={user} 
+                        t={t}
+                        onPlay={handlePlayFromEditor} 
+                        currentLanguage={language} 
+                    />
+                </div>
+            </div>
         )}
 
         {/* ... (Existing views for convert_upload, convert_analysis, game_lobby, etc. are identical) ... */}
         {view === 'convert_upload' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
-                <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
+                <CyberButton variant="ghost" onClick={() => setView('landing_v2')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
                 <div className="text-center space-y-2">
                     <h2 className="text-3xl font-cyber text-pink-400">{t.upload_source}</h2>
                     <p className="text-gray-500 font-mono text-sm">{t.upload_source_subtitle}</p>
@@ -912,7 +953,7 @@ const NeuralApp: React.FC = () => {
         {view === 'game_lobby' && (
             <GameLobby 
                 user={user} 
-                onBack={() => setView('home')} 
+                onBack={() => setView('landing_v2')} 
                 onStartGame={(q, teams, mode, config) => {
                     setGameQuiz(q);
                     setGameTeams(teams);

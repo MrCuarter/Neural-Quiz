@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 import { validateQuizQuestions } from "../utils/validation";
@@ -101,7 +102,7 @@ const quizRootSchema: Schema = {
 const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. 
 Tu misión es generar cuestionarios JSON precisos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
-Genera "tags" útiles.
+Genera "tags" útiles y concisos en el idioma solicitado por el usuario.
 
 REGLAS DE TIPOS DE PREGUNTA:
 1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones. Solo una correcta.
@@ -180,6 +181,7 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
     let prompt = `Generate a Quiz about "${topic}".`;
     prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;
     prompt += `\nTONE: ${tone.toUpperCase()}. Adapt the wording of questions and feedback to be ${tone}.`;
+    prompt += `\nIMPORTANT: Generate 3-5 short, relevant tags for this quiz in ${language}.`;
     
     if (types.length > 0) prompt += `\nInclude these types if possible: ${types.join(', ')}.`;
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;

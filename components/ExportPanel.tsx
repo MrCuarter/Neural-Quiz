@@ -311,13 +311,13 @@ const ExportPreviewCard: React.FC<{
 
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, initialTargetPlatform }) => {
-  // Determine default selection based on prop, or fallback to Kahoot
+  // Determine default selection based on prop, or fallback to Neural Quiz
   const getDefaultSelection = () => {
       if (initialTargetPlatform && initialTargetPlatform !== 'UNIVERSAL') {
           const isValid = Object.values(ExportFormat).includes(initialTargetPlatform as ExportFormat);
           if (isValid) return [initialTargetPlatform as ExportFormat];
       }
-      return [ExportFormat.KAHOOT];
+      return [ExportFormat.UNIVERSAL_CSV];
   };
 
   const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>(getDefaultSelection);
@@ -328,6 +328,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
   const [isGeneratingCats, setIsGeneratingCats] = useState(false);
 
   const formats = [
+    // --- TIER 0: NEURAL QUIZ (DEFAULT) ---
+    { id: ExportFormat.UNIVERSAL_CSV, name: "Neural Quiz (Copia de Seguridad)", desc: t.fmt_universal, logo: "https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png", allowedTypes: ['*'] },
+
     // --- TIER 1: THE BIG ONES ---
     { id: ExportFormat.KAHOOT, name: "Kahoot!", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
@@ -352,7 +355,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
     { id: ExportFormat.BAAMBOOZLE, name: "Baamboozle", desc: t.fmt_baamboozle, logo: "https://i.postimg.cc/3dwdrNFw/Baamboozle.png", allowedTypes: ['*'] },
     { id: ExportFormat.AIKEN, name: "Moodle/LMS (Aiken)", desc: t.fmt_aiken, logo: "https://i.postimg.cc/SKc8L98N/LMS.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GIFT, name: "Moodle (GIFT)", desc: t.fmt_gift, logo: "https://i.postimg.cc/JhjJ3XJ0/Moodle.png", allowedTypes: ['*'] },
-    { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
     { id: ExportFormat.JSON, name: "JSON (Raw)", desc: t.fmt_json, logo: "https://i.postimg.cc/zfTWwhWG/JSON.png", allowedTypes: ['*'] },
   ];
 
@@ -463,7 +465,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                 </div>
               )}
               {fmt.logo && (
-                <div className="w-20 h-full bg-white/5 flex items-center justify-center p-3 shrink-0 border-r border-white/5">
+                <div className="w-20 h-full bg-white/5 flex items-center justify-center p-3 shrink-0 border-r border-white/10">
                      <img 
                         src={fmt.logo} 
                         alt={`${fmt.name} Logo`} 
