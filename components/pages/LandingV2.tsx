@@ -106,10 +106,12 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                               frameBorder="0" 
                               width="800" 
                               height="800" 
-                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10, backgroundColor: 'transparent' }} 
+                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10, background: 'transparent' }} 
                               src="https://view.genially.com/697b237b344f20a411a68fc6" 
                               allowFullScreen={true} 
-                              scrolling="yes" 
+                              scrolling="no"
+                              // @ts-ignore
+                              allowTransparency="true"
                             />
                           </div>
                         </div>

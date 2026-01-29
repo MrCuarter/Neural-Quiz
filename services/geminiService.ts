@@ -160,6 +160,7 @@ interface GenParams {
   language?: string;
   includeFeedback?: boolean;
   tone?: string;
+  gamification?: string; // NEW PARAM
 }
 
 // *** CRITICAL: HARDCODED PRODUCTION MODEL FOR CHEAP/HIGH QUOTA ***
@@ -204,20 +205,37 @@ function cleanAIResponse(text: string): string {
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
     const ai = getAI();
-    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral' } = params;
+    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral', gamification } = params;
     // UPDATED LIMIT TO 50
     const safeCount = Math.min(Math.max(count, 1), 50);
 
-    let prompt = `Generate a Quiz about "${topic}".`;
-    prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;
-    prompt += `\nTONE: ${tone.toUpperCase()}. Adapt the wording of questions and feedback to be ${tone}.`;
-    prompt += `\nIMPORTANT: Generate 3-5 short, relevant tags for this quiz in ${language}.`;
+    // --- PROMPT ENGINEERING: STRICT INSTRUCTIONS ---
+    let prompt = `ROLE: Educational Content Generator.`;
     
-    if (types.length > 0) prompt += `\nInclude these types if possible: ${types.join(', ')}.`;
-    if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
-    if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
+    // 1. CORE TASK
+    prompt += `\nTASK: Generate a Quiz about "${topic}".`;
+    prompt += `\nOUTPUT LANGUAGE: ${language}.`;
+    prompt += `\nQUANTITY: Exactly ${safeCount} questions.`;
 
-    prompt += `\n\nGenerate exactly ${safeCount} questions.`;
+    // 2. AUDIENCE & TONE (CRITICAL)
+    prompt += `\n\nTARGET AUDIENCE (AGE/LEVEL): ${age}. Ensure vocabulary and complexity are appropriate for this group.`;
+    prompt += `\nTONE: ${tone.toUpperCase()}. The wording of questions and feedback MUST match this tone.`;
+
+    // 3. GAMIFICATION / THEME (HIGHEST PRIORITY INSTRUCTION)
+    if (gamification && gamification.trim().length > 0) {
+        prompt += `\n\n!!! GAMIFICATION THEME ACTIVE: "${gamification}" !!!`;
+        prompt += `\nINSTRUCTION: You MUST adapt the narrative style, vocabulary, and scenarios of the questions to fit the "${gamification}" universe.`;
+        prompt += `\nEXAMPLE: If theme is "Pirates", use terms like "Captain", "Treasure", "Ship". If "Harry Potter", use magical terms.`;
+        prompt += `\nHowever, ensure the educational content/answers remain factual and correct. Only the "flavor" text should be gamified.`;
+    }
+
+    // 4. TYPES & CONTENT
+    if (types.length > 0) prompt += `\n\nALLOWED QUESTION TYPES: ${types.join(', ')}.`;
+    if (context) prompt += `\n\nSOURCE MATERIAL (CONTEXT):\n${context.substring(0, 30000)}`;
+    if (urls && urls.length > 0) prompt += `\n\nREFERENCE URLS:\n${urls.join('\n')}`;
+
+    // 5. FINAL JSON INSTRUCTION
+    prompt += `\n\nGenerate valid JSON matching the schema. Generate 3-5 short tags in 'tags' array.`;
 
     const response = await ai.models.generateContent({
       model: MODEL_NAME,

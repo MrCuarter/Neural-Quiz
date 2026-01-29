@@ -487,11 +487,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           fullContext = await fetchUrlContent(aiSourceUrl);
       }
 
-      // 2. Append Gamification & Tone to Context or params
-      // Since geminiService accepts 'tone' and 'context', we can combine logic.
-      if (aiGamification) {
-          fullContext += `\n\nGAMIFICATION/NARRATIVE INSTRUCTION: The user wants this quiz to follow a '${aiGamification}' theme. Adapt the wording of questions, answers, and feedback to fit this universe (e.g. use themed terms, scenarios).`;
-      }
+      // No need to append gamification to context manually anymore, 
+      // as we pass it as a specific parameter now.
 
       const platformTypes = PLATFORM_SPECS[targetPlatform].types;
       
@@ -502,6 +499,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
         age: aiAge, 
         language: aiLanguage,
         tone: aiTone,
+        gamification: aiGamification, // PASSING NEW PARAMETER
         context: fullContext
       });
       
