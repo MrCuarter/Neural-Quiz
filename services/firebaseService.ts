@@ -5,7 +5,8 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
-  updateProfile // Added for TeacherHub profile update
+  updateProfile, // Added for TeacherHub profile update
+  signInAnonymously
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -24,9 +25,9 @@ import {
   setDoc,
   increment
 } from "firebase/firestore";
-import { getStorage } from "firebase/storage"; // Added Storage
+import { getStorage, deleteObject, ref } from "firebase/storage"; // Added Storage
 import { getAnalytics } from "firebase/analytics";
-import { Quiz, Evaluation, EvaluationAttempt } from "../types";
+import { Quiz, Evaluation, EvaluationAttempt, TeacherProfile } from "../types";
 
 // --- 0. HELPER PARA CARGA SEGURA DE VARIABLES DE ENTORNO ---
 // Evita el crash "Cannot read properties of undefined" en entornos sin env vars
@@ -94,7 +95,7 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 
 // Exportamos onAuthStateChanged y updateProfile para uso en componentes
-export { onAuthStateChanged, updateProfile };
+export { onAuthStateChanged, updateProfile, signInAnonymously };
 
 if (!isOfflineMode) {
     console.log("🔥 Firebase (NPM) inicializado correctamente.");
@@ -262,6 +263,51 @@ export const checkAndIncrementRaidLimit = async (userId: string): Promise<boolea
         // For UX, return true if error to avoid blocking due to network glitch on this specific check?
         // Let's assume we allow it if check fails to be nice.
         return true; 
+    }
+};
+
+/**
+ * Update User Profile Data (Bio, School, Socials)
+ */
+export const updateUserData = async (userId: string, data: TeacherProfile): Promise<void> => {
+    if (isOfflineMode) return;
+    const userRef = doc(db, "users", userId);
+    try {
+        await setDoc(userRef, { profile: data }, { merge: true });
+    } catch (e) {
+        console.error("Error updating user data:", e);
+        throw e;
+    }
+};
+
+/**
+ * Get User Profile Data
+ */
+export const getUserData = async (userId: string): Promise<TeacherProfile | null> => {
+    if (isOfflineMode) return null;
+    const userRef = doc(db, "users", userId);
+    try {
+        const snap = await getDoc(userRef);
+        if (snap.exists() && snap.data().profile) {
+            return snap.data().profile as TeacherProfile;
+        }
+        return null;
+    } catch (e) {
+        console.error("Error getting user data:", e);
+        return null;
+    }
+};
+
+/**
+ * Delete file from storage (Cleanup)
+ */
+export const deleteFile = async (url: string): Promise<void> => {
+    if (!url || isOfflineMode) return;
+    try {
+        const fileRef = ref(storage, url);
+        await deleteObject(fileRef);
+    } catch (e) {
+        console.warn("Failed to delete old file:", e);
     }
 };
 

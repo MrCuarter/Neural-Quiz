@@ -1,6 +1,6 @@
 
-import React, { useRef, useState } from 'react';
-import { CyberButton, CyberCard } from '../ui/CyberUI';
+import React, { useRef, useState, useEffect } from 'react';
+import { CyberButton, CyberCard, CyberInput, CyberTextArea } from '../ui/CyberUI';
 import { 
     Plus, 
     LayoutGrid, 
@@ -13,12 +13,18 @@ import {
     Gamepad2,
     Lock,
     BarChart2,
-    Camera
+    Camera,
+    Save,
+    Edit3,
+    Twitter,
+    Linkedin,
+    Link as LinkIcon
 } from 'lucide-react';
-import { auth, storage, updateProfile } from '../../services/firebaseService';
+import { auth, storage, updateProfile, updateUserData, getUserData, deleteFile } from '../../services/firebaseService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { compressImage } from '../../utils/imageOptimizer';
 import { useToast } from '../ui/Toast';
+import { AvatarCropper } from '../ui/AvatarCropper';
+import { TeacherProfile } from '../../types';
 
 interface TeacherHubProps {
     user: any;
@@ -28,45 +34,69 @@ interface TeacherHubProps {
 export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null); // For Cropper
+    const [showCropper, setShowCropper] = useState(false);
+    
+    // Profile State
+    const [profile, setProfile] = useState<TeacherProfile>({});
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [savingProfile, setSavingProfile] = useState(false);
+
     const toast = useToast();
 
-    // --- AVATAR UPLOAD LOGIC ---
+    // Load Profile Data on Mount
+    useEffect(() => {
+        if (user) {
+            getUserData(user.uid).then(data => {
+                if (data) setProfile(data);
+            });
+        }
+    }, [user]);
+
+    // --- AVATAR UPLOAD FLOW ---
     const handleAvatarClick = () => {
         fileInputRef.current?.click();
     };
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
-        
         const file = e.target.files[0];
         if (!file.type.startsWith('image/')) {
             toast.error("Por favor selecciona un archivo de imagen.");
             return;
         }
+        setSelectedFile(file);
+        setShowCropper(true);
+        // Reset input so same file can be selected again if cancelled
+        e.target.value = '';
+    };
 
-        if (!auth.currentUser) {
-            toast.error("Error de sesión. Recarga la página.");
-            return;
-        }
+    const handleCropSave = async (blob: Blob) => {
+        setShowCropper(false);
+        if (!auth.currentUser) return;
 
         setUploadingAvatar(true);
         try {
-            // 1. Optimizar imagen (Max 500px, Calidad 0.7)
-            const compressedBlob = await compressImage(file, 500, 0.7);
+            // 1. Check & Delete Old Avatar ONLY if it is hosted on Firebase Storage
+            // This prevents errors when trying to delete Google default avatars (lh3.googleusercontent.com)
+            const oldPhotoURL = auth.currentUser.photoURL;
+            if (oldPhotoURL && oldPhotoURL.includes("firebasestorage")) {
+                try {
+                    await deleteFile(oldPhotoURL);
+                } catch (err) {
+                    console.warn("Could not delete old avatar, proceeding anyway:", err);
+                }
+            }
 
-            // 2. Referencia fija para sobrescribir (ahorra espacio)
-            // users/{uid}/profile.jpg
-            const storageRef = ref(storage, `users/${auth.currentUser.uid}/profile.jpg`);
+            // 2. Upload New
+            // Using timestamp in filename to prevent caching issues on CDN if we reuse names
+            const filename = `profile_${Date.now()}.jpg`;
+            const storageRef = ref(storage, `users/${auth.currentUser.uid}/${filename}`);
+            await uploadBytes(storageRef, blob);
             
-            // 3. Subir
-            await uploadBytes(storageRef, compressedBlob);
-            
-            // 4. Obtener URL y actualizar perfil
-            // Añadimos timestamp al query para evitar cache del navegador al sobrescribir
+            // 3. Update Auth
             const downloadURL = await getDownloadURL(storageRef);
-            const urlWithCacheBust = `${downloadURL}?t=${Date.now()}`;
-            
-            await updateProfile(auth.currentUser, { photoURL: urlWithCacheBust });
+            await updateProfile(auth.currentUser, { photoURL: downloadURL });
             
             toast.success("Foto de perfil actualizada.");
         } catch (error) {
@@ -74,8 +104,22 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
             toast.error("Error al subir la imagen.");
         } finally {
             setUploadingAvatar(false);
-            // Reset input
-            if (fileInputRef.current) fileInputRef.current.value = "";
+            setSelectedFile(null);
+        }
+    };
+
+    // --- PROFILE SAVE ---
+    const handleSaveProfile = async () => {
+        if (!auth.currentUser) return;
+        setSavingProfile(true);
+        try {
+            await updateUserData(auth.currentUser.uid, profile);
+            setIsEditingProfile(false);
+            toast.success("Perfil actualizado.");
+        } catch (e) {
+            toast.error("Error al guardar perfil.");
+        } finally {
+            setSavingProfile(false);
         }
     };
 
@@ -94,13 +138,22 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
 
     return (
         <div className="min-h-screen bg-[#020617] text-white p-4 md:p-8 pt-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            {showCropper && selectedFile && (
+                <AvatarCropper 
+                    file={selectedFile} 
+                    onSave={handleCropSave} 
+                    onCancel={() => setShowCropper(false)} 
+                />
+            )}
+
             <div className="max-w-7xl mx-auto space-y-12">
                 
                 {/* --- HEADER: PERFIL & SALUDO --- */}
-                <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b border-gray-800 pb-8">
-                    <div className="flex items-center gap-6">
+                <div className="flex flex-col md:flex-row justify-between items-start gap-8 border-b border-gray-800 pb-8">
+                    <div className="flex gap-6 w-full md:w-auto">
                         {/* AVATAR CLICKABLE */}
-                        <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+                        <div className="relative group cursor-pointer shrink-0" onClick={handleAvatarClick}>
                             <div className={`w-24 h-24 rounded-full border-2 border-cyan-500 p-1 overflow-hidden bg-gray-900 ${uploadingAvatar ? 'animate-pulse' : ''}`}>
                                 {user.photoURL ? (
                                     <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover rounded-full" />
@@ -123,16 +176,52 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
                             />
                         </div>
 
-                        <div>
+                        <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="px-2 py-0.5 rounded bg-cyan-900/30 border border-cyan-500/30 text-cyan-400 text-[10px] font-mono uppercase tracking-widest">
                                     TEACHER OS v2.0
                                 </span>
                             </div>
-                            <h1 className="text-4xl md:text-5xl font-black font-cyber text-white">
+                            <h1 className="text-3xl md:text-5xl font-black font-cyber text-white">
                                 HOLA, <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">{user.displayName?.split(' ')[0] || 'DOCENTE'}</span>
                             </h1>
-                            <p className="text-gray-400 font-mono mt-2">Panel de Control Centralizado.</p>
+                            
+                            {/* PROFILE DISPLAY / EDIT */}
+                            {!isEditingProfile ? (
+                                <div className="mt-4 text-sm text-gray-400 space-y-1">
+                                    {profile.role && <p className="font-bold text-white">{profile.role}</p>}
+                                    {profile.school && <p>{profile.school}</p>}
+                                    {profile.bio && <p className="italic text-gray-500 text-xs max-w-md">{profile.bio}</p>}
+                                    
+                                    <div className="flex gap-3 pt-2">
+                                        {profile.socials?.twitter && <a href={profile.socials.twitter} target="_blank" className="text-gray-500 hover:text-cyan-400"><Twitter className="w-4 h-4"/></a>}
+                                        {profile.socials?.linkedin && <a href={profile.socials.linkedin} target="_blank" className="text-gray-500 hover:text-blue-400"><Linkedin className="w-4 h-4"/></a>}
+                                        {profile.socials?.website && <a href={profile.socials.website} target="_blank" className="text-gray-500 hover:text-purple-400"><LinkIcon className="w-4 h-4"/></a>}
+                                        <button onClick={() => setIsEditingProfile(true)} className="text-xs text-cyan-600 hover:text-cyan-400 underline ml-2 flex items-center gap-1">
+                                            <Edit3 className="w-3 h-3" /> Editar Perfil
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="mt-4 bg-black/40 p-4 rounded border border-gray-700 w-full max-w-lg space-y-3 animate-in fade-in">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <CyberInput placeholder="Cargo (ej: Prof. Matemáticas)" value={profile.role || ''} onChange={(e) => setProfile({...profile, role: e.target.value})} className="text-xs"/>
+                                        <CyberInput placeholder="Centro Educativo" value={profile.school || ''} onChange={(e) => setProfile({...profile, school: e.target.value})} className="text-xs"/>
+                                    </div>
+                                    <CyberTextArea placeholder="Breve biografía..." value={profile.bio || ''} onChange={(e) => setProfile({...profile, bio: e.target.value})} className="text-xs min-h-[60px]"/>
+                                    
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <CyberInput placeholder="URL Twitter/X" value={profile.socials?.twitter || ''} onChange={(e) => setProfile({...profile, socials: {...profile.socials, twitter: e.target.value}})} className="text-xs"/>
+                                        <CyberInput placeholder="URL LinkedIn" value={profile.socials?.linkedin || ''} onChange={(e) => setProfile({...profile, socials: {...profile.socials, linkedin: e.target.value}})} className="text-xs"/>
+                                        <CyberInput placeholder="URL Web" value={profile.socials?.website || ''} onChange={(e) => setProfile({...profile, socials: {...profile.socials, website: e.target.value}})} className="text-xs"/>
+                                    </div>
+
+                                    <div className="flex gap-2 justify-end pt-2">
+                                        <CyberButton variant="ghost" onClick={() => setIsEditingProfile(false)} className="text-xs h-8">Cancelar</CyberButton>
+                                        <CyberButton onClick={handleSaveProfile} isLoading={savingProfile} className="text-xs h-8"><Save className="w-3 h-3 mr-1"/> Guardar</CyberButton>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -165,7 +254,7 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
                             </div>
                         </button>
 
-                        {/* 2. MIS QUIZZES */}
+                        {/* 2. MIS QUIZZES (TYPO FIXED) */}
                         <button 
                             onClick={() => onNavigate('my_quizzes')}
                             className="group bg-black/40 border border-gray-800 hover:border-purple-500/50 rounded-xl p-6 text-left transition-all hover:bg-purple-900/10 flex flex-col justify-between"

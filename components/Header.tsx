@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid, Home, MonitorPlay } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
@@ -79,17 +80,9 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                             <MonitorPlay className="w-4 h-4" /> HUB DOCENTE
                         </button>
 
-                        <button 
-                            onClick={onMyQuizzes}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/30 rounded hover:bg-cyan-900/50 text-cyan-300 transition-all group hidden md:flex"
-                        >
-                            <LayoutGrid className="w-4 h-4" />
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">MIS QUIZES</span>
-                        </button>
-
                         <div className="flex items-center gap-2 px-2 py-1 bg-gray-900 border border-gray-800 rounded">
                             {user.photoURL ? (
-                                <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-gray-700" />
+                                <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-gray-700 object-cover" />
                             ) : (
                                 <User className="w-4 h-4 text-cyan-400" />
                             )}

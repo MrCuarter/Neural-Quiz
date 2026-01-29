@@ -1,7 +1,7 @@
+
 import React from 'react';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
 import { 
-    BrainCircuit, 
     ArrowRight, 
     Upload, 
     Zap, 
@@ -9,7 +9,6 @@ import {
     Gamepad2, 
     Layers, 
     Repeat, 
-    FileText, 
     Sparkles, 
     Users,
     Swords,
@@ -37,10 +36,10 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none" />
                 <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-purple-500/10 blur-[120px] rounded-full pointer-events-none" />
 
-                <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
+                <div className="max-w-7xl mx-auto flex flex-wrap lg:flex-nowrap gap-12 items-center relative z-10">
                     
                     {/* LEFT: COPYWRITING */}
-                    <div className="space-y-8 text-center lg:text-left animate-in slide-in-from-left-8 duration-700">
+                    <div className="flex-1 min-w-[300px] w-full space-y-8 text-center lg:text-left animate-in slide-in-from-left-8 duration-700">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/30 border border-cyan-500/30 text-cyan-400 text-xs font-mono tracking-widest uppercase mb-4">
                             <Sparkles className="w-3 h-3" /> V 2.0 :: Universal System
                         </div>
@@ -88,61 +87,22 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                         )}
                     </div>
 
-                    {/* RIGHT: THE HUB VISUALIZATION */}
-                    <div className="relative h-[400px] md:h-[500px] w-full flex items-center justify-center animate-in zoom-in-95 duration-1000 delay-200">
-                        {/* Central Brain */}
-                        <div className="relative z-20 w-32 h-32 md:w-40 md:h-40 bg-black border-2 border-cyan-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(6,182,212,0.4)] animate-pulse-slow">
-                            <BrainCircuit className="w-16 h-16 text-cyan-400" />
-                            <div className="absolute -bottom-8 text-center w-full font-cyber text-cyan-400 text-sm tracking-widest">CORE</div>
+                    {/* RIGHT: GENIALLY EMBED */}
+                    <div className="flex-1 min-w-[300px] w-full flex justify-center animate-in zoom-in-95 duration-1000 delay-200">
+                        <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                          <div style={{ position: 'relative', paddingBottom: '100%', paddingTop: 0, height: 0, width: '100%', maxWidth: '800px' }}>
+                            <iframe 
+                              title="Neural Quiz Header" 
+                              frameBorder="0" 
+                              width="800" 
+                              height="800" 
+                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} 
+                              src="https://view.genially.com/697b237b344f20a411a68fc6" 
+                              allowFullScreen={true} 
+                              scrolling="yes" 
+                            />
+                          </div>
                         </div>
-
-                        {/* Orbiting Satellites (Positions defined manually for diagram look) */}
-                        
-                        {/* Kahoot Node (Top Left) */}
-                        <div className="absolute top-10 left-10 md:top-20 md:left-20 flex flex-col items-center gap-2 z-10 animate-float-1">
-                            <div className="w-16 h-16 bg-purple-900/40 border border-purple-500 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                                <span className="font-bold text-purple-300 text-xs">K!</span>
-                            </div>
-                            <span className="text-[10px] font-mono text-purple-400">KAHOOT</span>
-                        </div>
-                        {/* Connection Line */}
-                        <svg className="absolute inset-0 z-0 pointer-events-none opacity-30">
-                            <line x1="30%" y1="25%" x2="50%" y2="50%" stroke="#a855f7" strokeWidth="2" strokeDasharray="5,5" />
-                        </svg>
-
-                        {/* Gimkit/Platform Node (Top Right) */}
-                        <div className="absolute top-10 right-10 md:top-20 md:right-20 flex flex-col items-center gap-2 z-10 animate-float-2">
-                            <div className="w-16 h-16 bg-blue-900/40 border border-blue-500 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                                <Gamepad2 className="w-8 h-8 text-blue-400" />
-                            </div>
-                            <span className="text-[10px] font-mono text-blue-400">GIMKIT</span>
-                        </div>
-                        <svg className="absolute inset-0 z-0 pointer-events-none opacity-30">
-                            <line x1="70%" y1="25%" x2="50%" y2="50%" stroke="#3b82f6" strokeWidth="2" strokeDasharray="5,5" />
-                        </svg>
-
-                        {/* PDF/File Node (Bottom Right) */}
-                        <div className="absolute bottom-10 right-10 md:bottom-20 md:right-20 flex flex-col items-center gap-2 z-10 animate-float-3">
-                            <div className="w-16 h-16 bg-red-900/40 border border-red-500 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                                <FileText className="w-8 h-8 text-red-400" />
-                            </div>
-                            <span className="text-[10px] font-mono text-red-400">PDF / IMG</span>
-                        </div>
-                        <svg className="absolute inset-0 z-0 pointer-events-none opacity-30">
-                            <line x1="70%" y1="75%" x2="50%" y2="50%" stroke="#ef4444" strokeWidth="2" strokeDasharray="5,5" />
-                        </svg>
-
-                        {/* Arcade Node (Bottom Left) */}
-                        <div className="absolute bottom-10 left-10 md:bottom-20 md:left-20 flex flex-col items-center gap-2 z-10 animate-float-4">
-                            <div className="w-16 h-16 bg-yellow-900/40 border border-yellow-500 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                                <Swords className="w-8 h-8 text-yellow-400" />
-                            </div>
-                            <span className="text-[10px] font-mono text-yellow-400">ARCADE</span>
-                        </div>
-                        <svg className="absolute inset-0 z-0 pointer-events-none opacity-30">
-                            <line x1="30%" y1="75%" x2="50%" y2="50%" stroke="#eab308" strokeWidth="2" strokeDasharray="5,5" />
-                        </svg>
-
                     </div>
                 </div>
             </section>

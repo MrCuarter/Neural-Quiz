@@ -576,7 +576,7 @@ const NeuralApp: React.FC = () => {
         {view === 'help' && <HelpView onBack={() => setView('home')} t={t} />}
         {view === 'privacy' && <PrivacyView onBack={() => setView('home')} />}
         {view === 'terms' && <TermsView onBack={() => setView('home')} />}
-        {view === 'my_quizzes' && <MyQuizzes user={user} onBack={() => setView('home')} onEdit={handleLoadQuiz} />}
+        {view === 'my_quizzes' && <MyQuizzes user={user} onBack={() => setView('home')} onEdit={handleLoadQuiz} onCreate={() => setView('create_menu')} />}
         {view === 'public_view' && sharedQuizId && <PublicQuizLanding quizId={sharedQuizId} currentUser={user} onPlay={launchPublicGame} onBack={() => setView('home')} onLoginReq={signInWithGoogle} />}
 
         {/* --- CREATION FLOW --- */}

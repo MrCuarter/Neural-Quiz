@@ -83,6 +83,18 @@ export interface ClassGroup {
     createdAt?: any;
 }
 
+// --- USER PROFILE (NEW FASE 4) ---
+export interface TeacherProfile {
+    bio?: string;
+    school?: string;
+    role?: string;
+    socials?: {
+        twitter?: string;
+        linkedin?: string;
+        website?: string;
+    };
+}
+
 // --- BOSS BATTLE CONFIG ---
 export interface BossImageConfig {
     idle: string;   // Normal state
@@ -328,7 +340,7 @@ export const QUESTION_TYPES = {
 
 export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
     'UNIVERSAL': { 
-        name: 'Universal / Generic', 
+        name: 'Neural Quiz (Nativo)', 
         types: Object.values(QUESTION_TYPES) 
     },
     [ExportFormat.PDF_PRINT]: {

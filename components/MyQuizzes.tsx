@@ -12,9 +12,10 @@ interface MyQuizzesProps {
     user: any;
     onBack: () => void;
     onEdit: (quiz: Quiz) => void;
+    onCreate: () => void; // New prop for navigation
 }
 
-export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) => {
+export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit, onCreate }) => {
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -154,7 +155,7 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
                     <CyberButton variant="ghost" onClick={onBack} className="pl-0 gap-2">
                         <ArrowLeft className="w-4 h-4" /> VOLVER
                     </CyberButton>
-                    <h2 className="text-3xl font-cyber text-cyan-400">MIS QUIZES</h2>
+                    <h2 className="text-3xl font-cyber text-cyan-400">MIS QUIZZES</h2>
                 </div>
                 <div className="flex gap-2">
                     <CyberButton onClick={() => setShowDashboard(true)} variant="neural" className="text-xs h-9">
@@ -215,13 +216,13 @@ export const MyQuizzes: React.FC<MyQuizzesProps> = ({ user, onBack, onEdit }) =>
                 <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-gray-800 rounded-lg bg-black/10 text-center">
                     <Sparkles className="w-12 h-12 text-cyan-500/50 mb-4" />
                     <h3 className="text-xl font-cyber text-white mb-2">
-                        {searchTerm ? "No se encontraron resultados" : "Aún no tienes quizes"}
+                        {searchTerm ? "No se encontraron resultados" : "Aún no tienes quizzes"}
                     </h3>
                     <p className="text-gray-500 font-mono text-sm max-w-md">
                         {searchTerm ? "Intenta con otro término de búsqueda." : "¡Es hora de crear el primero! Ve al generador y empieza a crear contenido increíble."}
                     </p>
                     {!searchTerm && (
-                        <CyberButton variant="neural" onClick={onBack} className="mt-6">
+                        <CyberButton variant="neural" onClick={onCreate} className="mt-6">
                             CREAR NUEVO QUIZ
                         </CyberButton>
                     )}
