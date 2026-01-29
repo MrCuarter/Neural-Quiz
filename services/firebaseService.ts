@@ -59,13 +59,14 @@ let storageInstance: any;
 
 if (!isOfflineMode) {
     try {
+        // DATOS CORRECTOS PROYECTO ORIGINAL (UNA-PARA-TODAS)
         const firebaseConfig = {
           apiKey: apiKey,
-          authDomain: "neural-quiz-v2.firebaseapp.com", 
-          projectId: "neural-quiz-v2", 
-          storageBucket: "neural-quiz-v2.appspot.com", 
-          messagingSenderId: "1005385021667", 
-          appId: "1:1005385021667:web:2c6670b023933093082539" 
+          authDomain: "una-para-todas.firebaseapp.com",
+          projectId: "una-para-todas",
+          storageBucket: "una-para-todas.firebasestorage.app",
+          messagingSenderId: "1005385021667",
+          appId: "1:1005385021667:web:b0c13438ab526d29bcadd6"
         };
         
         // Prevent multiple initializations
@@ -77,11 +78,11 @@ if (!isOfflineMode) {
         if (typeof window !== 'undefined') {
             try { getAnalytics(app); } catch (e) {}
         }
-        console.log("🔥 Firebase initialized successfully.");
+        console.log("🔥 Firebase initialized successfully (Project: una-para-todas).");
     } catch (e) {
         console.error("Firebase init failed:", e);
         // Fallback to offline mode if init crashes
-        isOfflineMode === true;
+        // isOfflineMode === true; // This line did nothing in previous code, just logic flow
     }
 } else {
     console.warn("⚠️ Firebase API Key missing. Running in PREVIEW/OFFLINE mode. Database features will be disabled.");
