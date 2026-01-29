@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Quiz, Question, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { Header } from './components/Header';
@@ -21,6 +22,7 @@ import { translations, Language } from './utils/translations';
 import { auth, onAuthStateChanged } from './services/firebaseService';
 import { ToastProvider, useToast } from './components/ui/Toast';
 import { Loader2 } from 'lucide-react';
+import { AuthModal } from './components/auth/AuthModal';
 
 const AppContent: React.FC = () => {
   const [view, setView] = useState<string>('landing');
@@ -29,6 +31,9 @@ const AppContent: React.FC = () => {
   const [language, setLanguage] = useState<Language>('es');
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
   const [publicId, setPublicId] = useState<string>(''); // For public quiz/campaign routing
+  
+  // Global Auth Modal State
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   
   // Game State
   const [gameConfig, setGameConfig] = useState<{mode: GameMode, teams: GameTeam[], config?: any} | null>(null);
@@ -68,9 +73,11 @@ const AppContent: React.FC = () => {
       setView('game_play');
   };
 
+  const openLogin = () => setIsAuthModalOpen(true);
+
   const renderView = () => {
       switch(view) {
-          case 'landing': return <LandingV2 onNavigate={handleNavigate} user={user} onLoginReq={() => {}} />;
+          case 'landing': return <LandingV2 onNavigate={handleNavigate} user={user} onLoginReq={openLogin} />;
           case 'teacher_hub': return <TeacherHub user={user} onNavigate={handleNavigate} />;
           case 'my_quizzes': 
               return <MyQuizzes user={user} onBack={() => setView('teacher_hub')} onEdit={(q: Quiz) => { setQuiz(q); setView('create_menu'); }} onCreate={() => { setQuiz({ title: '', description: '', questions: [] }); setView('create_menu'); }} />;
@@ -84,18 +91,28 @@ const AppContent: React.FC = () => {
           case 'export': return <ExportPanel quiz={quiz} t={t} />;
           case 'campaign_manager': return <CampaignManager onBack={() => setView('teacher_hub')} />;
           case 'classes_manager': return <ClassesManager onBack={() => setView('teacher_hub')} />;
-          case 'public_quiz': return <PublicQuizLanding quizId={publicId} currentUser={user} onPlay={(q, m) => { setQuiz(q); setView('game_lobby'); }} onBack={() => setView('landing')} onLoginReq={() => {}} />;
+          case 'public_quiz': return <PublicQuizLanding quizId={publicId} currentUser={user} onPlay={(q, m) => { setQuiz(q); setView('game_lobby'); }} onBack={() => setView('landing')} onLoginReq={openLogin} />;
           case 'public_campaign': return <PublicCampaignView publicId={publicId} />;
           case 'help': return <HelpView onBack={() => setView('landing')} t={t} />;
           case 'privacy': return <PrivacyView onBack={() => setView('landing')} />;
           case 'terms': return <TermsView onBack={() => setView('landing')} />;
-          default: return <LandingV2 onNavigate={handleNavigate} user={user} onLoginReq={() => {}} />;
+          default: return <LandingV2 onNavigate={handleNavigate} user={user} onLoginReq={openLogin} />;
       }
   };
 
   return (
       <div className="app-container font-sans text-white min-h-screen bg-[#020617]">
-          <Header language={language} setLanguage={setLanguage} onHelp={() => setView('help')} onMyQuizzes={() => setView('my_quizzes')} onHome={() => setView('landing')} onTeacherHub={() => setView('teacher_hub')} />
+          <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+          
+          <Header 
+            language={language} 
+            setLanguage={setLanguage} 
+            onHelp={() => setView('help')} 
+            onMyQuizzes={() => setView('my_quizzes')} 
+            onHome={() => setView('landing')} 
+            onTeacherHub={() => setView('teacher_hub')} 
+            onLogin={openLogin}
+          />
           {renderView()}
           <Footer onPrivacy={() => setView('privacy')} onTerms={() => setView('terms')} />
       </div>

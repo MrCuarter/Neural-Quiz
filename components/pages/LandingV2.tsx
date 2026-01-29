@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { CyberButton } from '../ui/CyberUI';
 import { 
     Sparkles, 
@@ -15,7 +15,6 @@ import {
     LogIn
 } from 'lucide-react';
 import { ASSETS_BASE } from '../../data/bossPresets';
-import { AuthModal } from '../auth/AuthModal';
 
 interface LandingV2Props {
     onNavigate: (view: string) => void;
@@ -24,23 +23,19 @@ interface LandingV2Props {
 }
 
 export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginReq }) => {
-    // Estado para controlar la visibilidad del modal de autenticación
-    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-
+    
     // Wrapper for restricted actions
     const handleRestrictedAction = (targetView: string) => {
         if (user) {
             onNavigate(targetView);
         } else {
-            setIsAuthModalOpen(true);
+            onLoginReq();
         }
     };
 
     return (
         <div className="min-h-screen bg-[#020617] text-white flex flex-col font-sans selection:bg-cyan-500/30">
             
-            <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-
             {/* --- HERO SECTION: THE PROMISE (GENIALLY) --- */}
             <section className="relative pt-20 pb-20 md:pt-32 md:pb-32 px-6 overflow-hidden">
                 {/* Background Glows */}
@@ -83,7 +78,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                                 </>
                             ) : (
                                 <CyberButton 
-                                    onClick={() => setIsAuthModalOpen(true)} 
+                                    onClick={onLoginReq} 
                                     className="h-14 text-lg px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-none shadow-[0_0_20px_rgba(6,182,212,0.4)] animate-pulse"
                                 >
                                     <LogIn className="w-5 h-5 mr-2" /> ACCESO DOCENTE
@@ -277,7 +272,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                             <MonitorPlay className="w-6 h-6 mr-3" /> IR AL CENTRO DE MANDO
                         </CyberButton>
                     ) : (
-                        <CyberButton onClick={() => setIsAuthModalOpen(true)} className="h-16 px-10 text-xl shadow-[0_0_30px_rgba(6,182,212,0.4)]">
+                        <CyberButton onClick={onLoginReq} className="h-16 px-10 text-xl shadow-[0_0_30px_rgba(6,182,212,0.4)]">
                             <LogIn className="w-6 h-6 mr-3" /> INICIAR SESIÓN
                         </CyberButton>
                     )}
