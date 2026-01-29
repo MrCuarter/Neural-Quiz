@@ -3,33 +3,52 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 import { validateQuizQuestions } from "../utils/validation";
 
+// --- HELPER FOR SAFE ENV ACCESS ---
+const getEnv = (key: string): string => {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            return import.meta.env[key] || "";
+        }
+    } catch (e) {}
+    try {
+        if (typeof process !== 'undefined' && process.env) {
+            return process.env[key] || "";
+        }
+    } catch (e) {}
+    return "";
+};
+
 // --- API KEY MANAGEMENT ---
 let currentKeyIndex = 0;
 
 const getAPIKeys = (): string[] => {
   const keys: string[] = [];
-  try {
-    // @ts-ignore
-    if (import.meta.env.VITE_API_KEY) keys.push(import.meta.env.VITE_API_KEY);
-    // @ts-ignore
-    if (import.meta.env.API_KEY) keys.push(import.meta.env.API_KEY);
-    // @ts-ignore
-    if (import.meta.env.VITE_GOOGLE_API_KEY) keys.push(import.meta.env.VITE_GOOGLE_API_KEY);
-  } catch (e) {}
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      if (process.env.VITE_API_KEY) keys.push(process.env.VITE_API_KEY);
-      if (process.env.API_KEY) keys.push(process.env.API_KEY);
-    }
-  } catch(e) {}
+  const k1 = getEnv("VITE_API_KEY");
+  const k2 = getEnv("API_KEY");
+  const k3 = getEnv("VITE_GOOGLE_API_KEY");
+  
+  if(k1) keys.push(k1);
+  if(k2) keys.push(k2);
+  if(k3) keys.push(k3);
+
   return Array.from(new Set(keys)).filter(k => !!k && k.length > 10 && !k.includes("undefined"));
 };
 
 const getAI = () => {
   const keys = getAPIKeys();
   if (keys.length === 0) {
-      if (process.env.API_KEY) return new GoogleGenAI({ apiKey: process.env.API_KEY });
-      return new GoogleGenAI({ apiKey: "dummy" }); 
+      // Return a dummy instance or one that will fail gracefully later
+      // But we can't create GoogleGenAI with empty key usually.
+      // We'll throw only when generateContent is CALLED, not on init.
+      return {
+          models: {
+              generateContent: async () => {
+                  throw new Error("Preview Mode: No Google API Key found. Configure VITE_API_KEY.");
+              }
+          }
+      } as unknown as GoogleGenAI;
   }
   if (currentKeyIndex >= keys.length) currentKeyIndex = 0;
   const activeKey = keys[currentKeyIndex];

@@ -84,16 +84,19 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                         )}
                     </div>
 
-                    {/* RIGHT: GENIALLY EMBED */}
+                    {/* RIGHT: GENIALLY EMBED WITH PROTECTIVE OVERLAY */}
                     <div className="flex-1 min-w-[300px] w-full flex justify-center animate-in zoom-in-95 duration-1000 delay-200">
                         <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                           <div style={{ position: 'relative', paddingBottom: '100%', paddingTop: 0, height: 0, width: '100%', maxWidth: '800px' }}>
+                            {/* OVERLAY: Bloquea scroll/interacción para no molestar la navegación */}
+                            <div className="absolute inset-0 z-20 w-full h-full bg-transparent" />
+                            
                             <iframe 
                               title="Neural Quiz Header" 
                               frameBorder="0" 
                               width="800" 
                               height="800" 
-                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} 
+                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 }} 
                               src="https://view.genially.com/697b237b344f20a411a68fc6" 
                               allowFullScreen={true} 
                               scrolling="yes" 
