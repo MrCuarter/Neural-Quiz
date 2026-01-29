@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
 import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
@@ -61,7 +62,11 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     // --- STATE: GAMEPLAY ---
     const [gameState, setGameState] = useState<GameState>('LOBBY');
     const [combatState, setCombatState] = useState<CombatState>('IDLE');
+    
+    // IDENTITY
     const [nickname, setNickname] = useState("");
+    const [realName, setRealName] = useState<string | undefined>(undefined);
+
     const [score, setScore] = useState(0);
     const [streak, setStreak] = useState(0);
     const [isMuted, setIsMuted] = useState(false);
@@ -219,8 +224,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         return () => clearInterval(timerRef.current);
     }, [gameState, combatState, timeLeft]);
 
-    const handleStart = (name: string) => {
-        setNickname(name);
+    const handleStart = (alias: string, rName?: string) => {
+        setNickname(alias);
+        setRealName(rName); // Save Real Name
         setGameState('ROULETTE');
     };
 
@@ -447,12 +453,16 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const finishGame = async (result: 'WIN' | 'LOSE') => {
         setGameState('STATS'); 
         if (evaluationId && !evaluationId.includes('demo') && !previewConfig) {
-            await saveEvaluationAttempt({
-                evaluationId, nickname, score,
+            const docId = await saveEvaluationAttempt({
+                evaluationId, 
+                nickname, 
+                realName, // SAVE REAL NAME
+                score,
                 totalTime: Math.floor((Date.now() - startTimeRef.current) / 1000),
                 accuracy: (battleStats.correctAnswers / Math.max(1, battleStats.totalAnswers)) * 100,
                 answersSummary: { correct: battleStats.correctAnswers, incorrect: battleStats.totalAnswers - battleStats.correctAnswers, total: battleStats.totalAnswers }
             });
+            setSavedAttemptId(docId);
         }
     };
 
@@ -576,7 +586,14 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     }
 
     if (gameState === 'LOBBY') {
-        return <StudentLogin bossConfig={bossConfig!} quizTitle={evaluation?.title || "Quiz"} onJoin={handleStart} />;
+        return (
+            <StudentLogin 
+                bossConfig={bossConfig!} 
+                quizTitle={evaluation?.title || "Quiz"} 
+                classId={evaluation?.classId} // PASS CLASS ID
+                onJoin={handleStart} 
+            />
+        );
     }
 
     if (gameState === 'STATS') {
@@ -664,6 +681,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
                         <span className="font-cyber font-bold text-sm md:text-xl text-green-400">{nickname}</span>
+                        {realName && <span className="text-[9px] text-gray-500 font-mono">({realName})</span>}
                         <span className="text-[9px] md:text-xs text-gray-400 font-mono">LVL {1 + Math.floor(score/1000)}</span>
                     </div>
                     {passiveEffect && <img src={PASSIVES[passiveEffect].image} crossOrigin="anonymous" className="w-8 h-8 md:w-12 md:h-12 border-2 border-purple-500 rounded-full bg-purple-900/50" />}

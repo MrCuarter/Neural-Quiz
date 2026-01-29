@@ -1,6 +1,5 @@
-
 import React, { useEffect, useState } from 'react';
-import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid, Home } from 'lucide-react';
+import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid, Home, MonitorPlay } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
 import { auth, signInWithGoogle, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
 
@@ -9,10 +8,11 @@ interface HeaderProps {
   setLanguage: (lang: Language) => void;
   onHelp: () => void;
   onMyQuizzes: () => void;
-  onHome: () => void; 
+  onHome: () => void;
+  onTeacherHub: () => void; // New Callback
 }
 
-export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes, onHome }) => {
+export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes, onHome, onTeacherHub }) => {
   const [user, setUser] = useState<any>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
@@ -68,25 +68,23 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
         {/* SECCIÓN DERECHA: ACCIONES */}
         <div className="flex items-center gap-3">
              
-             <a 
-                href="https://mistercuarter.es" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-900/50 border border-gray-700/50 rounded hover:bg-gray-800 hover:border-gray-600 text-gray-400 hover:text-white transition-all group mr-2"
-             >
-                <Home className="w-3 h-3" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">WEB MR. CUARTER</span>
-             </a>
-
              {!isLoadingAuth && (
                  user ? (
                     <div className="flex items-center gap-3">
+                        {/* TEACHER HUB BUTTON */}
+                        <button 
+                            onClick={onTeacherHub}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded font-bold font-mono text-[10px] tracking-wider uppercase shadow-[0_0_10px_rgba(6,182,212,0.4)] transition-all transform hover:scale-105"
+                        >
+                            <MonitorPlay className="w-4 h-4" /> HUB DOCENTE
+                        </button>
+
                         <button 
                             onClick={onMyQuizzes}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/30 rounded hover:bg-cyan-900/50 text-cyan-300 transition-all group"
+                            className="flex items-center gap-2 px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/30 rounded hover:bg-cyan-900/50 text-cyan-300 transition-all group hidden md:flex"
                         >
                             <LayoutGrid className="w-4 h-4" />
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">MIS QUIZES</span>
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">MIS QUIZES</span>
                         </button>
 
                         <div className="flex items-center gap-2 px-2 py-1 bg-gray-900 border border-gray-800 rounded">

@@ -3,27 +3,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- 1. QUIZZES PRIVADOS (Mi Librería) ---
-    // Colección 'quizes': Solo el dueño (userId) puede leer o escribir.
-    match /quizes/{quizId} {
-      // Permitir crear si estás autenticado y el userId coincide con tu UID
+    // --- 1. QUIZZES (Colección Unificada) ---
+    match /quizzes/{quizId} {
+      
+      // LECTURA: Permitido si eres el dueño O si el quiz es público
+      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || resource.data.isPublic == true;
+      
+      // CREACIÓN: Solo autenticados y asignándose como dueños
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       
-      // Permitir leer, actualizar y borrar solo si el documento existente pertenece al usuario
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      // EDICIÓN/BORRADO: Solo el dueño
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
-    // --- 2. QUIZZES PÚBLICOS (Comunidad Neural) ---
-    // Colección 'public_quizzes': Accesible globalmente para lectura.
-    match /public_quizzes/{quizId} {
-      // Cualquiera puede leer (necesario para la Galería y Landing Page)
-      allow read: if true;
-      
-      // Solo usuarios autenticados (incluido anónimos) pueden publicar
-      allow create: if request.auth != null;
-      
-      // Solo el autor original puede modificar o eliminar su publicación
-      allow update, delete: if request.auth != null && resource.data.authorId == request.auth.uid;
+    // --- 2. EVALUACIONES ARCADE ---
+    match /evaluations/{evalId} {
+      allow read: if true; // Alumnos necesitan leer la config para jugar
+      allow create: if request.auth != null; 
+      allow update: if request.auth != null && resource.data.hostUserId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.hostUserId == request.auth.uid;
+    }
+
+    // --- 3. INTENTOS / RESULTADOS ---
+    match /attempts/{attemptId} {
+      allow read: if true; // Leaderboard público
+      allow create: if true; // Alumnos guardan resultados
     }
   }
 }

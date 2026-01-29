@@ -12,15 +12,21 @@ import {
     FileText, 
     Sparkles, 
     Users,
-    Swords
+    Swords,
+    MonitorPlay,
+    LayoutGrid,
+    Lock,
+    Trophy
 } from 'lucide-react';
 import { ASSETS_BASE } from '../../data/bossPresets';
 
 interface LandingV2Props {
     onNavigate: (view: string) => void;
+    user: any;
+    onLoginReq: () => void;
 }
 
-export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
+export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginReq }) => {
     
     return (
         <div className="min-h-screen bg-[#020617] text-white flex flex-col font-sans selection:bg-cyan-500/30">
@@ -49,24 +55,37 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
-                            <CyberButton 
-                                onClick={() => onNavigate('create_menu')} 
-                                className="h-14 text-lg px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-none shadow-[0_0_20px_rgba(6,182,212,0.4)]"
-                            >
-                                <RocketIcon className="w-5 h-5 mr-2" /> CREAR & CONVERTIR
-                            </CyberButton>
-                            <CyberButton 
-                                variant="secondary" 
-                                onClick={() => onNavigate('community')}
-                                className="h-14 text-lg px-8"
-                            >
-                                <Globe className="w-5 h-5 mr-2" /> EXPLORAR BIBLIOTECA
-                            </CyberButton>
+                            {user ? (
+                                <>
+                                    <CyberButton 
+                                        onClick={() => onNavigate('teacher_hub')} 
+                                        className="h-14 text-lg px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-none shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                                    >
+                                        <MonitorPlay className="w-5 h-5 mr-2" /> 💻 IR AL HUB DOCENTE
+                                    </CyberButton>
+                                    <CyberButton 
+                                        variant="secondary" 
+                                        onClick={() => onNavigate('my_quizzes')}
+                                        className="h-14 text-lg px-8"
+                                    >
+                                        <LayoutGrid className="w-5 h-5 mr-2" /> 📂 MIS QUIZZES
+                                    </CyberButton>
+                                </>
+                            ) : (
+                                <CyberButton 
+                                    onClick={onLoginReq} 
+                                    className="h-14 text-lg px-8 bg-yellow-600 hover:bg-yellow-500 border-none shadow-[0_0_20px_rgba(234,179,8,0.4)] text-black font-bold"
+                                >
+                                    <Lock className="w-5 h-5 mr-2" /> INICIAR SESIÓN PARA GUARDAR TU PROGRESO
+                                </CyberButton>
+                            )}
                         </div>
                         
-                        <p className="text-xs text-gray-500 font-mono pt-2">
-                            * Sin registro obligatorio para empezar. Compatible con Kahoot, PDF y Excel.
-                        </p>
+                        {!user && (
+                            <p className="text-xs text-gray-500 font-mono pt-2">
+                                * Puedes explorar sin cuenta, pero no podrás guardar ni gestionar clases.
+                            </p>
+                        )}
                     </div>
 
                     {/* RIGHT: THE HUB VISUALIZATION */}
@@ -152,7 +171,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
                                 </div>
                                 <h3 className="text-2xl font-bold font-cyber text-white mb-2 group-hover:text-pink-300">CONVERSIÓN TOTAL</h3>
                                 <p className="text-gray-400 text-sm max-w-md">
-                                    Importa desde cualquier fuente: Kahoots públicos, PDFs de editoriales o Excel. La IA estructura los datos y te permite exportar a más de 15 plataformas (Google Forms, Wooclap, Socrative...).
+                                    Importa desde cualquier fuente: Kahoots públicos, PDFs de editoriales o Excel. La IA estructura los datos y te permite exportar a más de 15 plataformas.
                                 </p>
                             </div>
                         </div>
@@ -166,7 +185,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
                             <div className="w-12 h-12 bg-cyan-900/30 rounded-lg flex items-center justify-center border border-cyan-500/30 mb-4">
                                 <Sparkles className="w-6 h-6 text-cyan-400" />
                             </div>
-                            <h3 className="text-xl font-bold font-cyber text-white mb-2">GENERADOR HÍBRIDO</h3>
+                            <h3 className="text-xl font-bold font-cyber text-white mb-2">NEURAL QUIZ</h3>
                             <p className="text-gray-400 text-xs">
                                 IA + Edición Manual. Crea quizzes en segundos desde un tema o pule cada detalle a mano.
                             </p>
@@ -217,13 +236,13 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
                 </div>
             </section>
 
-            {/* --- GAME MODES SHOWCASE --- */}
-            <section className="py-20 px-6 relative overflow-hidden">
+            {/* --- GAME MODES SHOWCASE (BOSS BATTLE) --- */}
+            <section className="py-20 px-6 relative overflow-hidden bg-gradient-to-b from-black to-red-950/20">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-red-900/10 blur-[100px] rounded-full pointer-events-none" />
                 
                 <div className="max-w-5xl mx-auto relative z-10 text-center">
                     <h2 className="text-4xl md:text-5xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600 mb-8">
-                        JUEGA EN NEURAL QUIZ
+                        ARCADE: MODO JEFE FINAL
                     </h2>
                     
                     <div className="bg-gradient-to-br from-red-950/80 to-black border border-red-500/30 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
@@ -234,13 +253,13 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
                         <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 relative z-10">
                             <div className="text-left flex-1 space-y-6">
                                 <div className="inline-block px-3 py-1 bg-red-600 text-white text-xs font-bold font-mono rounded uppercase">
-                                    NUEVO MODO
+                                    SOLO / ASÍNCRONO
                                 </div>
                                 <h3 className="text-4xl font-black font-cyber text-red-500 tracking-wide drop-shadow-md">
                                     BOSS BATTLE RPG
                                 </h3>
                                 <p className="text-gray-300 text-lg leading-relaxed">
-                                    Transforma el examen en una batalla cooperativa. Toda la clase contra un Jefe Final controlado por IA. Barra de vida compartida, items, críticos y narrativa inmersiva.
+                                    Transforma el examen en una batalla épica. El alumno debe responder correctamente para bajar la vida a Lythara y sus esbirros. ¡Sistema de loot y niveles!
                                 </p>
                                 <div className="flex gap-4 pt-4">
                                     <CyberButton 
@@ -252,13 +271,13 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
                                 </div>
                             </div>
                             
-                            {/* Boss Visual */}
+                            {/* Boss Visual (Lythara) */}
                             <div className="w-64 h-64 md:w-80 md:h-80 relative shrink-0">
                                 <div className="absolute inset-0 bg-red-500/20 rounded-full blur-3xl animate-pulse"></div>
                                 <img 
-                                    src={`${ASSETS_BASE}/finalboss/kryon.png`} 
+                                    src={`${ASSETS_BASE}/finalboss/lythara.png`} 
                                     className="relative w-full h-full object-contain drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]"
-                                    alt="Boss Preview"
+                                    alt="Lythara Boss"
                                 />
                                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 border border-red-500 text-red-500 text-xs px-3 py-1 rounded font-mono">
                                     HP: 10000 / 10000
@@ -269,10 +288,72 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate }) => {
                 </div>
             </section>
 
+            {/* --- GAME MODES SHOWCASE (JEOPARDY) --- */}
+            <section className="py-20 px-6 relative overflow-hidden bg-gradient-to-b from-black to-purple-950/20 border-t border-gray-900">
+                
+                <div className="max-w-5xl mx-auto relative z-10 text-center">
+                    <h2 className="text-4xl md:text-5xl font-black font-cyber text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600 mb-8">
+                        ARCADE: MODO TV
+                    </h2>
+                    
+                    <div className="bg-gradient-to-br from-purple-950/80 to-black border border-purple-500/30 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
+                        
+                        {/* Fake Grid Background */}
+                        <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'linear-gradient(#a855f7 1px, transparent 1px), linear-gradient(90deg, #a855f7 1px, transparent 1px)', backgroundSize: '40px 40px'}}></div>
+
+                        <div className="flex flex-col-reverse md:flex-row items-center gap-8 md:gap-12 relative z-10">
+                            
+                            {/* Visual Board Mockup */}
+                            <div className="w-full md:w-1/2 relative">
+                                <div className="bg-black/80 border-4 border-purple-500 rounded-lg p-2 shadow-[0_0_30px_rgba(168,85,247,0.4)] aspect-video flex flex-col gap-1">
+                                    {/* Mock Categories */}
+                                    <div className="grid grid-cols-4 gap-1 text-[8px] font-mono text-center text-purple-300 font-bold mb-1">
+                                        <div className="bg-purple-900/50 p-1">HISTORIA</div>
+                                        <div className="bg-purple-900/50 p-1">CIENCIA</div>
+                                        <div className="bg-purple-900/50 p-1">ARTE</div>
+                                        <div className="bg-purple-900/50 p-1">CINE</div>
+                                    </div>
+                                    {/* Mock Cells */}
+                                    <div className="grid grid-cols-4 gap-1 flex-1">
+                                        {[...Array(12)].map((_, i) => (
+                                            <div key={i} className="bg-purple-900/20 border border-purple-500/30 flex items-center justify-center text-purple-400 font-cyber text-xs">
+                                                {Math.floor(i / 4 + 1) * 100}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="text-left flex-1 space-y-6">
+                                <div className="inline-block px-3 py-1 bg-purple-600 text-white text-xs font-bold font-mono rounded uppercase">
+                                    GRUPAL / CLASE
+                                </div>
+                                <h3 className="text-4xl font-black font-cyber text-purple-400 tracking-wide drop-shadow-md">
+                                    JEOPARDY NEURAL
+                                </h3>
+                                <p className="text-gray-300 text-lg leading-relaxed">
+                                    El clásico concurso de televisión llevado al aula. Equipos, rebotes, apuestas y "Chaos Mode" con poderes especiales. Ideal para repasar en la pizarra digital.
+                                </p>
+                                <div className="flex gap-4 pt-4">
+                                    <CyberButton 
+                                        onClick={() => onNavigate('game_lobby')} 
+                                        variant="secondary"
+                                        className="h-12 border-purple-500 text-purple-400 hover:bg-purple-900/30"
+                                    >
+                                        <Trophy className="w-5 h-5 mr-2" /> JUGAR DEMO
+                                    </CyberButton>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* --- FOOTER CTA --- */}
             <section className="py-16 text-center border-t border-gray-900 bg-gray-950/50">
                 <h3 className="text-2xl font-cyber text-white mb-6">¿LISTO PARA TOMAR EL CONTROL?</h3>
-                <CyberButton onClick={() => onNavigate('create_menu')} className="h-16 px-10 text-xl">
+                <CyberButton onClick={() => onNavigate(user ? 'teacher_hub' : 'create_menu')} className="h-16 px-10 text-xl">
                     EMPEZAR AHORA
                 </CyberButton>
             </section>

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { QuizEditor } from './components/QuizEditor';
@@ -14,7 +15,9 @@ import { HexConquestGame } from './components/game/HexConquestGame';
 import { PublicQuizLanding } from './components/PublicQuizLanding'; 
 import { CommunityPage } from './components/CommunityPage'; 
 import { ArcadePlay } from './components/pages/ArcadePlay'; 
-import { LandingV2 } from './components/pages/LandingV2'; // NEW IMPORT
+import { LandingV2 } from './components/pages/LandingV2'; 
+import { TeacherHub } from './components/pages/TeacherHub'; 
+import { ClassesManager } from './components/pages/ClassesManager'; // NEW IMPORT
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
 import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2, LayoutTemplate } from 'lucide-react';
@@ -28,8 +31,8 @@ import { searchImage } from './services/imageService';
 import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
-// Types - Added 'landing_v2'
-type ViewState = 'home' | 'landing_v2' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play';
+// Types - Added 'classes_manager'
+type ViewState = 'home' | 'landing_v2' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -285,6 +288,15 @@ const NeuralApp: React.FC = () => {
       setView(targetView);
   };
 
+  const handleLoginRequest = async () => {
+      try {
+          await signInWithGoogle();
+          // Stay on view, Header will update
+      } catch (e) {
+          toast.error("Login failed");
+      }
+  };
+
   // --- GAME LAUNCHERS ---
   const launchPublicGame = (q: Quiz, mode: GameMode) => {
       const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500'];
@@ -422,8 +434,13 @@ const NeuralApp: React.FC = () => {
                 onHelp={() => handleSafeExit('help')} 
                 onMyQuizzes={() => handleSafeExit('my_quizzes')}
                 onHome={() => handleSafeExit('home')}
+                onTeacherHub={() => handleSafeExit('teacher_hub')}
               />
-              <LandingV2 onNavigate={(targetView: string) => setView(targetView as ViewState)} />
+              <LandingV2 
+                onNavigate={(targetView: string) => setView(targetView as ViewState)} 
+                user={user}
+                onLoginReq={handleLoginRequest}
+              />
               <Footer onPrivacy={() => setView('privacy')} onTerms={() => setView('terms')} />
           </div>
       );
@@ -437,6 +454,7 @@ const NeuralApp: React.FC = () => {
         onHelp={() => handleSafeExit('help')} 
         onMyQuizzes={() => handleSafeExit('my_quizzes')}
         onHome={() => handleSafeExit('home')}
+        onTeacherHub={() => handleSafeExit('teacher_hub')}
       />
       
       {showMissingAnswersModal && renderMissingAnswersModal()}
@@ -484,7 +502,7 @@ const NeuralApp: React.FC = () => {
                     <BrainCircuit className="w-8 h-8 text-cyan-400" />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-bold font-cyber text-white group-hover:text-cyan-300 mb-2">{t.create_quiz}</h3>
+                    <h3 className="text-2xl font-bold font-cyber text-white group-hover:text-cyan-300 mb-2">NEURAL QUIZ</h3>
                     <p className="text-cyan-400/80 font-mono text-xs uppercase tracking-wider mb-3">{t.create_quiz_desc}</p>
                     <p className="text-gray-400 text-sm leading-relaxed">{t.create_quiz_help}</p>
                   </div>
@@ -518,6 +536,19 @@ const NeuralApp: React.FC = () => {
               </CyberCard>
             </div>
           </div>
+        )}
+
+        {/* --- TEACHER HUB --- */}
+        {view === 'teacher_hub' && (
+            <TeacherHub 
+                user={user} 
+                onNavigate={(targetView: string) => setView(targetView as ViewState)} 
+            />
+        )}
+
+        {/* --- CLASSES MANAGER (NEW) --- */}
+        {view === 'classes_manager' && (
+            <ClassesManager onBack={() => setView('teacher_hub')} />
         )}
 
         {/* ... rest of the app ... */}

@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
-import { Quiz, Evaluation, EvaluationConfig, BossSettings } from '../../types';
+import { Quiz, Evaluation, EvaluationConfig, BossSettings, ClassGroup } from '../../types';
 import { createEvaluation, auth } from '../../services/firebaseService';
+import { getTeacherClasses } from '../../services/classService';
 import { signInAnonymously } from 'firebase/auth';
-import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Edit3, Image as ImageIcon, Calculator, Play, Copy, CheckCircle2, Code, LayoutDashboard, School } from 'lucide-react';
+import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberSelect } from '../ui/CyberUI';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Users, LayoutDashboard, School, Code, Copy, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES, ASSETS_BASE } from '../../data/bossPresets';
 import { ArcadePlay } from '../pages/ArcadePlay';
@@ -13,7 +15,7 @@ interface CreateEvaluationModalProps {
     onClose: () => void;
     quiz: Quiz;
     user: any;
-    onGoToDashboard?: () => void; // New prop for redirection
+    onGoToDashboard?: () => void; 
 }
 
 export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ isOpen, onClose, quiz, user, onGoToDashboard }) => {
@@ -29,6 +31,10 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     
+    // Class Selection
+    const [classes, setClasses] = useState<ClassGroup[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<string>("none");
+
     // Game Mode Config
     const [gameMode, setGameMode] = useState<'classic' | 'time_attack' | 'final_boss'>('classic');
     const [questionCount, setQuestionCount] = useState(0);
@@ -71,8 +77,19 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             setQuestionCount(quiz.questions.length);
             setCountWarning(false);
             handleSelectPreset('kryon_v');
+            loadClasses();
         }
     }, [isOpen, quiz]);
+
+    const loadClasses = async () => {
+        if (!user) return;
+        try {
+            const data = await getTeacherClasses();
+            setClasses(data);
+        } catch (e) {
+            console.error("Error loading classes", e);
+        }
+    };
 
     const handleSelectPreset = (key: string) => {
         setSelectedPreset(key);
@@ -161,6 +178,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                 quizId: quiz.id || "temp-quiz",
                 quizTitle: quiz.title,
                 hostUserId: hostUserId,
+                classId: selectedClassId !== "none" ? selectedClassId : undefined, // NEW
                 title: title,
                 config: config,
                 isActive: true,
@@ -255,6 +273,28 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                 </h3>
                                 <div className="grid grid-cols-1 gap-4">
                                     <CyberInput label="TÍTULO DE LA SESIÓN" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Examen Unidad 1"/>
+                                    
+                                    {/* CLASS SELECTION */}
+                                    <div>
+                                        <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block mb-1">ASIGNAR A CLASE (OPCIONAL)</label>
+                                        <select 
+                                            className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none w-full appearance-none"
+                                            value={selectedClassId}
+                                            onChange={(e) => setSelectedClassId(e.target.value)}
+                                        >
+                                            <option value="none">-- Modo Abierto (Cualquiera puede entrar con Nickname) --</option>
+                                            {classes.map(c => (
+                                                <option key={c.id} value={c.id}>{c.name} ({c.students.length} alumnos)</option>
+                                            ))}
+                                        </select>
+                                        {selectedClassId !== "none" && (
+                                            <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded text-xs text-blue-200 flex items-center gap-2">
+                                                <Users className="w-4 h-4" />
+                                                <span>Los alumnos deberán seleccionar su nombre real de la lista.</span>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="flex flex-col gap-1">
                                             <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest">FECHA INICIO</label>

@@ -1,4 +1,5 @@
 
+
 export interface Option {
   id: string;
   text: string;
@@ -74,6 +75,15 @@ export interface Quiz {
   clones?: number;
 }
 
+// --- CLASS MANAGEMENT (NEW FASE 2) ---
+export interface ClassGroup {
+    id?: string;
+    teacherId: string;
+    name: string;
+    students: string[]; // List of real names
+    createdAt?: any;
+}
+
 // --- BOSS BATTLE CONFIG ---
 export interface BossImageConfig {
     idle: string;   // Normal state
@@ -132,6 +142,7 @@ export interface Evaluation {
     quizId: string;
     quizTitle: string; // Denormalized for display
     hostUserId: string;
+    classId?: string; // NEW: Link to a ClassGroup
     title: string; // Evaluation specific title (e.g. "Examen Matemáticas 3ºB")
     config: EvaluationConfig;
     createdAt: any;
@@ -143,7 +154,8 @@ export interface Evaluation {
 export interface EvaluationAttempt {
     id?: string;
     evaluationId: string;
-    nickname: string;
+    nickname: string; // BATTLE ALIAS (Shown in public ranking)
+    realName?: string; // NEW: REAL NAME (Shown to teacher only)
     score: number;
     totalTime: number; // Seconds
     accuracy: number; // Percentage 0-100

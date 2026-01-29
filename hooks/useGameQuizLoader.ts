@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Quiz } from '../types';
 import { DEMO_QUIZZES } from '../data/demoQuizzes';
@@ -54,7 +53,8 @@ export const useGameQuizLoader = (quizId?: string, initialQuiz?: Quiz | null): L
 
                 // 3. PRIVATE/MAIN COLLECTION CHECK
                 // Note: Firestore rules might block this if not the owner
-                const docRef = doc(db, "quizes", quizId);
+                // REFACTOR: 'quizzes'
+                const docRef = doc(db, "quizzes", quizId);
                 const snap = await getDoc(docRef);
                 
                 if (snap.exists()) {

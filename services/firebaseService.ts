@@ -151,7 +151,8 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
         throw new Error("User ID is undefined or null");
     }
 
-    const collectionRef = collection(db, "quizes");
+    // REFACTOR: 'quizzes' collection
+    const collectionRef = collection(db, "quizzes");
     
     // Construimos el objeto base
     const rawData = {
@@ -179,7 +180,8 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
                 updatedAt: serverTimestamp()
             };
 
-            const docRef = doc(db, "quizes", quiz.id);
+            // REFACTOR: 'quizzes' collection
+            const docRef = doc(db, "quizzes", quiz.id);
             await updateDoc(docRef, payload);
             return quiz.id;
 
@@ -340,12 +342,12 @@ export const getEvaluationLeaderboard = async (evaluationId: string, limitCount 
 export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
     if (isOfflineMode) return [];
     try {
-        // INTENTO 1: Consulta Óptima con Ordenación
+        // REFACTOR: 'quizzes' collection and 'createdAt' sort
         try {
             const q = query(
-                collection(db, "quizes"),
+                collection(db, "quizzes"),
                 where("userId", "==", userId),
-                orderBy("updatedAt", "desc")
+                orderBy("createdAt", "desc") // REFACTOR: createdAt desc
             );
             const querySnapshot = await getDocs(q);
             return mapSnapshotToQuizzes(querySnapshot);
@@ -356,15 +358,15 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
                 console.warn("⚠️ FALTA ÍNDICE EN FIRESTORE. Usando fallback en cliente.");
                 
                 const qSimple = query(
-                    collection(db, "quizes"),
+                    collection(db, "quizzes"),
                     where("userId", "==", userId)
                 );
                 const snapshot = await getDocs(qSimple);
                 const results = mapSnapshotToQuizzes(snapshot);
-                // Ordenar en memoria
+                // Ordenar en memoria (REFACTOR: createdAt)
                 return results.sort((a, b) => {
-                    const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date();
-                    const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date();
+                    const dateA = a.createdAt instanceof Date ? a.createdAt : new Date();
+                    const dateB = b.createdAt instanceof Date ? b.createdAt : new Date();
                     return dateB.getTime() - dateA.getTime();
                 });
             }
@@ -398,7 +400,8 @@ const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
 export const deleteQuizFromFirestore = async (quizId: string) => {
     if (isOfflineMode) return;
     try {
-        await deleteDoc(doc(db, "quizes", quizId));
+        // REFACTOR: 'quizzes' collection
+        await deleteDoc(doc(db, "quizzes", quizId));
     } catch (e) {
         console.error("Error deleting quiz:", e);
         throw e;
