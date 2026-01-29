@@ -562,7 +562,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-24 py-8 space-y-8 animate-in fade-in duration-500">
       
       {/* GLOBAL MODALS */}
       <PublishModal 
@@ -685,7 +685,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
       {showAiModal && (
           <div className="border border-purple-500/50 bg-purple-950/10 p-6 rounded-lg animate-in slide-in-from-top-4">
-              <div className="flex items-center gap-2 mb-4 text-purple-400 font-cyber"><Bot className="w-5 h-5" /><h3>{t.ai_modal_title}</h3></div>
+              <div className="flex items-center gap-2 mb-4 text-purple-400 font-cyber"><Bot className="w-5 h-5"/><h3>{t.ai_modal_title}</h3></div>
               <div className="flex flex-col md:flex-row gap-4 items-end">
                   <div className="flex-1 w-full"><CyberInput label={t.topic_label} placeholder={t.gen_placeholder} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}/></div>
                   <div className="w-full md:w-40">

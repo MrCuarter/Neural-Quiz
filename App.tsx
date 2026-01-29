@@ -14,6 +14,7 @@ import { CampaignManager } from './components/pages/campaign/CampaignManager';
 import { ClassesManager } from './components/pages/ClassesManager';
 import { PublicQuizLanding } from './components/PublicQuizLanding';
 import { PublicCampaignView } from './components/pages/campaign/PublicCampaignView';
+import { CommunityPage } from './components/CommunityPage';
 import { HelpView } from './components/HelpView';
 import { PrivacyView } from './components/PrivacyView';
 import { TermsView } from './components/TermsView';
@@ -91,6 +92,7 @@ const AppContent: React.FC = () => {
           case 'export': return <ExportPanel quiz={quiz} t={t} />;
           case 'campaign_manager': return <CampaignManager onBack={() => setView('teacher_hub')} />;
           case 'classes_manager': return <ClassesManager onBack={() => setView('teacher_hub')} />;
+          case 'community': return <CommunityPage onBack={() => setView('landing')} onPlay={(q) => { setQuiz(q); setView('game_lobby'); }} onImport={(q) => { setQuiz(q); setView('create_menu'); }} />;
           case 'public_quiz': return <PublicQuizLanding quizId={publicId} currentUser={user} onPlay={(q, m) => { setQuiz(q); setView('game_lobby'); }} onBack={() => setView('landing')} onLoginReq={openLogin} />;
           case 'public_campaign': return <PublicCampaignView publicId={publicId} />;
           case 'help': return <HelpView onBack={() => setView('landing')} t={t} />;

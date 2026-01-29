@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { CyberButton, CyberCard, CyberInput, CyberTextArea } from '../ui/CyberUI';
 import { 
@@ -27,7 +28,12 @@ import {
     MonitorPlay,
     Instagram,
     Youtube,
-    Eye
+    Eye,
+    Bot,
+    PenTool,
+    Upload,
+    FolderOpen,
+    FileText
 } from 'lucide-react';
 import { auth, storage, updateUserData, getUserData, getUserQuizzes, deleteQuizFromFirestore } from '../../services/firebaseService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -162,6 +168,10 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
         setSelectedArcadeMode(mode);
         setShowQuizPicker(true);
     };
+
+    // --- NAVIGATION HELPERS ---
+    const goToCreate = () => onNavigate('create_menu');
+    const goToMyQuizzes = () => onNavigate('my_quizzes');
 
     if (!user) return <div className="text-center p-20">Acceso Denegado</div>;
 
@@ -305,8 +315,8 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
 
                 {/* --- NAVIGATION BAR (STICKY) --- */}
                 <div className="sticky top-20 z-30 bg-[#020617]/90 backdrop-blur border-y border-gray-800 py-3 flex justify-center gap-2 overflow-x-auto">
-                    <button onClick={() => scrollToSection('quizzes')} className="px-6 py-2 rounded-full border border-gray-700 hover:border-cyan-500 hover:text-cyan-400 text-gray-400 text-xs font-mono font-bold transition-all whitespace-nowrap">
-                        MIS QUIZZES
+                    <button onClick={() => scrollToSection('quiz-manager')} className="px-6 py-2 rounded-full border border-gray-700 hover:border-blue-500 hover:text-blue-400 text-gray-400 text-xs font-mono font-bold transition-all whitespace-nowrap">
+                        GESTOR DE QUIZZES
                     </button>
                     <button onClick={() => scrollToSection('arcade')} className="px-6 py-2 rounded-full border border-gray-700 hover:border-purple-500 hover:text-purple-400 text-gray-400 text-xs font-mono font-bold transition-all whitespace-nowrap">
                         ZONA ARCADE
@@ -318,43 +328,86 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
 
                 {/* --- SECTIONS --- */}
 
-                {/* 1. QUIZZES */}
-                <div id="quizzes" className="scroll-mt-32 space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-black font-cyber text-cyan-400 flex items-center gap-2"><LayoutGrid className="w-6 h-6"/> MIS QUIZZES</h2>
-                        <CyberButton onClick={() => onNavigate('create_menu')} className="text-xs h-9 bg-cyan-900/50 border-cyan-500"><Plus className="w-4 h-4 mr-2"/> CREAR NUEVO</CyberButton>
-                    </div>
+                {/* 1. NEW: GESTOR DE QUIZZES (MAIN ACTIONS) */}
+                <div id="quiz-manager" className="scroll-mt-32 space-y-6">
+                    <h2 className="text-2xl font-black font-cyber text-blue-400 flex items-center gap-2"><LayoutGrid className="w-6 h-6"/> GESTOR DE QUIZZES</h2>
                     
-                    {loadingQuizzes ? (
-                        <div className="text-center py-20 text-gray-500 font-mono">Cargando biblioteca...</div>
-                    ) : quizzes.length === 0 ? (
-                        <div className="text-center py-16 border-2 border-dashed border-gray-800 rounded-lg">
-                            <p className="text-gray-500">Tu biblioteca está vacía.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* BOTÓN 1: GENERAR CON IA */}
+                        <button onClick={goToCreate} className="group relative h-40 rounded-xl overflow-hidden border-2 border-purple-500/30 bg-purple-950/20 hover:bg-purple-900/40 hover:border-purple-500 transition-all text-left p-5 flex flex-col justify-between">
+                            <div className="absolute top-0 right-0 p-12 bg-purple-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
+                            <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center border border-purple-500/50 group-hover:scale-110 transition-transform">
+                                <Bot className="w-6 h-6 text-purple-300" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold font-cyber text-white text-lg">GENERAR CON IA</h3>
+                                <p className="text-[10px] text-gray-400 font-mono mt-1">Creación automática desde tema</p>
+                            </div>
+                        </button>
+
+                        {/* BOTÓN 2: GENERACIÓN MANUAL */}
+                        <button onClick={goToCreate} className="group relative h-40 rounded-xl overflow-hidden border-2 border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-900/40 hover:border-cyan-500 transition-all text-left p-5 flex flex-col justify-between">
+                            <div className="absolute top-0 right-0 p-12 bg-cyan-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
+                            <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/50 group-hover:scale-110 transition-transform">
+                                <PenTool className="w-6 h-6 text-cyan-300" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold font-cyber text-white text-lg">MANUAL</h3>
+                                <p className="text-[10px] text-gray-400 font-mono mt-1">Editor clásico pregunta a pregunta</p>
+                            </div>
+                        </button>
+
+                        {/* BOTÓN 3: IMPORTAR QUIZ */}
+                        <button onClick={goToCreate} className="group relative h-40 rounded-xl overflow-hidden border-2 border-green-500/30 bg-green-950/20 hover:bg-green-900/40 hover:border-green-500 transition-all text-left p-5 flex flex-col justify-between">
+                            <div className="absolute top-0 right-0 p-12 bg-green-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
+                            <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center border border-green-500/50 group-hover:scale-110 transition-transform">
+                                <Upload className="w-6 h-6 text-green-300" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold font-cyber text-white text-lg">IMPORTAR QUIZ</h3>
+                                <p className="text-[10px] text-gray-400 font-mono mt-1">Desde PDF, Excel, Kahoot, Texto...</p>
+                            </div>
+                        </button>
+
+                        {/* BOTÓN 4: MIS QUIZZES */}
+                        <button onClick={goToMyQuizzes} className="group relative h-40 rounded-xl overflow-hidden border-2 border-yellow-500/30 bg-yellow-950/20 hover:bg-yellow-900/40 hover:border-yellow-500 transition-all text-left p-5 flex flex-col justify-between">
+                            <div className="absolute top-0 right-0 p-12 bg-yellow-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
+                            <div className="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center border border-yellow-500/50 group-hover:scale-110 transition-transform">
+                                <FolderOpen className="w-6 h-6 text-yellow-300" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold font-cyber text-white text-lg">MIS QUIZZES</h3>
+                                <p className="text-[10px] text-gray-400 font-mono mt-1">Accede a tu biblioteca ({stats.totalQuizzes})</p>
+                            </div>
+                        </button>
+                    </div>
+
+                    {/* RECENT QUIZZES PREVIEW (Optional) */}
+                    <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">ACTIVIDAD RECIENTE</h4>
+                            <button onClick={goToMyQuizzes} className="text-xs text-cyan-400 hover:underline">Ver Todo</button>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {quizzes.map(q => (
-                                <CyberCard key={q.id} className="group hover:border-cyan-500/50 transition-colors flex flex-col h-full bg-gray-900/20">
-                                    <div className="flex-1 space-y-3">
-                                        <div className="flex justify-between items-start">
-                                            <h3 className="font-bold text-lg text-white font-cyber line-clamp-1">{q.title}</h3>
-                                            <span className="text-[10px] bg-black border border-gray-700 px-2 py-1 rounded text-gray-400">{q.questions.length} Qs</span>
+                        {loadingQuizzes ? (
+                            <div className="text-xs text-gray-500 text-center py-4">Cargando...</div>
+                        ) : quizzes.length === 0 ? (
+                            <div className="text-xs text-gray-500 text-center py-4 italic">No hay actividad reciente.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {quizzes.slice(0, 3).map(q => (
+                                    <div key={q.id} onClick={() => handleLaunchQuiz(q)} className="flex items-center gap-3 p-2 rounded bg-black/40 border border-gray-800 hover:border-cyan-500/30 cursor-pointer group">
+                                        <div className="w-8 h-8 rounded bg-gray-800 flex items-center justify-center text-gray-500 group-hover:text-white transition-colors">
+                                            <FileText className="w-4 h-4" />
                                         </div>
-                                        <p className="text-xs text-gray-500 font-mono line-clamp-2 min-h-[32px]">{q.description || "Sin descripción."}</p>
-                                        <div className="flex flex-wrap gap-1">
-                                            {q.tags?.slice(0, 3).map(t => <span key={t} className="text-[9px] text-cyan-600 bg-cyan-950/30 px-1 rounded">#{t}</span>)}
+                                        <div className="min-w-0">
+                                            <div className="text-xs font-bold text-gray-300 truncate group-hover:text-cyan-300">{q.title}</div>
+                                            <div className="text-[9px] text-gray-600">{q.questions.length} preguntas • {new Date(q.updatedAt).toLocaleDateString()}</div>
                                         </div>
                                     </div>
-                                    <div className="pt-4 mt-4 border-t border-gray-800 flex gap-2">
-                                        <button onClick={() => handleLaunchQuiz(q)} className="flex-1 bg-cyan-900/50 hover:bg-cyan-800 text-cyan-200 py-2 rounded text-xs font-bold flex items-center justify-center gap-2 transition-all border border-cyan-700/50">
-                                            <Rocket className="w-3 h-3" /> LANZAR
-                                        </button>
-                                        <button onClick={() => handleDeleteQuiz(q.id!)} className="p-2 bg-black hover:bg-red-900/50 rounded text-gray-500 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                    </div>
-                                </CyberCard>
-                            ))}
-                        </div>
-                    )}
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* 2. ARCADE */}

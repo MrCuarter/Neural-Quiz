@@ -277,6 +277,37 @@ export interface HexCell {
     col: number;
 }
 
+// --- NEURAL RACE TYPES ---
+export type RaceTeamColor = 'red' | 'blue' | 'green' | 'yellow';
+export type RacePowerUp = 'boost' | 'shield' | 'freeze' | 'swap';
+
+export interface RacePlayer {
+    id: string;
+    name: string;
+    team: RaceTeamColor;
+    streak: number;
+    inventory: RacePowerUp | null;
+}
+
+export interface RaceTeamState {
+    score: number; // 0 to 100% progress
+    members: string[]; // Player IDs
+    activeEffects: { type: RacePowerUp; expiresAt: number }[]; 
+}
+
+export interface RaceSession {
+    id: string;
+    pin: string;
+    status: 'waiting' | 'racing' | 'finished';
+    hostId: string;
+    quizId: string;
+    quizTitle: string;
+    currentQuestionIndex: number; 
+    teams: Record<RaceTeamColor, RaceTeamState>;
+    players: Record<string, RacePlayer>;
+    createdAt: any;
+}
+
 export interface DiscoveryAttempt {
     method: 'api_proxy' | 'jina_reader' | 'html_embedded' | 'direct_fetch';
     finalUrl: string;
