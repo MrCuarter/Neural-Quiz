@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { CyberButton, CyberCard, CyberInput, CyberTextArea, CyberSelect } from '../../ui/CyberUI';
 import { X, ArrowRight, ArrowLeft, Wand2, Image as ImageIcon, Upload, Search, Palette, Coins, Scroll, Heart, Zap, Globe, Save } from 'lucide-react';
@@ -11,38 +12,41 @@ interface CreateQuestModalProps {
     onCreate: (campaignData: Partial<Campaign>) => void;
 }
 
+// ASSETS CONFIG
+const QUEST_ASSETS_BASE = "https://raw.githubusercontent.com/MrCuarter/neuralquiz-assets/79e18fb06409dc5669a2b360950e0e87e61a4abb/quest";
+
 // THEME PRESETS
 const THEME_PRESETS: Record<CampaignTheme, { visuals: CampaignVisuals, resources: CampaignResource[] }> = {
     fantasy: {
-        visuals: { primaryColor: '#f59e0b', font: 'serif', backgroundUrl: '' }, // Amber
+        visuals: { primaryColor: '#f59e0b', font: 'serif', backgroundUrl: `${QUEST_ASSETS_BASE}/fantasy.png` }, // Amber
         resources: [
             { id: 'r1', name: 'Oro', emoji: '🪙', type: 'accumulate', startValue: 0, targetValue: 1000 },
             { id: 'r2', name: 'Salud', emoji: '❤️', type: 'drain', startValue: 100, targetValue: 100 }
         ]
     },
     space: {
-        visuals: { primaryColor: '#3b82f6', font: 'sans', backgroundUrl: '' }, // Blue
+        visuals: { primaryColor: '#3b82f6', font: 'sans', backgroundUrl: `${QUEST_ASSETS_BASE}/space.png` }, // Blue
         resources: [
             { id: 'r1', name: 'Créditos', emoji: '💳', type: 'accumulate', startValue: 0, targetValue: 5000 },
             { id: 'r2', name: 'Combustible', emoji: '⛽', type: 'drain', startValue: 100, targetValue: 100 }
         ]
     },
     historical: {
-        visuals: { primaryColor: '#d97706', font: 'serif', backgroundUrl: '' }, // Bronze
+        visuals: { primaryColor: '#d97706', font: 'serif', backgroundUrl: `${QUEST_ASSETS_BASE}/history.png` }, // Bronze
         resources: [
             { id: 'r1', name: 'Reputación', emoji: '📜', type: 'accumulate', startValue: 0, targetValue: 100 },
             { id: 'r2', name: 'Provisiones', emoji: '🍞', type: 'drain', startValue: 50, targetValue: 50 }
         ]
     },
     arcade: {
-        visuals: { primaryColor: '#ec4899', font: 'mono', backgroundUrl: '' }, // Pink
+        visuals: { primaryColor: '#ec4899', font: 'mono', backgroundUrl: `${QUEST_ASSETS_BASE}/arcade.png` }, // Pink
         resources: [
             { id: 'r1', name: 'Score', emoji: '🏆', type: 'accumulate', startValue: 0, targetValue: 99999 },
             { id: 'r2', name: 'Vidas', emoji: '👾', type: 'drain', startValue: 3, targetValue: 3 }
         ]
     },
     kids: {
-        visuals: { primaryColor: '#10b981', font: 'sans', backgroundUrl: '' }, // Emerald
+        visuals: { primaryColor: '#10b981', font: 'sans', backgroundUrl: `${QUEST_ASSETS_BASE}/infantil.png` }, // Emerald
         resources: [
             { id: 'r1', name: 'Estrellas', emoji: '⭐', type: 'accumulate', startValue: 0, targetValue: 50 }
         ]
@@ -78,8 +82,8 @@ export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({ onClose, onC
 
     const handleThemeSelect = (t: CampaignTheme) => {
         setTheme(t);
-        // Load presets but keep current background if any
-        setVisuals(prev => ({ ...THEME_PRESETS[t].visuals, backgroundUrl: prev.backgroundUrl }));
+        // Load presets INCLUDING the backgroundUrl from the preset
+        setVisuals(THEME_PRESETS[t].visuals);
         setResources(THEME_PRESETS[t].resources);
     };
 
