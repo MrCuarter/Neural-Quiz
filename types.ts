@@ -1,5 +1,4 @@
 
-
 export interface Option {
   id: string;
   text: string;
@@ -117,11 +116,11 @@ export interface BossSettings {
 
 // --- EVALUATION (ARCADE MODE) ---
 export interface EvaluationConfig {
-    gameMode: 'classic' | 'time_attack' | 'final_boss'; // NEW: Added final_boss
+    gameMode: 'classic' | 'time_attack' | 'final_boss' | 'raid'; // ADDED 'raid'
     questionCount: number; 
     timeLimit?: number; // Global time limit for Time Attack (seconds)
     
-    // RPG SETTINGS (Only for final_boss)
+    // RPG SETTINGS (Only for final_boss & raid)
     bossSettings?: BossSettings;
 
     allowSpeedPoints: boolean; // More points for faster answers
@@ -135,6 +134,12 @@ export interface EvaluationConfig {
     };
     startDate: string; // ISO String
     endDate?: string; // ISO String (Optional)
+    
+    // RAID SPECIFIC
+    raidConfig?: {
+        totalBossHP: number; // Calculated based on students
+        timeLimitMinutes: number;
+    };
 }
 
 export interface Evaluation {
@@ -147,6 +152,7 @@ export interface Evaluation {
     config: EvaluationConfig;
     createdAt: any;
     isActive: boolean;
+    status?: 'waiting' | 'active' | 'finished' | 'paused'; // New detailed status
     questions: Question[]; // Snapshot of questions at launch time
     participants?: number; // Counter
 }
@@ -156,11 +162,12 @@ export interface EvaluationAttempt {
     evaluationId: string;
     nickname: string; // BATTLE ALIAS (Shown in public ranking)
     realName?: string; // NEW: REAL NAME (Shown to teacher only)
-    score: number;
+    score: number; // Represents DAMAGE in Raid Mode
     totalTime: number; // Seconds
     accuracy: number; // Percentage 0-100
     timestamp: any; // ServerTimestamp
     answersSummary?: { correct: number; incorrect: number; total: number };
+    isFinished?: boolean; // For Raid mode to know if student is still playing
 }
 
 // --- GAME TYPES ---

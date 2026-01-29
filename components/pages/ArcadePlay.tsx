@@ -1,12 +1,15 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
+import { db } from '../../services/firebaseService'; // Import db for direct snapshot
+import { doc, onSnapshot } from 'firebase/firestore'; // Import firestore functions
 import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink, Volume2, VolumeX, Repeat } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
 import { PRESET_BOSSES, ASSETS_BASE, DIFFICULTY_SETTINGS, DifficultyStats } from '../../data/bossPresets';
 import { StudentLogin } from '../student/StudentLogin';
+import { RaidPodium } from './live/RaidPodium';
 
 // --- CONSTANTS & TYPES ---
 
@@ -96,6 +99,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     const [timeLeft, setTimeLeft] = useState(20);
     const [shakeScreen, setShakeScreen] = useState(false);
     const [isHit, setIsHit] = useState(false);
+    const [showLoopMsg, setShowLoopMsg] = useState(false); // RAID LOOP FX
 
     // --- MANUAL INPUT STATES ---
     const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
@@ -188,8 +192,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 setBossHP({ current: initialBossHP, max: initialBossHP });
                 setPlayerHP({ current: settings.health.playerHP, max: settings.health.playerHP });
                 
-                const limitCount = evalData?.config.questionCount || 10;
-                const shuffled = shuffleArray(rawQuestions).slice(0, limitCount);
+                // Raid Mode: Use ALL questions (shuffled)
+                // Classic Mode: Limit if configured
+                const limitCount = evalData?.config.gameMode === 'raid' ? 9999 : (evalData?.config.questionCount || 10);
+                const shuffled = shuffleArray(rawQuestions).slice(0, Math.min(rawQuestions.length, limitCount));
                 
                 const prepared = shuffled.map(q => ({
                     ...q,
@@ -210,6 +216,26 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         
         init();
     }, [evaluationId, previewConfig]);
+
+    // --- RAID SYNC LISTENER ---
+    useEffect(() => {
+        if (!evaluationId || previewConfig) return;
+        
+        // Only for Raid Mode: Listen to status changes to trigger Game Over / Victory
+        if (evaluation?.config.gameMode === 'raid') {
+            const unsub = onSnapshot(doc(db, 'evaluations', evaluationId), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // If teacher sets status to finished, force end game
+                    if (data.status === 'finished') {
+                        setCombatState('VICTORY'); // Or neutral end state
+                        finishGame('WIN');
+                    }
+                }
+            });
+            return () => unsub();
+        }
+    }, [evaluationId, evaluation?.config.gameMode]);
 
     // --- TIMER LOGIC ---
     useEffect(() => {
@@ -239,6 +265,26 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
     const startQuestion = (index: number) => {
         const queue = gameState === 'FINISH_IT' ? retryQueue : playableQuestions;
+        
+        // RAID MODE: ENDLESS LOOP LOGIC
+        if (evaluation?.config.gameMode === 'raid' && index >= queue.length) {
+            // Refill queue
+            const newQueue = shuffleArray([...playableQuestions]);
+            // Insert recently failed questions at the start for retry
+            const wrongs = shuffleArray([...incorrectQuestions]);
+            const finalQueue = [...wrongs, ...newQueue.filter(q => !wrongs.some(w => w.id === q.id))];
+            
+            setPlayableQuestions(finalQueue);
+            setIncorrectQuestions([]); // Reset wrongs for new cycle
+            setCurrentQIndex(0);
+            
+            setShowLoopMsg(true);
+            setTimeout(() => setShowLoopMsg(false), 3000);
+            playSFX('powerup');
+            
+            return startQuestion(0);
+        }
+
         if (!queue || index >= queue.length) { finishGame('LOSE'); return; }
 
         setCurrentQIndex(index);
@@ -307,7 +353,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
         if (correct) {
             const bossDodgeRoll = Math.random();
-            if (bossDodgeRoll < difficultyStats.dodgeChance) {
+            if (bossDodgeRoll < difficultyStats.dodgeChance && evaluation?.config.gameMode !== 'raid') {
                 setCombatLog("¡EL JEFE ESQUIVÓ TU ATAQUE!");
                 playSFX('miss');
                 setStreak(0); 
@@ -344,6 +390,17 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setTimeout(() => { playSFX('hit'); setShakeScreen(true); }, 200);
         setTimeout(() => { setShakeScreen(false); setIsHit(false); }, 500);
 
+        // RAID MODE SYNC (Update score frequently)
+        if (evaluation?.config.gameMode === 'raid' && evaluationId) {
+            // In Raid mode, score = total damage dealt. We persist it incrementally.
+            saveEvaluationAttempt({
+                evaluationId, nickname, realName,
+                score: battleStats.totalDamage + damage, // Accumulate
+                totalTime: 0, // Not critical for raid sync
+                accuracy: 0 // Calculated at end
+            }, savedAttemptId!).then(id => { if(!savedAttemptId) setSavedAttemptId(id); });
+        }
+
         if (Math.random() < (passiveEffect === 'suerte' ? 0.25 : 0.10)) {
             const types = Object.keys(POTIONS) as PotionType[];
             const loot = types[Math.floor(Math.random() * types.length)];
@@ -369,6 +426,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             return;
         }
 
+        // Raid Mode: Player HP doesn't really matter, you respawn instantly, but streak breaks.
         let damage = Math.ceil(playerHP.max * 0.2 * difficultyStats.dmgMult);
         
         if (passiveEffect === 'escudo') damage = Math.ceil(damage * 0.85);
@@ -401,6 +459,18 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     };
 
     const checkWinConditionOrNext = (lastWasCorrect: boolean) => {
+        // RAID MODE IGNORES LOCAL BOSS DEATH (Boss is global)
+        if (evaluation?.config.gameMode === 'raid') {
+            const nextIdx = currentQIndex + 1;
+            startQuestion(nextIdx);
+            // Player death in Raid just respawns
+            if (playerHP.current <= 0) {
+                setPlayerHP(p => ({...p, current: p.max})); // Auto-Revive
+                setCombatLog("¡REANIMACIÓN DE EMERGENCIA!");
+            }
+            return;
+        }
+
         if (playerHP.current <= 0) {
             setCombatState('DEFEAT'); 
             playSFX('gameover');
@@ -457,12 +527,12 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 evaluationId, 
                 nickname, 
                 realName, // SAVE REAL NAME
-                score,
+                score: battleStats.totalDamage, // Use damage as score for raid consistency
                 totalTime: Math.floor((Date.now() - startTimeRef.current) / 1000),
                 accuracy: (battleStats.correctAnswers / Math.max(1, battleStats.totalAnswers)) * 100,
                 answersSummary: { correct: battleStats.correctAnswers, incorrect: battleStats.totalAnswers - battleStats.correctAnswers, total: battleStats.totalAnswers }
-            });
-            setSavedAttemptId(docId);
+            }, savedAttemptId!); // Update existing doc if raid
+            if (!savedAttemptId) setSavedAttemptId(docId);
         }
     };
 
@@ -597,6 +667,10 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     }
 
     if (gameState === 'STATS') {
+        if (evaluation?.config.gameMode === 'raid' && evaluationId) {
+            return <RaidPodium evaluationId={evaluationId} result={combatState === 'VICTORY' ? 'victory' : 'defeat'} bossName={bossConfig?.bossName || "Boss"} />;
+        }
+
         return (
             <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6">
                 <CyberCard className="max-w-2xl w-full border-gray-700 bg-gray-900/90 p-8 relative overflow-hidden">
@@ -633,6 +707,13 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
             </button>
 
+            {/* LOOP NOTIFICATION FX */}
+            {showLoopMsg && (
+                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-purple-900/80 border-2 border-purple-500 text-purple-200 px-6 py-2 rounded-full font-black font-cyber animate-bounce shadow-[0_0_30px_purple]">
+                    <Repeat className="w-5 h-5 inline mr-2" /> ¡RONDA EXTRA! ¡SIGUE LUCHANDO!
+                </div>
+            )}
+
             {/* 2. LAYER 0: BOSS BACKGROUND SCENE */}
             <div className="absolute inset-0 z-0 flex items-end md:items-center justify-center md:justify-start bg-gradient-to-t from-red-950/40 to-transparent">
                 <img 
@@ -663,13 +744,24 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                     <img src={bossConfig?.badgeUrl || bossConfig?.images?.badge} className="w-8 h-8 md:w-12 md:h-12 rounded-full border border-red-500 bg-black" crossOrigin="anonymous"/>
                     <h2 className="text-sm md:text-2xl font-cyber text-red-500 font-bold leading-none text-shadow-red truncate">{bossConfig?.bossName}</h2>
                 </div>
-                {/* HP BAR */}
-                <div className="w-full h-3 md:h-6 bg-black/80 rounded-r-lg border border-red-900 overflow-hidden relative skew-x-[-15deg] origin-bottom-left shadow-lg">
-                    <div className="h-full bg-gradient-to-r from-red-900 to-red-600 transition-all duration-500 ease-out" style={{ width: `${(bossHP.current / bossHP.max) * 100}%` }} />
-                    <span className="absolute inset-0 flex items-center justify-center text-[8px] md:text-xs font-mono font-bold text-white/90 skew-x-[15deg]">
-                        {bossHP.current} / {bossHP.max}
-                    </span>
-                </div>
+                
+                {/* RAID MODE SPECIFIC HUD */}
+                {evaluation?.config.gameMode === 'raid' ? (
+                    <div className="bg-black/80 rounded border border-red-900 p-1">
+                        <div className="text-[10px] text-red-400 text-center font-mono animate-pulse">VIDA GLOBAL DEL JEFE</div>
+                        <div className="w-full h-2 bg-red-950 mt-1 rounded-full overflow-hidden">
+                            <div className="h-full bg-red-600 animate-pulse w-full"></div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="w-full h-3 md:h-6 bg-black/80 rounded-r-lg border border-red-900 overflow-hidden relative skew-x-[-15deg] origin-bottom-left shadow-lg">
+                        <div className="h-full bg-gradient-to-r from-red-900 to-red-600 transition-all duration-500 ease-out" style={{ width: `${(bossHP.current / bossHP.max) * 100}%` }} />
+                        <span className="absolute inset-0 flex items-center justify-center text-[8px] md:text-xs font-mono font-bold text-white/90 skew-x-[15deg]">
+                            {bossHP.current} / {bossHP.max}
+                        </span>
+                    </div>
+                )}
+
                 {/* Status Icons */}
                 <div className="flex gap-1 h-6">
                     {bossStatus.map((s, i) => <img key={i} src={POTIONS[s.type].image} crossOrigin="anonymous" className="w-5 h-5 md:w-6 md:h-6 border border-red-500 rounded bg-black" title={s.type}/>)}

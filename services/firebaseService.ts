@@ -20,7 +20,9 @@ import {
   where, 
   orderBy, 
   serverTimestamp,
-  limit
+  limit,
+  setDoc,
+  increment
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage"; // Added Storage
 import { getAnalytics } from "firebase/analytics";
@@ -212,6 +214,58 @@ export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: bo
 };
 
 /**
+ * CHECK AND INCREMENT RAID LIMIT
+ * Enforces 3 Raids per day limit per teacher.
+ */
+export const checkAndIncrementRaidLimit = async (userId: string): Promise<boolean> => {
+    if (isOfflineMode) return true; // Bypass in offline
+    
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const userRef = doc(db, "users", userId);
+    
+    try {
+        const userSnap = await getDoc(userRef);
+        
+        // Initial state if user doc doesn't exist or no raid data
+        let currentCount = 0;
+        let lastRaidDate = "";
+
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            if (data.dailyRaids) {
+                currentCount = data.dailyRaids.count || 0;
+                lastRaidDate = data.dailyRaids.date || "";
+            }
+        }
+
+        // Reset if new day
+        if (lastRaidDate !== today) {
+            currentCount = 0;
+        }
+
+        if (currentCount >= 3) {
+            return false; // Limit reached
+        }
+
+        // Increment and Update
+        await setDoc(userRef, {
+            dailyRaids: {
+                date: today,
+                count: currentCount + 1
+            }
+        }, { merge: true });
+
+        return true;
+    } catch (e) {
+        console.error("Error checking raid limit:", e);
+        // Fail open if error (allow play) or strict? Let's strictly require it but log error.
+        // For UX, return true if error to avoid blocking due to network glitch on this specific check?
+        // Let's assume we allow it if check fails to be nice.
+        return true; 
+    }
+};
+
+/**
  * Create a new Arcade Evaluation
  */
 export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<string> => {
@@ -221,6 +275,7 @@ export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'crea
             ...evaluation,
             createdAt: serverTimestamp(),
             isActive: true,
+            status: 'active', // Explicit status
             participants: 0
         };
         
@@ -256,9 +311,10 @@ export const getEvaluation = async (evaluationId: string): Promise<Evaluation> =
 };
 
 /**
- * Save Evaluation Attempt (Leaderboard Data)
+ * Save Evaluation Attempt (Leaderboard Data / Raid Damage)
+ * Now handles updates for existing attempts (optional)
  */
-export const saveEvaluationAttempt = async (attempt: Omit<EvaluationAttempt, 'id' | 'timestamp'>): Promise<string> => {
+export const saveEvaluationAttempt = async (attempt: Omit<EvaluationAttempt, 'id' | 'timestamp'>, existingId?: string): Promise<string> => {
     if (isOfflineMode) {
         console.warn("Saving attempt mocked in Offline Mode");
         return "mock-attempt-id";
@@ -271,13 +327,15 @@ export const saveEvaluationAttempt = async (attempt: Omit<EvaluationAttempt, 'id
         };
         
         const cleanPayload = JSON.parse(JSON.stringify(payload));
-        const docRef = await addDoc(collection(db, "attempts"), cleanPayload);
         
-        // Increment participant count in parent evaluation (Optional but good for stats)
-        // const evalRef = doc(db, "evaluations", attempt.evaluationId);
-        // updateDoc(evalRef, { participants: increment(1) }); // Need 'increment' imported from firestore
-
-        return docRef.id;
+        if (existingId) {
+            const docRef = doc(db, "attempts", existingId);
+            await updateDoc(docRef, cleanPayload);
+            return existingId;
+        } else {
+            const docRef = await addDoc(collection(db, "attempts"), cleanPayload);
+            return docRef.id;
+        }
     } catch (error) {
         console.error("Error saving attempt:", error);
         throw error;

@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Quiz, Evaluation, EvaluationConfig, BossSettings, ClassGroup } from '../../types';
-import { createEvaluation, auth, storage } from '../../services/firebaseService';
+import { createEvaluation, auth, storage, checkAndIncrementRaidLimit } from '../../services/firebaseService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getTeacherClasses } from '../../services/classService';
 import { compressImage } from '../../utils/imageOptimizer';
 import { signInAnonymously } from 'firebase/auth';
 import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Users, LayoutDashboard, School, Code, Copy, CheckCircle2, Upload } from 'lucide-react';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Users, LayoutDashboard, School, Code, Copy, CheckCircle2, Upload, MonitorPlay } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES, ASSETS_BASE } from '../../data/bossPresets';
 import { ArcadePlay } from '../pages/ArcadePlay';
@@ -24,6 +24,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const toast = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+    const [createdEvalId, setCreatedEvalId] = useState<string | null>(null);
     const [copiedLink, setCopiedLink] = useState(false);
     const [copiedEmbed, setCopiedEmbed] = useState(false);
     const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -38,10 +39,15 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [selectedClassId, setSelectedClassId] = useState<string>("none");
 
     // Game Mode Config
-    const [gameMode, setGameMode] = useState<'classic' | 'time_attack' | 'final_boss'>('classic');
+    const [gameMode, setGameMode] = useState<'classic' | 'time_attack' | 'final_boss' | 'raid'>('classic');
     const [questionCount, setQuestionCount] = useState(0);
     const [timeLimit, setTimeLimit] = useState(180); 
     const [countWarning, setCountWarning] = useState(false);
+
+    // --- RAID MODE STATE ---
+    const [raidDuration, setRaidDuration] = useState(10); // Minutes
+    const [estStudents, setEstStudents] = useState(25);
+    const [raidBossHP, setRaidBossHP] = useState(0);
 
     // --- BOSS SETTINGS STATE ---
     const [selectedPreset, setSelectedPreset] = useState<string | null>('kryon_v');
@@ -79,6 +85,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             setStartDate(now.toISOString().slice(0, 16));
             setEndDate("");
             setCreatedUrl(null);
+            setCreatedEvalId(null);
             setCopiedLink(false);
             setCopiedEmbed(false);
             setQuestionCount(quiz.questions.length);
@@ -87,6 +94,14 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             loadClasses();
         }
     }, [isOpen, quiz]);
+
+    useEffect(() => {
+        // Auto-calculate Raid Boss HP
+        // Avg Dmg per question ~ 100-150. Assuming 80% accuracy.
+        // HP = Students * Questions * 100 * 0.8
+        const autoHP = Math.round(estStudents * questionCount * 120 * 0.8);
+        setRaidBossHP(autoHP);
+    }, [estStudents, questionCount, gameMode]);
 
     const loadClasses = async () => {
         if (!user) return;
@@ -167,7 +182,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     };
 
     const buildBossConfig = (): BossSettings | undefined => {
-        if (gameMode !== 'final_boss') return undefined;
+        if (gameMode !== 'final_boss' && gameMode !== 'raid') return undefined;
         
         let imagesConfig;
         
@@ -195,7 +210,10 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             bossName,
             imageId: imageId,
             difficulty: bossDifficulty,
-            health: { bossHP, playerHP },
+            health: { 
+                bossHP: gameMode === 'raid' ? raidBossHP : bossHP, 
+                playerHP: playerHP 
+            },
             images: imagesConfig,
             badgeUrl: imagesConfig.badge,
             messages: { bossWins: msgBossWin, playerWins: msgPlayerWin, perfectWin: msgPerfect },
@@ -220,6 +238,16 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                 }
             }
 
+            // RAID LIMIT CHECK
+            if (gameMode === 'raid' && user) {
+                const allowed = await checkAndIncrementRaidLimit(user.uid);
+                if (!allowed) {
+                    toast.error("⚠️ Límite diario de Raids alcanzado (3/3). Vuelve mañana.");
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
             const finalCount = Math.min(Math.max(1, questionCount), quiz.questions.length);
             const bossSettings = buildBossConfig();
 
@@ -234,7 +262,11 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                 startDate: new Date(startDate).toISOString(),
                 endDate: endDate ? new Date(endDate).toISOString() : undefined,
                 bossSettings,
-                showCorrectAnswer: showCorrectAnswer 
+                showCorrectAnswer: showCorrectAnswer,
+                raidConfig: gameMode === 'raid' ? {
+                    totalBossHP: raidBossHP,
+                    timeLimitMinutes: raidDuration
+                } : undefined
             };
 
             const evaluationData: Omit<Evaluation, 'id' | 'createdAt'> = {
@@ -245,14 +277,16 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                 title: title,
                 config: config,
                 isActive: true,
+                status: 'active',
                 participants: 0,
                 questions: quiz.questions
             };
 
             const evalId = await createEvaluation(evaluationData);
+            setCreatedEvalId(evalId);
             const url = `${window.location.origin}/play/${evalId}`;
             setCreatedUrl(url);
-            toast.success("¡Evaluación creada con éxito!");
+            toast.success(gameMode === 'raid' ? "¡Raid lanzada! Abre el Dashboard." : "¡Evaluación creada con éxito!");
 
         } catch (e: any) {
             console.error(e);
@@ -285,6 +319,12 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         onClose();
     };
 
+    const handleOpenRaidDashboard = () => {
+        if (createdEvalId) {
+            window.open(`/raid/${createdEvalId}`, '_blank');
+        }
+    };
+
     if (!isOpen) return null;
 
     if (isPreviewMode) {
@@ -310,15 +350,15 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-            <CyberCard className={`w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[90vh] overflow-hidden relative shadow-[0_0_50px_rgba(6,182,212,0.2)] ${gameMode === 'final_boss' ? 'border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.2)]' : ''}`}>
+            <CyberCard className={`w-full max-w-2xl border-cyan-500/50 flex flex-col max-h-[90vh] overflow-hidden relative shadow-[0_0_50px_rgba(6,182,212,0.2)] ${gameMode === 'final_boss' || gameMode === 'raid' ? 'border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.2)]' : ''}`}>
                 
                 {/* Header */}
                 <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-4 shrink-0">
-                    <div className={`flex items-center gap-3 ${gameMode === 'final_boss' ? 'text-red-500' : 'text-cyan-400'}`}>
-                        {gameMode === 'final_boss' ? <Skull className="w-6 h-6 animate-pulse" /> : <Rocket className="w-6 h-6" />}
+                    <div className={`flex items-center gap-3 ${gameMode === 'final_boss' || gameMode === 'raid' ? 'text-red-500' : 'text-cyan-400'}`}>
+                        {gameMode === 'final_boss' || gameMode === 'raid' ? <Skull className="w-6 h-6 animate-pulse" /> : <Rocket className="w-6 h-6" />}
                         <div>
                             <h2 className="font-cyber font-bold text-lg leading-none">LANZAR EVALUACIÓN ARCADE</h2>
-                            <p className="text-[10px] text-gray-400 font-mono mt-1">CREA UNA SESIÓN ASÍNCRONA PARA TUS ALUMNOS</p>
+                            <p className="text-[10px] text-gray-400 font-mono mt-1">CREA UNA SESIÓN ASÍNCRONA O EN VIVO</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-6 h-6" /></button>
@@ -358,16 +398,18 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest">FECHA INICIO</label>
-                                            <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"/>
+                                    {gameMode !== 'raid' && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest">FECHA INICIO</label>
+                                                <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"/>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest">FECHA FIN (OPCIONAL)</label>
+                                                <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"/>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest">FECHA FIN (OPCIONAL)</label>
-                                            <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-black/40 border border-gray-700 text-white p-3 rounded text-sm focus:border-cyan-500 outline-none"/>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -377,41 +419,59 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                     <Zap className="w-4 h-4 text-purple-400" /> MODO Y REGLAS
                                 </h3>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="md:col-span-3">
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setGameMode('classic')} className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'classic' ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                                                <div className="font-bold text-sm">CLASSIC</div>
-                                                <div className="text-[10px] opacity-70">Ritmo normal</div>
-                                            </button>
-                                            <button onClick={() => setGameMode('time_attack')} className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'time_attack' ? 'bg-blue-900/40 border-blue-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                                                <div className="font-bold text-sm">TIME ATTACK</div>
-                                                <div className="text-[10px] opacity-70">Contrarreloj</div>
-                                            </button>
-                                            <button onClick={() => setGameMode('final_boss')} className={`flex-1 p-3 rounded border text-center transition-all ${gameMode === 'final_boss' ? 'bg-red-900/40 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                                                <div className="font-bold text-sm flex items-center justify-center gap-1"><Skull className="w-3 h-3"/> FINAL BOSS</div>
-                                                <div className="text-[10px] opacity-70">RPG Battle</div>
-                                            </button>
-                                        </div>
-                                    </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <button onClick={() => setGameMode('classic')} className={`p-3 rounded border text-center transition-all ${gameMode === 'classic' ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                        <div className="font-bold text-xs">CLASSIC</div>
+                                        <div className="text-[9px] opacity-70">Ritmo normal</div>
+                                    </button>
+                                    <button onClick={() => setGameMode('time_attack')} className={`p-3 rounded border text-center transition-all ${gameMode === 'time_attack' ? 'bg-blue-900/40 border-blue-500 text-white' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                        <div className="font-bold text-xs">TIME ATTACK</div>
+                                        <div className="text-[9px] opacity-70">Contrarreloj</div>
+                                    </button>
+                                    <button onClick={() => setGameMode('final_boss')} className={`p-3 rounded border text-center transition-all ${gameMode === 'final_boss' ? 'bg-red-900/40 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                        <div className="font-bold text-xs flex items-center justify-center gap-1"><Skull className="w-3 h-3"/> BOSS SOLO</div>
+                                        <div className="text-[9px] opacity-70">RPG Individual</div>
+                                    </button>
+                                    <button onClick={() => setGameMode('raid')} className={`p-3 rounded border text-center transition-all ${gameMode === 'raid' ? 'bg-orange-900/40 border-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-black/40 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                        <div className="font-bold text-xs flex items-center justify-center gap-1"><Users className="w-3 h-3"/> RAID LIVE</div>
+                                        <div className="text-[9px] opacity-70">Cooperativo Clase</div>
+                                    </button>
+                                </div>
 
-                                    <div className="md:col-span-3 space-y-4">
-                                        <div className="flex gap-4 items-end">
-                                            <div className="flex-1">
-                                                <CyberInput type="number" label="CANTIDAD PREGUNTAS" value={questionCount} onChange={(e) => handleCountChange(parseInt(e.target.value))} min={1} />
-                                                {countWarning && <div className="flex items-center gap-1 text-[10px] text-yellow-500 mt-1"><AlertCircle className="w-3 h-3" /> Máximo disponible: {quiz.questions.length}</div>}
-                                            </div>
-                                            {gameMode === 'time_attack' && (
-                                                <div className="flex-1 animate-in slide-in-from-left-2">
-                                                    <CyberInput type="number" label="TIEMPO TOTAL (SEG)" value={timeLimit} onChange={(e) => setTimeLimit(parseInt(e.target.value))} min={30} />
-                                                </div>
-                                            )}
+                                <div className="space-y-4">
+                                    <div className="flex gap-4 items-end">
+                                        <div className="flex-1">
+                                            <CyberInput type="number" label="CANTIDAD PREGUNTAS" value={questionCount} onChange={(e) => handleCountChange(parseInt(e.target.value))} min={1} />
+                                            {countWarning && <div className="flex items-center gap-1 text-[10px] text-yellow-500 mt-1"><AlertCircle className="w-3 h-3" /> Máximo disponible: {quiz.questions.length}</div>}
                                         </div>
+                                        {gameMode === 'time_attack' && (
+                                            <div className="flex-1 animate-in slide-in-from-left-2">
+                                                <CyberInput type="number" label="TIEMPO TOTAL (SEG)" value={timeLimit} onChange={(e) => setTimeLimit(parseInt(e.target.value))} min={30} />
+                                            </div>
+                                        )}
+                                        {gameMode === 'raid' && (
+                                            <div className="flex-1 animate-in slide-in-from-left-2">
+                                                <CyberInput type="number" label="DURACIÓN RAID (MIN)" value={raidDuration} onChange={(e) => setRaidDuration(parseInt(e.target.value))} min={1} />
+                                            </div>
+                                        )}
                                     </div>
+                                    
+                                    {gameMode === 'raid' && (
+                                        <div className="bg-orange-950/20 border border-orange-500/30 p-3 rounded space-y-3">
+                                            <h4 className="text-xs font-mono text-orange-400 font-bold uppercase">BALANCE DE RAID</h4>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <CyberInput label="Nº ALUMNOS ESTIMADOS" type="number" value={estStudents} onChange={(e) => setEstStudents(parseInt(e.target.value))} />
+                                                <CyberInput label="VIDA DEL BOSS (AUTO)" type="number" value={raidBossHP} onChange={(e) => setRaidBossHP(parseInt(e.target.value))} />
+                                            </div>
+                                            <p className="text-[10px] text-gray-500">
+                                                * La vida se calcula para que sea un reto. Los alumnos deben acertar ~80% de preguntas para ganar.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* BOSS CONFIGURATION PANEL */}
-                                {gameMode === 'final_boss' && (
+                                {(gameMode === 'final_boss' || gameMode === 'raid') && (
                                     <div className="mt-6 space-y-6 animate-in slide-in-from-top-4 border border-red-500/30 bg-red-950/10 p-4 rounded-lg">
                                         <div className="flex items-center gap-2 text-red-400 border-b border-red-500/30 pb-2 mb-2">
                                             <Skull className="w-5 h-5" />
@@ -545,11 +605,23 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                 </p>
                             </div>
 
+                            {gameMode === 'raid' && (
+                                <div className="w-full bg-orange-900/30 border border-orange-500 rounded-lg p-4 animate-pulse">
+                                    <h4 className="text-orange-400 font-bold font-cyber text-lg mb-2">🔥 MODO RAID ACTIVADO</h4>
+                                    <p className="text-sm text-orange-200 mb-4">
+                                        Debes proyectar el Dashboard en la pizarra para que los alumnos vean el progreso del Boss.
+                                    </p>
+                                    <CyberButton onClick={handleOpenRaidDashboard} className="w-full bg-orange-600 hover:bg-orange-500 border-none">
+                                        <MonitorPlay className="w-5 h-5 mr-2" /> ABRIR DASHBOARD DE PROYECCIÓN
+                                    </CyberButton>
+                                </div>
+                            )}
+
                             <div className="w-full space-y-4">
                                 {/* ENLACE DIRECTO */}
                                 <div className="bg-black/50 p-4 rounded-lg border border-gray-700 flex flex-col gap-2">
                                     <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest text-left flex items-center gap-2">
-                                        <Rocket className="w-3 h-3" /> ENLACE DE ACCESO
+                                        <Rocket className="w-3 h-3" /> ENLACE DE ACCESO ALUMNOS
                                     </label>
                                     <div className="flex gap-2">
                                         <input 

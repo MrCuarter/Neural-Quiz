@@ -17,7 +17,8 @@ import { CommunityPage } from './components/CommunityPage';
 import { ArcadePlay } from './components/pages/ArcadePlay'; 
 import { LandingV2 } from './components/pages/LandingV2'; 
 import { TeacherHub } from './components/pages/TeacherHub'; 
-import { ClassesManager } from './components/pages/ClassesManager'; // NEW IMPORT
+import { ClassesManager } from './components/pages/ClassesManager'; 
+import { RaidDashboard } from './components/pages/live/RaidDashboard'; // NEW
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
 import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2, LayoutTemplate } from 'lucide-react';
@@ -31,8 +32,8 @@ import { searchImage } from './services/imageService';
 import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
-// Types - Added 'classes_manager'
-type ViewState = 'home' | 'landing_v2' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play';
+// Types
+type ViewState = 'home' | 'landing_v2' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play' | 'raid_dashboard';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -84,7 +85,8 @@ const NeuralApp: React.FC = () => {
 
   // URL Parsing State
   const [sharedQuizId, setSharedQuizId] = useState<string | null>(null);
-  const [arcadeEvalId, setArcadeEvalId] = useState<string | null>(null); // NEW
+  const [arcadeEvalId, setArcadeEvalId] = useState<string | null>(null); 
+  const [raidDashboardId, setRaidDashboardId] = useState<string | null>(null); // NEW
 
   // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
@@ -159,14 +161,24 @@ const NeuralApp: React.FC = () => {
               return; // Stop further checks
           }
       }
+
+      // 2. RAID DASHBOARD ROUTE (/raid/:id)
+      if (path.startsWith('/raid/')) {
+          const raidId = path.split('/raid/')[1];
+          if (raidId && raidId.length > 0) {
+              setRaidDashboardId(raidId);
+              setView('raid_dashboard');
+              return;
+          }
+      }
       
-      // 2. NEW HOME ROUTE (/new-home)
+      // 3. NEW HOME ROUTE (/new-home)
       if (path.startsWith('/new-home')) {
           setView('landing_v2');
           return;
       }
 
-      // 3. SHARE ID QUERY PARAM (?shareId=...)
+      // 4. SHARE ID QUERY PARAM (?shareId=...)
       const shareId = params.get('shareId');
       if (shareId) {
           setSharedQuizId(shareId);
@@ -421,6 +433,13 @@ const NeuralApp: React.FC = () => {
   if (view === 'arcade_play' && arcadeEvalId) {
       return (
           <ArcadePlay evaluationId={arcadeEvalId} />
+      );
+  }
+
+  // --- RAID DASHBOARD RENDER ---
+  if (view === 'raid_dashboard' && raidDashboardId) {
+      return (
+          <RaidDashboard evaluationId={raidDashboardId} />
       );
   }
 
