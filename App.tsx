@@ -32,6 +32,7 @@ const AppContent: React.FC = () => {
   const [language, setLanguage] = useState<Language>('es');
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
   const [publicId, setPublicId] = useState<string>(''); // For public quiz/campaign routing
+  const [autoOpenAi, setAutoOpenAi] = useState(false); // NEW STATE for AI Modal auto-open
   
   // Global Auth Modal State
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -66,7 +67,14 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleNavigate = (v: string) => setView(v);
+  const handleNavigate = (v: string, params?: { autoAi?: boolean }) => {
+      if (params?.autoAi) {
+          setAutoOpenAi(true);
+      } else {
+          setAutoOpenAi(false);
+      }
+      setView(v);
+  };
 
   const handleStartGame = (q: Quiz, teams: GameTeam[], mode: GameMode, config: any) => {
       setQuiz(q);
@@ -81,9 +89,9 @@ const AppContent: React.FC = () => {
           case 'landing': return <LandingV2 onNavigate={handleNavigate} user={user} onLoginReq={openLogin} />;
           case 'teacher_hub': return <TeacherHub user={user} onNavigate={handleNavigate} />;
           case 'my_quizzes': 
-              return <MyQuizzes user={user} onBack={() => setView('teacher_hub')} onEdit={(q: Quiz) => { setQuiz(q); setView('create_menu'); }} onCreate={() => { setQuiz({ title: '', description: '', questions: [] }); setView('create_menu'); }} />;
+              return <MyQuizzes user={user} onBack={() => setView('teacher_hub')} onEdit={(q: Quiz) => { setQuiz(q); setView('create_menu'); setAutoOpenAi(false); }} onCreate={() => { setQuiz({ title: '', description: '', questions: [] }); setView('create_menu'); setAutoOpenAi(false); }} />;
           case 'create_menu': 
-              return <QuizEditor quiz={quiz} setQuiz={setQuiz} onExport={() => setView('export')} onSave={() => {}} user={user} t={t} onPlay={() => setView('game_lobby')} />;
+              return <QuizEditor quiz={quiz} setQuiz={setQuiz} onExport={() => setView('export')} onSave={() => {}} user={user} t={t} onPlay={() => setView('game_lobby')} initialAutoOpenAi={autoOpenAi} />;
           case 'game_lobby': return <GameLobby user={user} onBack={() => setView('landing')} onStartGame={handleStartGame} t={t} preSelectedQuiz={quiz.questions.length > 0 ? quiz : null} />;
           case 'game_play':
               if (gameConfig?.mode === 'JEOPARDY') return <JeopardyBoard quiz={quiz} initialTeams={gameConfig.teams} gameConfig={gameConfig.config} onExit={() => setView('landing')} />;
@@ -92,7 +100,7 @@ const AppContent: React.FC = () => {
           case 'export': return <ExportPanel quiz={quiz} t={t} />;
           case 'campaign_manager': return <CampaignManager onBack={() => setView('teacher_hub')} />;
           case 'classes_manager': return <ClassesManager onBack={() => setView('teacher_hub')} />;
-          case 'community': return <CommunityPage onBack={() => setView('landing')} onPlay={(q) => { setQuiz(q); setView('game_lobby'); }} onImport={(q) => { setQuiz(q); setView('create_menu'); }} />;
+          case 'community': return <CommunityPage onBack={() => setView('landing')} onPlay={(q) => { setQuiz(q); setView('game_lobby'); }} onImport={(q) => { setQuiz(q); setView('create_menu'); setAutoOpenAi(false); }} />;
           case 'public_quiz': return <PublicQuizLanding quizId={publicId} currentUser={user} onPlay={(q, m) => { setQuiz(q); setView('game_lobby'); }} onBack={() => setView('landing')} onLoginReq={openLogin} />;
           case 'public_campaign': return <PublicCampaignView publicId={publicId} />;
           case 'help': return <HelpView onBack={() => setView('landing')} t={t} />;

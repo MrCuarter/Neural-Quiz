@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, FileText, Sparkles, BrainCircuit } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
@@ -14,6 +14,8 @@ import { PublishModal } from './PublishModal';
 import { ImagePickerModal } from './ui/ImagePickerModal';
 import { ImageResult } from '../services/imageService';
 import { getUserQuizzes, saveQuizToFirestore } from '../services/firebaseService';
+import { extractTextFromPDF } from '../services/pdfService';
+import { fetchUrlContent } from '../services/urlService';
 import * as XLSX from 'xlsx';
 
 interface QuizEditorProps {
@@ -27,9 +29,10 @@ interface QuizEditorProps {
   t: any;
   onPlay: (quiz: Quiz) => void;
   currentLanguage?: string;
+  initialAutoOpenAi?: boolean; // NEW PROP
 }
 
-export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t, onPlay, currentLanguage = 'es' }) => {
+export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t, onPlay, currentLanguage = 'es', initialAutoOpenAi }) => {
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   const [targetPlatform, setTargetPlatform] = useState<string>('UNIVERSAL');
   const [hasSelectedPlatform, setHasSelectedPlatform] = useState(false);
@@ -37,18 +40,29 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   
   // AI & Modal State
   const [showAiModal, setShowAiModal] = useState(false);
+  
+  // Advanced AI Params
   const [aiTopic, setAiTopic] = useState('');
-  const [aiCount, setAiCount] = useState(3);
-  const [aiLanguage, setAiLanguage] = useState('Spanish'); // Added Language State
+  const [aiCount, setAiCount] = useState(10);
+  const [aiLanguage, setAiLanguage] = useState('Spanish');
+  const [aiTone, setAiTone] = useState('Neutral'); // NEW
+  const [aiAge, setAiAge] = useState('Universal'); // NEW
+  const [aiGamification, setAiGamification] = useState(''); // NEW
+  const [aiSourceMode, setAiSourceMode] = useState<'topic' | 'text' | 'pdf' | 'url'>('topic'); // NEW
+  const [aiSourceText, setAiSourceText] = useState(''); // NEW
+  const [aiSourceUrl, setAiSourceUrl] = useState(''); // NEW
+  const [aiSourceFile, setAiSourceFile] = useState<File | null>(null); // NEW
+  
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  const aiFileRef = useRef<HTMLInputElement>(null);
   
   // Image Picker State
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [pickingImageForId, setPickingImageForId] = useState<string | null>(null);
   const [pickingImageForOptionId, setPickingImageForOptionId] = useState<string | null>(null); 
   const [pickingImageCurrentUrl, setPickingImageCurrentUrl] = useState<string | null>(null);
-  const [pickingImageCurrentCredit, setPickingImageCurrentCredit] = useState<ImageCredit | undefined>(undefined); // NEW
+  const [pickingImageCurrentCredit, setPickingImageCurrentCredit] = useState<ImageCredit | undefined>(undefined); 
   
   // Share/Publish State
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -69,6 +83,11 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
   const [draggedOption, setDraggedOption] = useState<{qId: string, idx: number} | null>(null);
   const cardRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
+
+  // Auto Open AI Check
+  useEffect(() => {
+      if (initialAutoOpenAi) setShowAiModal(true);
+  }, [initialAutoOpenAi]);
 
   useEffect(() => {
       if (quiz.questions.length > 0) setHasSelectedPlatform(true);
@@ -104,11 +123,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       if (newPage < 1 || newPage > totalPages) return;
       setCurrentPage(newPage);
       
-      // Auto-scroll to first item of the new page
       const firstIndexOnPage = (newPage - 1) * ITEMS_PER_PAGE;
       const q = quiz.questions[firstIndexOnPage];
       if (q) {
-          // Optional: Auto-expand the first question of the new page for better UX
           setExpandedQuestionId(q.id);
           setTimeout(() => {
               const el = cardRefs.current[q.id];
@@ -188,7 +205,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   // --- IMAGE PICKER ---
-  // Updated to receive credit object
   const openImagePicker = (qId: string, currentUrl?: string, optionId?: string, credit?: ImageCredit) => {
       setPickingImageForId(qId);
       setPickingImageForOptionId(optionId || null);
@@ -451,14 +467,42 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }
   };
 
+  // --- UPDATED AI GENERATION LOGIC ---
   const handleAiGenerate = async () => {
-    if (!aiTopic.trim()) return;
+    if (!aiTopic.trim() && aiSourceMode === 'topic') {
+        toast.warning("Escribe un tema o selecciona una fuente.");
+        return;
+    }
     setIsGenerating(true);
+    
     try {
+      // 1. Prepare Context from Source
+      let fullContext = "";
+      
+      if (aiSourceMode === 'text') {
+          fullContext = aiSourceText;
+      } else if (aiSourceMode === 'pdf' && aiSourceFile) {
+          fullContext = await extractTextFromPDF(aiSourceFile);
+      } else if (aiSourceMode === 'url' && aiSourceUrl) {
+          fullContext = await fetchUrlContent(aiSourceUrl);
+      }
+
+      // 2. Append Gamification & Tone to Context or params
+      // Since geminiService accepts 'tone' and 'context', we can combine logic.
+      if (aiGamification) {
+          fullContext += `\n\nGAMIFICATION/NARRATIVE INSTRUCTION: The user wants this quiz to follow a '${aiGamification}' theme. Adapt the wording of questions, answers, and feedback to fit this universe (e.g. use themed terms, scenarios).`;
+      }
+
       const platformTypes = PLATFORM_SPECS[targetPlatform].types;
       
       const aiResult = await generateQuizQuestions({
-        topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: aiLanguage
+        topic: aiTopic || "General",
+        count: aiCount, 
+        types: platformTypes, 
+        age: aiAge, 
+        language: aiLanguage,
+        tone: aiTone,
+        context: fullContext
       });
       
       const newQuestions: Question[] = aiResult.questions.map((gq: any) => {
@@ -489,8 +533,15 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           setTimeout(() => setCurrentPage(Math.ceil(updatedQs.length / ITEMS_PER_PAGE)), 50);
           return { ...prev, questions: updatedQs, tags: newTags };
       });
-      setAiTopic(''); setShowAiModal(false);
-    } catch (e: any) { alert(t.alert_fail + ": " + e.message); } finally { setIsGenerating(false); }
+      setAiTopic(''); 
+      setShowAiModal(false);
+      toast.success(`¡${newQuestions.length} preguntas generadas!`);
+
+    } catch (e: any) { 
+        alert(t.alert_fail + ": " + e.message); 
+    } finally { 
+        setIsGenerating(false); 
+    }
   };
 
   const handleAddTag = (e: React.KeyboardEvent) => {
@@ -679,38 +730,193 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           </div>
           <div className="flex items-center gap-4 w-full md:w-auto">
              <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
-             <CyberButton onClick={() => setShowAiModal(!showAiModal)} variant="secondary" className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Bot className="w-4 h-4" /> {t.add_gen_ai}</CyberButton>
+             <CyberButton onClick={() => setShowAiModal(true)} variant="secondary" className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9 bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-purple-500/50 hover:border-purple-400"><Bot className="w-4 h-4" /> {t.add_gen_ai}</CyberButton>
           </div>
       </div>
 
+      {/* --- FULL AI MODAL --- */}
       {showAiModal && (
-          <div className="border border-purple-500/50 bg-purple-950/10 p-6 rounded-lg animate-in slide-in-from-top-4">
-              <div className="flex items-center gap-2 mb-4 text-purple-400 font-cyber"><Bot className="w-5 h-5"/><h3>{t.ai_modal_title}</h3></div>
-              <div className="flex flex-col md:flex-row gap-4 items-end">
-                  <div className="flex-1 w-full"><CyberInput label={t.topic_label} placeholder={t.gen_placeholder} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}/></div>
-                  <div className="w-full md:w-40">
-                      <CyberSelect 
-                          label="IDIOMA" 
-                          options={[
-                              { value: 'Spanish', label: '🇪🇸 Español' },
-                              { value: 'English', label: '🇬🇧 English' },
-                              { value: 'French', label: '🇫🇷 Français' },
-                              { value: 'German', label: '🇩🇪 Deutsch' },
-                              { value: 'Italian', label: '🇮🇹 Italiano' },
-                              { value: 'Portuguese', label: '🇵🇹 Português' },
-                              { value: 'Catalan', label: '🏴 Catalan' },
-                              { value: 'Basque', label: '🏴 Euskera' },
-                              { value: 'Galician', label: '🏴 Galego' }
-                          ]}
-                          value={aiLanguage} 
-                          onChange={(e) => setAiLanguage(e.target.value)} 
-                      />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-in zoom-in-95 duration-200">
+              <CyberCard className="w-full max-w-5xl h-[85vh] border-purple-500/50 shadow-[0_0_50px_rgba(168,85,247,0.2)] flex flex-col p-0 overflow-hidden relative">
+                  
+                  {/* HEADER */}
+                  <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-500/20 rounded-full border border-purple-500/50 animate-pulse">
+                              <Bot className="w-6 h-6 text-purple-400" />
+                          </div>
+                          <div>
+                              <h2 className="text-xl font-cyber font-bold text-white">ASISTENTE GENERATIVO NEURAL</h2>
+                              <p className="text-[10px] text-gray-400 font-mono">CORE V3.0 // POWERED BY GEMINI</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setShowAiModal(false)}><XCircle className="w-8 h-8 text-gray-500 hover:text-white transition-colors" /></button>
                   </div>
-                  <div className="w-24"><CyberInput type="number" label="#" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value))} min={1} max={10}/></div>
-                  <CyberButton onClick={handleAiGenerate} isLoading={isGenerating} disabled={!aiTopic}>{t.ai_modal_add}</CyberButton>
-                  <CyberButton variant="ghost" onClick={() => setShowAiModal(false)}>{t.ai_modal_close}</CyberButton>
-              </div>
-              <p className="text-xs text-purple-300/60 mt-2 font-mono">* {t.editor_types_desc}</p>
+
+                  <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+                      
+                      {/* LEFT COLUMN: PARAMETERS */}
+                      <div className="w-full md:w-1/3 bg-gray-950/50 p-6 border-r border-gray-800 space-y-6 overflow-y-auto custom-scrollbar">
+                          
+                          <div className="space-y-4">
+                              <h3 className="text-xs font-mono font-bold text-purple-400 uppercase tracking-widest border-b border-purple-500/30 pb-2">1. PARÁMETROS BÁSICOS</h3>
+                              
+                              <CyberInput 
+                                label="TEMA PRINCIPAL" 
+                                placeholder="Ej: Revolución Francesa" 
+                                value={aiTopic} 
+                                onChange={(e) => setAiTopic(e.target.value)} 
+                              />
+
+                              <CyberInput 
+                                type="number" 
+                                label="CANTIDAD (MAX 50)" 
+                                value={aiCount} 
+                                onChange={(e) => setAiCount(Math.min(50, Math.max(1, parseInt(e.target.value))))} 
+                                min={1} 
+                                max={50} 
+                              />
+
+                              <CyberSelect 
+                                  label="IDIOMA" 
+                                  options={[
+                                      { value: 'Spanish', label: '🇪🇸 Español' },
+                                      { value: 'English', label: '🇬🇧 English' },
+                                      { value: 'French', label: '🇫🇷 Français' },
+                                      { value: 'German', label: '🇩🇪 Deutsch' },
+                                      { value: 'Italian', label: '🇮🇹 Italiano' },
+                                      { value: 'Portuguese', label: '🇵🇹 Português' },
+                                      { value: 'Catalan', label: '🏴 Catalan' },
+                                      { value: 'Basque', label: '🏴 Euskera' },
+                                      { value: 'Galician', label: '🏴 Galego' }
+                                  ]}
+                                  value={aiLanguage} 
+                                  onChange={(e) => setAiLanguage(e.target.value)} 
+                              />
+                          </div>
+
+                          <div className="space-y-4">
+                              <h3 className="text-xs font-mono font-bold text-pink-400 uppercase tracking-widest border-b border-pink-500/30 pb-2">2. PERSONALIZACIÓN</h3>
+                              
+                              <CyberSelect 
+                                  label="EDAD / NIVEL" 
+                                  options={[
+                                      { value: 'Universal', label: 'Universal (Cualquiera)' },
+                                      { value: 'Kids (6-9)', label: 'Primaria (6-9 años)' },
+                                      { value: 'Teens (10-14)', label: 'Secundaria (10-14 años)' },
+                                      { value: 'High School (15-18)', label: 'Bachillerato (15-18 años)' },
+                                      { value: 'University', label: 'Universidad / Adultos' }
+                                  ]}
+                                  value={aiAge} 
+                                  onChange={(e) => setAiAge(e.target.value)} 
+                              />
+
+                              <CyberSelect 
+                                  label="TONO" 
+                                  options={[
+                                      { value: 'Neutral', label: 'Neutral / Académico' },
+                                      { value: 'Humorous', label: 'Divertido / Informal' },
+                                      { value: 'Strict', label: 'Estricto / Examen' },
+                                      { value: 'Motivational', label: 'Motivador / Coach' },
+                                      { value: 'Pirate', label: '🏴‍☠️ Pirata' },
+                                      { value: 'Cyberpunk', label: '🤖 Cyberpunk' }
+                                  ]}
+                                  value={aiTone} 
+                                  onChange={(e) => setAiTone(e.target.value)} 
+                              />
+
+                              <div>
+                                  <label className="text-xs font-mono-cyber text-cyan-400/80 uppercase tracking-widest block mb-1">AMBIENTACIÓN / GAMIFICACIÓN (OPCIONAL)</label>
+                                  <CyberInput 
+                                    placeholder="Ej: Mundo de Elfos, Star Wars, Harry Potter..." 
+                                    value={aiGamification} 
+                                    onChange={(e) => setAiGamification(e.target.value)} 
+                                  />
+                                  <p className="text-[9px] text-gray-500 mt-1">La IA adaptará los enunciados a esta temática.</p>
+                              </div>
+                          </div>
+
+                      </div>
+
+                      {/* RIGHT COLUMN: CONTEXT SOURCE */}
+                      <div className="flex-1 bg-black/40 p-6 flex flex-col">
+                          
+                          <h3 className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-widest border-b border-cyan-500/30 pb-2 mb-4">3. FUENTE DE CONTEXTO (OPCIONAL)</h3>
+                          
+                          <div className="flex gap-2 mb-4">
+                              <button onClick={() => setAiSourceMode('topic')} className={`flex-1 py-2 text-xs font-bold rounded border ${aiSourceMode === 'topic' ? 'bg-cyan-900/50 border-cyan-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                  SOLO TEMA
+                              </button>
+                              <button onClick={() => setAiSourceMode('text')} className={`flex-1 py-2 text-xs font-bold rounded border ${aiSourceMode === 'text' ? 'bg-cyan-900/50 border-cyan-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                  PEGAR TEXTO
+                              </button>
+                              <button onClick={() => setAiSourceMode('pdf')} className={`flex-1 py-2 text-xs font-bold rounded border ${aiSourceMode === 'pdf' ? 'bg-cyan-900/50 border-cyan-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                  PDF
+                              </button>
+                              <button onClick={() => setAiSourceMode('url')} className={`flex-1 py-2 text-xs font-bold rounded border ${aiSourceMode === 'url' ? 'bg-cyan-900/50 border-cyan-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                                  URL
+                              </button>
+                          </div>
+
+                          <div className="flex-1 bg-gray-900/30 rounded border border-gray-800 p-4 relative">
+                              {aiSourceMode === 'topic' && (
+                                  <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 opacity-60">
+                                      <Bot className="w-16 h-16 mb-4" />
+                                      <p className="text-sm font-mono">La IA generará preguntas basándose únicamente en tu "Tema Principal" y su conocimiento general.</p>
+                                  </div>
+                              )}
+
+                              {aiSourceMode === 'text' && (
+                                  <CyberTextArea 
+                                      placeholder="Pega aquí tus apuntes, resumen o texto base..." 
+                                      className="h-full font-mono text-xs" 
+                                      value={aiSourceText}
+                                      onChange={(e) => setAiSourceText(e.target.value)}
+                                  />
+                              )}
+
+                              {aiSourceMode === 'pdf' && (
+                                  <div className="h-full flex flex-col items-center justify-center">
+                                      <div 
+                                          className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-cyan-500 hover:bg-cyan-900/10 transition-all cursor-pointer w-full max-w-md"
+                                          onClick={() => aiFileRef.current?.click()}
+                                      >
+                                          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                          <p className="text-sm font-bold text-white mb-2">{aiSourceFile ? aiSourceFile.name : "ARRASTRA O CLIC PARA SUBIR PDF"}</p>
+                                          <p className="text-xs text-gray-500">Máx 10MB. Solo texto extraíble.</p>
+                                          <input type="file" ref={aiFileRef} className="hidden" accept="application/pdf" onChange={(e) => setAiSourceFile(e.target.files?.[0] || null)} />
+                                      </div>
+                                      {aiSourceFile && <button onClick={() => setAiSourceFile(null)} className="mt-4 text-red-400 text-xs hover:underline">Eliminar archivo</button>}
+                                  </div>
+                              )}
+
+                              {aiSourceMode === 'url' && (
+                                  <div className="h-full flex flex-col justify-center gap-4">
+                                      <div className="text-center mb-4">
+                                          <Globe className="w-12 h-12 text-cyan-500 mx-auto mb-2" />
+                                          <p className="text-sm text-gray-400">Introduce una URL pública (Wikipedia, Blog, Noticia) para analizar.</p>
+                                      </div>
+                                      <CyberInput 
+                                          placeholder="https://..." 
+                                          value={aiSourceUrl} 
+                                          onChange={(e) => setAiSourceUrl(e.target.value)} 
+                                      />
+                                  </div>
+                              )}
+                          </div>
+
+                      </div>
+                  </div>
+
+                  {/* FOOTER */}
+                  <div className="p-6 border-t border-gray-800 bg-gray-900 flex justify-end gap-4">
+                      <CyberButton variant="ghost" onClick={() => setShowAiModal(false)} disabled={isGenerating}>CANCELAR</CyberButton>
+                      <CyberButton onClick={handleAiGenerate} isLoading={isGenerating} className="px-8 bg-gradient-to-r from-purple-600 to-pink-600 border-none shadow-[0_0_20px_rgba(168,85,247,0.4)]">
+                          <Sparkles className="w-5 h-5 mr-2" /> GENERAR CONTENIDO
+                      </CyberButton>
+                  </div>
+
+              </CyberCard>
           </div>
       )}
 

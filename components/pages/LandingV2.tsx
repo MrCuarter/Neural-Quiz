@@ -23,7 +23,7 @@ import { ASSETS_BASE } from '../../data/bossPresets';
 import { AuthModal } from '../auth/AuthModal';
 
 interface LandingV2Props {
-    onNavigate: (view: string) => void;
+    onNavigate: (view: string, params?: { autoAi?: boolean }) => void;
     user: any;
     onLoginReq: () => void;
 }
@@ -97,17 +97,16 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                         </div>
                     </div>
 
-                    {/* RIGHT: GENIALLY EMBED WITH PROTECTIVE OVERLAY */}
+                    {/* RIGHT: GENIALLY EMBED WITHOUT OVERLAY */}
                     <div className="flex-1 min-w-[300px] w-full flex justify-center animate-in zoom-in-95 duration-1000 delay-200">
                         <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                           <div style={{ position: 'relative', paddingBottom: '100%', paddingTop: 0, height: 0, width: '100%', maxWidth: '800px' }}>
-                            <div className="absolute inset-0 z-20 w-full h-full bg-transparent" />
                             <iframe 
                               title="Neural Quiz Header" 
                               frameBorder="0" 
                               width="800" 
                               height="800" 
-                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 }} 
+                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10, backgroundColor: 'transparent' }} 
                               src="https://view.genially.com/697b237b344f20a411a68fc6" 
                               allowFullScreen={true} 
                               scrolling="yes" 
@@ -130,7 +129,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* 1. CREAR CON IA */}
-                        <button onClick={() => onNavigate('create_menu')} className="group relative p-6 bg-purple-950/20 border border-purple-500/30 hover:bg-purple-900/40 hover:border-purple-500 rounded-xl transition-all text-left overflow-hidden">
+                        <button onClick={() => onNavigate('create_menu', { autoAi: true })} className="group relative p-6 bg-purple-950/20 border border-purple-500/30 hover:bg-purple-900/40 hover:border-purple-500 rounded-xl transition-all text-left overflow-hidden">
                             <div className="absolute top-0 right-0 p-8 bg-purple-500/10 rounded-full blur-xl -mr-4 -mt-4"></div>
                             <div className="relative z-10 flex flex-col gap-3">
                                 <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center border border-purple-500/50 group-hover:scale-110 transition-transform">

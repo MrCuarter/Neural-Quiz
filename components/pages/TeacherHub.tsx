@@ -44,7 +44,7 @@ import { CreateEvaluationModal } from '../evaluations/CreateEvaluationModal';
 
 interface TeacherHubProps {
     user: any;
-    onNavigate: (view: string) => void;
+    onNavigate: (view: string, params?: { autoAi?: boolean }) => void;
 }
 
 export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
@@ -171,6 +171,7 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
 
     // --- NAVIGATION HELPERS ---
     const goToCreate = () => onNavigate('create_menu');
+    const goToCreateAI = () => onNavigate('create_menu', { autoAi: true });
     const goToMyQuizzes = () => onNavigate('my_quizzes');
 
     if (!user) return <div className="text-center p-20">Acceso Denegado</div>;
@@ -334,7 +335,7 @@ export const TeacherHub: React.FC<TeacherHubProps> = ({ user, onNavigate }) => {
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* BOTÓN 1: GENERAR CON IA */}
-                        <button onClick={goToCreate} className="group relative h-40 rounded-xl overflow-hidden border-2 border-purple-500/30 bg-purple-950/20 hover:bg-purple-900/40 hover:border-purple-500 transition-all text-left p-5 flex flex-col justify-between">
+                        <button onClick={goToCreateAI} className="group relative h-40 rounded-xl overflow-hidden border-2 border-purple-500/30 bg-purple-950/20 hover:bg-purple-900/40 hover:border-purple-500 transition-all text-left p-5 flex flex-col justify-between">
                             <div className="absolute top-0 right-0 p-12 bg-purple-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
                             <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center border border-purple-500/50 group-hover:scale-110 transition-transform">
                                 <Bot className="w-6 h-6 text-purple-300" />
