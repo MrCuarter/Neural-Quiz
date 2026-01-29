@@ -193,8 +193,9 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                             className="group relative h-96 rounded-2xl overflow-hidden border border-red-900/50 cursor-pointer transition-all hover:scale-[1.02] hover:border-red-500"
                         >
                             <div className="absolute inset-0 bg-gradient-to-t from-red-950 via-gray-900/80 to-transparent z-10"></div>
+                            {/* CAMBIO: USAR BADGE EN VEZ DE IMAGEN COMPLETA PARA QUE NO SE CORTE LA CABEZA */}
                             <img 
-                                src={`${ASSETS_BASE}/finalboss/kryon.png`} 
+                                src={`${ASSETS_BASE}/finalboss/kryonbadge.png`} 
                                 className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity group-hover:scale-110 duration-700"
                                 alt="Boss"
                             />
@@ -220,8 +221,12 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                             className="group relative h-96 rounded-2xl overflow-hidden border border-purple-900/50 cursor-pointer transition-all hover:scale-[1.02] hover:border-purple-500"
                         >
                             <div className="absolute inset-0 bg-gradient-to-t from-purple-950 via-gray-900/80 to-transparent z-10"></div>
-                            {/* Abstract BG for Jeopardy */}
-                            <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(168,85,247,0.1)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px] opacity-30"></div>
+                            {/* CAMBIO: AÑADIR IMAGEN PREVIEW ESPECÍFICA */}
+                            <img 
+                                src="https://raw.githubusercontent.com/MrCuarter/neuralquiz-assets/main/elements/jeopardy.png"
+                                className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity group-hover:scale-110 duration-700"
+                                alt="Jeopardy"
+                            />
                             
                             <div className="absolute bottom-0 left-0 right-0 p-8 z-20 space-y-3">
                                 <div className="flex items-center gap-2 text-purple-400 font-cyber font-bold text-2xl">
