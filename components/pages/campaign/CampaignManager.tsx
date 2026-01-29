@@ -75,7 +75,23 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
                 resourceName: formResourceName,
                 resourceEmoji: '🪙', // Default for MVP
                 goalAmount: formGoal,
-                missions: []
+                missions: [],
+                // Add default visual settings and resources to satisfy Campaign type
+                visualSettings: {
+                    primaryColor: '#f59e0b',
+                    font: 'serif',
+                    backgroundUrl: ''
+                },
+                resources: [
+                    {
+                        id: Math.random().toString(36).substring(7),
+                        name: formResourceName,
+                        emoji: '🪙',
+                        type: 'accumulate',
+                        startValue: 0,
+                        targetValue: formGoal
+                    }
+                ]
             });
             toast.success("Campaña creada");
             setIsCreating(false);
@@ -271,7 +287,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
                 <CyberCard className="max-w-2xl mx-auto border-yellow-500/50">
                     <h3 className="font-bold text-xl text-yellow-400 mb-6">DISEÑAR NUEVA AVENTURA</h3>
                     <div className="space-y-4">
-                        <CyberInput label="TÍTULO ÉPICO" value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="La Búsqueda del Conocimiento"/>
+                        <CyberInput label="TÍTULO ÉPICO" value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Ej: La Búsqueda del Conocimiento"/>
                         <CyberInput label="MONEDA (NOMBRE)" value={formResourceName} onChange={e => setFormResourceName(e.target.value)} placeholder="Oro, Créditos, Karma..."/>
                         <CyberInput label="META TOTAL" type="number" value={formGoal} onChange={e => setFormGoal(Number(e.target.value))} />
                         
