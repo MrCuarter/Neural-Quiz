@@ -4,7 +4,8 @@ import {
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  updateProfile // Added for TeacherHub profile update
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -21,6 +22,7 @@ import {
   serverTimestamp,
   limit
 } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // Added Storage
 import { getAnalytics } from "firebase/analytics";
 import { Quiz, Evaluation, EvaluationAttempt } from "../types";
 
@@ -80,6 +82,7 @@ if (typeof window !== 'undefined' && !isOfflineMode) {
 
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+export const storage = getStorage(app); // EXPORT STORAGE
 
 // --- 3. CONFIGURACIÓN CRÍTICA DEL PROVEEDOR (SCOPES) ---
 export const googleProvider = new GoogleAuthProvider();
@@ -88,8 +91,8 @@ export const googleProvider = new GoogleAuthProvider();
 // 'drive.file' permite a la app ver y editar solo los archivos que ella misma ha creado.
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 
-// Exportamos onAuthStateChanged para uso en componentes
-export { onAuthStateChanged };
+// Exportamos onAuthStateChanged y updateProfile para uso en componentes
+export { onAuthStateChanged, updateProfile };
 
 if (!isOfflineMode) {
     console.log("🔥 Firebase (NPM) inicializado correctamente.");

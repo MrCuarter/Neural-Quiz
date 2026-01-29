@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Quiz, Evaluation, EvaluationConfig, BossSettings, ClassGroup } from '../../types';
-import { createEvaluation, auth } from '../../services/firebaseService';
+import { createEvaluation, auth, storage } from '../../services/firebaseService';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getTeacherClasses } from '../../services/classService';
+import { compressImage } from '../../utils/imageOptimizer';
 import { signInAnonymously } from 'firebase/auth';
-import { CyberButton, CyberCard, CyberInput, CyberCheckbox, CyberSelect } from '../ui/CyberUI';
-import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Users, LayoutDashboard, School, Code, Copy, CheckCircle2 } from 'lucide-react';
+import { CyberButton, CyberCard, CyberInput, CyberCheckbox } from '../ui/CyberUI';
+import { X, Rocket, Calendar, Zap, Trophy, MessageSquare, Shield, AlertCircle, Skull, Sword, Users, LayoutDashboard, School, Code, Copy, CheckCircle2, Upload } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { PRESET_BOSSES, ASSETS_BASE } from '../../data/bossPresets';
 import { ArcadePlay } from '../pages/ArcadePlay';
@@ -48,6 +50,11 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [bossDifficulty, setBossDifficulty] = useState<'easy' | 'medium' | 'hard' | 'legend'>('medium');
     const [bossHP, setBossHP] = useState(1000);
     const [playerHP, setPlayerHP] = useState(100);
+    
+    // Custom Boss State
+    const [customBossImage, setCustomBossImage] = useState<string | null>(null);
+    const [isUploadingBoss, setIsUploadingBoss] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
     // Boss Messages
     const [msgBossWin, setMsgBossWin] = useState("");
@@ -116,6 +123,44 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
         }
     };
 
+    // --- CUSTOM BOSS UPLOAD (FIREBASE STORAGE) ---
+    const handleCustomImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        
+        setIsUploadingBoss(true);
+        try {
+            // Ensure we have a user ID (anonymous or real)
+            let userId = user?.uid;
+            if (!userId) {
+                const cred = await signInAnonymously(auth);
+                userId = cred.user.uid;
+            }
+
+            const file = e.target.files[0];
+            
+            // 1. Compress Image (Max 800x800, quality 0.7)
+            const compressedBlob = await compressImage(file, 800, 0.7);
+
+            // 2. Upload to Firebase Storage: users/{uid}/bosses/{timestamp}.jpg
+            const path = `users/${userId}/bosses/${Date.now()}.jpg`;
+            const storageRef = ref(storage, path);
+            await uploadBytes(storageRef, compressedBlob);
+
+            // 3. Get URL
+            const url = await getDownloadURL(storageRef);
+            
+            setCustomBossImage(url);
+            handleSelectPreset('CUSTOM'); // Switch to custom mode
+            toast.success("Imagen de Boss subida correctamente");
+        } catch (error) {
+            console.error("Upload error", error);
+            toast.error("Error al subir imagen");
+        } finally {
+            setIsUploadingBoss(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
     const handleCountChange = (val: number) => {
         setQuestionCount(val);
         setCountWarning(val > quiz.questions.length);
@@ -123,18 +168,36 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
 
     const buildBossConfig = (): BossSettings | undefined => {
         if (gameMode !== 'final_boss') return undefined;
-        return {
-            bossName,
-            imageId: imageId,
-            difficulty: bossDifficulty,
-            health: { bossHP, playerHP },
-            images: { 
+        
+        let imagesConfig;
+        
+        if (selectedPreset === 'CUSTOM' && customBossImage) {
+            // Use custom image for all states
+            imagesConfig = {
+                idle: customBossImage,
+                badge: customBossImage,
+                damage: customBossImage,
+                defeat: customBossImage,
+                win: customBossImage
+            };
+        } else {
+            // Use preset
+            imagesConfig = { 
                 idle: `${ASSETS_BASE}/finalboss/${imageId}.png`,
                 badge: `${ASSETS_BASE}/finalboss/${imageId}badge.png`,
                 damage: `${ASSETS_BASE}/finalboss/${imageId}.png`,
                 defeat: `${ASSETS_BASE}/finalboss/${imageId}lose.png`,
                 win: `${ASSETS_BASE}/finalboss/${imageId}win.png`
-            },
+            };
+        }
+
+        return {
+            bossName,
+            imageId: imageId,
+            difficulty: bossDifficulty,
+            health: { bossHP, playerHP },
+            images: imagesConfig,
+            badgeUrl: imagesConfig.badge,
             messages: { bossWins: msgBossWin, playerWins: msgPlayerWin, perfectWin: msgPerfect },
             mechanics: { enablePowerUps: powerUps, finishHimMove: finishHim }
         };
@@ -359,6 +422,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                         <div>
                                             <label className="text-xs font-mono text-red-400/80 uppercase tracking-widest block mb-3">SELECCIONAR ENEMIGO</label>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                {/* PRESETS */}
                                                 {Object.entries(PRESET_BOSSES).map(([key, boss]) => (
                                                     <button 
                                                         key={key}
@@ -376,6 +440,31 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                                                         {selectedPreset === key && <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>}
                                                     </button>
                                                 ))}
+
+                                                {/* CUSTOM BOSS BUTTON */}
+                                                <button 
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className={`relative p-2 rounded border-2 transition-all flex flex-col items-center gap-2 group overflow-hidden border-dashed ${selectedPreset === 'CUSTOM' ? 'border-red-500 bg-red-900/40' : 'border-gray-700 bg-black/40 hover:border-gray-500'}`}
+                                                >
+                                                    <div className="w-24 h-24 rounded-full border border-gray-600 overflow-hidden bg-black/50 flex items-center justify-center group-hover:bg-black/30">
+                                                        {customBossImage ? (
+                                                            <img src={customBossImage} className="w-full h-full object-cover" alt="Custom Boss" />
+                                                        ) : (
+                                                            <Upload className="w-8 h-8 text-gray-500 group-hover:text-white" />
+                                                        )}
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold font-cyber text-center ${selectedPreset === 'CUSTOM' ? 'text-red-300' : 'text-gray-400'}`}>
+                                                        {isUploadingBoss ? "SUBIENDO..." : "SUBIR PROPIO"}
+                                                    </span>
+                                                    {selectedPreset === 'CUSTOM' && <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>}
+                                                    <input 
+                                                        type="file" 
+                                                        ref={fileInputRef} 
+                                                        className="hidden" 
+                                                        accept="image/*" 
+                                                        onChange={handleCustomImageUpload} 
+                                                    />
+                                                </button>
                                             </div>
                                         </div>
 
