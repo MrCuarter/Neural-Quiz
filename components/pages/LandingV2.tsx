@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
 import { 
     Sparkles, 
@@ -16,6 +16,7 @@ import {
     LogIn
 } from 'lucide-react';
 import { ASSETS_BASE } from '../../data/bossPresets';
+import { AuthModal } from '../auth/AuthModal';
 
 interface LandingV2Props {
     onNavigate: (view: string) => void;
@@ -24,10 +25,22 @@ interface LandingV2Props {
 }
 
 export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginReq }) => {
-    
+    const [showAuth, setShowAuth] = useState(false);
+
+    // Wrapper for restricted actions
+    const handleRestrictedAction = (targetView: string) => {
+        if (user) {
+            onNavigate(targetView);
+        } else {
+            setShowAuth(true);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#020617] text-white flex flex-col font-sans selection:bg-cyan-500/30">
             
+            <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
+
             {/* --- HERO SECTION: THE PROMISE (GENIALLY) --- */}
             <section className="relative pt-20 pb-20 md:pt-32 md:pb-32 px-6 overflow-hidden">
                 {/* Background Glows */}
@@ -52,7 +65,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
-                            {user && (
+                            {user ? (
                                 <>
                                     <CyberButton 
                                         onClick={() => onNavigate('teacher_hub')} 
@@ -68,6 +81,13 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                                         <LayoutGrid className="w-5 h-5 mr-2" /> 📂 MIS QUIZZES
                                     </CyberButton>
                                 </>
+                            ) : (
+                                <CyberButton 
+                                    onClick={() => setShowAuth(true)} 
+                                    className="h-14 text-lg px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-none shadow-[0_0_20px_rgba(6,182,212,0.4)] animate-pulse"
+                                >
+                                    <LogIn className="w-5 h-5 mr-2" /> ACCESO DOCENTE
+                                </CyberButton>
                             )}
                         </div>
                     </div>
@@ -76,9 +96,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                     <div className="flex-1 min-w-[300px] w-full flex justify-center animate-in zoom-in-95 duration-1000 delay-200">
                         <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                           <div style={{ position: 'relative', paddingBottom: '100%', paddingTop: 0, height: 0, width: '100%', maxWidth: '800px' }}>
-                            {/* OVERLAY: Bloquea scroll/interacción para no molestar la navegación */}
                             <div className="absolute inset-0 z-20 w-full h-full bg-transparent" />
-                            
                             <iframe 
                               title="Neural Quiz Header" 
                               frameBorder="0" 
@@ -111,15 +129,13 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                         
                         {/* CARD 1: QUIZ MANAGEMENT */}
                         <div 
-                            onClick={() => onNavigate(user ? 'my_quizzes' : 'create_menu')}
+                            onClick={() => handleRestrictedAction('my_quizzes')}
                             className="group relative bg-gray-900/40 backdrop-blur-sm border border-cyan-500/20 hover:border-cyan-400 p-8 rounded-2xl transition-all cursor-pointer hover:bg-gray-900/60 hover:-translate-y-2 shadow-lg"
                         >
                             <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-cyan-500/10 transition-colors"></div>
-                            
                             <div className="w-14 h-14 bg-cyan-950/50 rounded-xl border border-cyan-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                                 <FolderOpen className="w-7 h-7 text-cyan-400" />
                             </div>
-                            
                             <h3 className="text-xl font-bold font-cyber text-white mb-3 group-hover:text-cyan-300">
                                 GESTIÓN DE QUIZZES
                             </h3>
@@ -130,15 +146,13 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
 
                         {/* CARD 2: LIVE ACTIVITIES */}
                         <div 
-                            onClick={() => onNavigate(user ? 'teacher_hub' : 'create_menu')}
+                            onClick={() => handleRestrictedAction('teacher_hub')}
                             className="group relative bg-gray-900/40 backdrop-blur-sm border border-purple-500/20 hover:border-purple-400 p-8 rounded-2xl transition-all cursor-pointer hover:bg-gray-900/60 hover:-translate-y-2 shadow-lg"
                         >
                             <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-purple-500/10 transition-colors"></div>
-                            
                             <div className="w-14 h-14 bg-purple-950/50 rounded-xl border border-purple-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                                 <Radio className="w-7 h-7 text-purple-400" />
                             </div>
-                            
                             <h3 className="text-xl font-bold font-cyber text-white mb-3 group-hover:text-purple-300">
                                 ACTIVIDADES & DIRECTO
                             </h3>
@@ -149,15 +163,13 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
 
                         {/* CARD 3: CLASS MANAGEMENT */}
                         <div 
-                            onClick={() => onNavigate(user ? 'classes_manager' : 'create_menu')}
+                            onClick={() => handleRestrictedAction('classes_manager')}
                             className="group relative bg-gray-900/40 backdrop-blur-sm border border-green-500/20 hover:border-green-400 p-8 rounded-2xl transition-all cursor-pointer hover:bg-gray-900/60 hover:-translate-y-2 shadow-lg"
                         >
                             <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-green-500/10 transition-colors"></div>
-                            
                             <div className="w-14 h-14 bg-green-950/50 rounded-xl border border-green-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                                 <ShieldCheck className="w-7 h-7 text-green-400" />
                             </div>
-                            
                             <h3 className="text-xl font-bold font-cyber text-white mb-3 group-hover:text-green-300">
                                 GESTIÓN DE CLASES
                             </h3>
@@ -170,9 +182,8 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                 </div>
             </section>
 
-            {/* --- SECTION 2: NEURAL ARCADE --- */}
+            {/* --- SECTION 2: NEURAL ARCADE (No Auth Required for Lobby but recommended) --- */}
             <section className="py-24 px-6 bg-gradient-to-b from-gray-900 to-black relative overflow-hidden">
-                {/* Background Decor */}
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
                 
                 <div className="max-w-7xl mx-auto space-y-16 relative z-10">
@@ -186,20 +197,17 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        
                         {/* CARD A: FINAL BOSS */}
                         <div 
                             onClick={() => onNavigate('game_lobby')}
                             className="group relative h-96 rounded-2xl overflow-hidden border border-red-900/50 cursor-pointer transition-all hover:scale-[1.02] hover:border-red-500"
                         >
                             <div className="absolute inset-0 bg-gradient-to-t from-red-950 via-gray-900/80 to-transparent z-10"></div>
-                            {/* CAMBIO: USAR BADGE EN VEZ DE IMAGEN COMPLETA PARA QUE NO SE CORTE LA CABEZA */}
                             <img 
                                 src={`${ASSETS_BASE}/finalboss/kryonbadge.png`} 
                                 className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity group-hover:scale-110 duration-700"
                                 alt="Boss"
                             />
-                            
                             <div className="absolute bottom-0 left-0 right-0 p-8 z-20 space-y-3">
                                 <div className="flex items-center gap-2 text-red-400 font-cyber font-bold text-2xl">
                                     <Skull className="w-6 h-6" /> FINAL BOSS
@@ -221,13 +229,11 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                             className="group relative h-96 rounded-2xl overflow-hidden border border-purple-900/50 cursor-pointer transition-all hover:scale-[1.02] hover:border-purple-500"
                         >
                             <div className="absolute inset-0 bg-gradient-to-t from-purple-950 via-gray-900/80 to-transparent z-10"></div>
-                            {/* CAMBIO: AÑADIR IMAGEN PREVIEW ESPECÍFICA */}
                             <img 
                                 src="https://raw.githubusercontent.com/MrCuarter/neuralquiz-assets/main/elements/jeopardy.png"
                                 className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity group-hover:scale-110 duration-700"
                                 alt="Jeopardy"
                             />
-                            
                             <div className="absolute bottom-0 left-0 right-0 p-8 z-20 space-y-3">
                                 <div className="flex items-center gap-2 text-purple-400 font-cyber font-bold text-2xl">
                                     <Trophy className="w-6 h-6" /> JEOPARDY
@@ -243,14 +249,12 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                             </div>
                         </div>
 
-                        {/* CARD C: THE ESCAPE (COMING SOON) */}
+                        {/* CARD C: THE ESCAPE */}
                         <div className="group relative h-96 rounded-2xl overflow-hidden border border-gray-800 bg-black/60 cursor-not-allowed">
                             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-green-900/10 via-black to-black opacity-50"></div>
-                            
                             <div className="absolute top-4 right-4 bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1 rounded text-[10px] font-mono font-bold tracking-widest animate-pulse">
                                 EN DESARROLLO
                             </div>
-
                             <div className="absolute bottom-0 left-0 right-0 p-8 z-20 space-y-3 opacity-60 group-hover:opacity-80 transition-opacity">
                                 <div className="flex items-center gap-2 text-gray-400 font-cyber font-bold text-2xl">
                                     <Timer className="w-6 h-6" /> THE ESCAPE
@@ -260,7 +264,6 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
                                 </p>
                             </div>
                         </div>
-
                     </div>
                 </div>
             </section>
@@ -269,20 +272,15 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user, onLoginR
             <section className="py-16 text-center border-t border-gray-900 bg-gray-950/50">
                 <h3 className="text-2xl font-cyber text-white mb-6">¿LISTO PARA TOMAR EL CONTROL?</h3>
                 <div className="flex justify-center">
-                    <CyberButton 
-                        onClick={user ? () => onNavigate('teacher_hub') : onLoginReq} 
-                        className="h-16 px-10 text-xl shadow-[0_0_30px_rgba(6,182,212,0.4)]"
-                    >
-                        {user ? (
-                            <>
-                                <MonitorPlay className="w-6 h-6 mr-3" /> IR AL CENTRO DE MANDO
-                            </>
-                        ) : (
-                            <>
-                                <LogIn className="w-6 h-6 mr-3" /> INICIAR SESIÓN
-                            </>
-                        )}
-                    </CyberButton>
+                    {user ? (
+                        <CyberButton onClick={() => onNavigate('teacher_hub')} className="h-16 px-10 text-xl shadow-[0_0_30px_rgba(6,182,212,0.4)]">
+                            <MonitorPlay className="w-6 h-6 mr-3" /> IR AL CENTRO DE MANDO
+                        </CyberButton>
+                    ) : (
+                        <CyberButton onClick={() => setShowAuth(true)} className="h-16 px-10 text-xl shadow-[0_0_30px_rgba(6,182,212,0.4)]">
+                            <LogIn className="w-6 h-6 mr-3" /> INICIAR SESIÓN
+                        </CyberButton>
+                    )}
                 </div>
             </section>
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
@@ -923,7 +924,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       <div className="bg-black/20 p-4 rounded border border-gray-800/50">
                                           {/* --- STANDARD OPTIONS (MC, MS, TF, POLL, ORDER) --- */}
                                           {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE || q.questionType === QUESTION_TYPES.POLL || q.questionType === QUESTION_TYPES.ORDER || !q.questionType) && (
-                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                              <div className={q.questionType === QUESTION_TYPES.ORDER ? "flex flex-col gap-3" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
                                                   {q.options.length === 0 && (
                                                       <div className="col-span-2 text-center py-4">
                                                           <p className="text-yellow-500 font-mono text-sm mb-2">No options detected.</p>

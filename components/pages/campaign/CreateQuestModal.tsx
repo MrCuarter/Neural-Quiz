@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { CyberButton, CyberCard, CyberInput, CyberTextArea, CyberSelect } from '../../ui/CyberUI';
-import { X, ArrowRight, ArrowLeft, Wand2, Image as ImageIcon, Upload, Search, Palette, Coins, Scroll, Heart, Zap, Globe, Save } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { CyberButton, CyberCard, CyberInput, CyberTextArea } from '../../ui/CyberUI';
+import { X, ArrowRight, ArrowLeft, Wand2, Image as ImageIcon, Upload, Search, Palette, Coins, Scroll, Globe, Save, Trash2, Check } from 'lucide-react';
 import { Campaign, CampaignResource, CampaignTheme, CampaignVisuals } from '../../../types';
 import { compressImage } from '../../../utils/imageOptimizer';
 import { uploadImageToCloudinary } from '../../../services/cloudinaryService';
@@ -83,7 +83,11 @@ export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({ onClose, onC
     const handleThemeSelect = (t: CampaignTheme) => {
         setTheme(t);
         // Load presets INCLUDING the backgroundUrl from the preset
-        setVisuals(THEME_PRESETS[t].visuals);
+        setVisuals(prev => ({
+            ...THEME_PRESETS[t].visuals,
+            // If user previously uploaded custom image, maybe keep it? No, reset on theme change for UX clarity unless custom
+            backgroundUrl: THEME_PRESETS[t].visuals.backgroundUrl || prev.backgroundUrl
+        }));
         setResources(THEME_PRESETS[t].resources);
     };
 
@@ -92,13 +96,7 @@ export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({ onClose, onC
         setUploading(true);
         try {
             const file = e.target.files[0];
-            const compressed = await compressImage(file, 1280, 0.7);
-            // Upload to Cloudinary (using existing service)
-            // Note: compressImage returns Blob, uploadImageToCloudinary expects File. 
-            // We cast Blob to File for the service.
-            const fileToUpload = new File([compressed], "cover.jpg", { type: "image/jpeg" });
-            const url = await uploadImageToCloudinary(fileToUpload);
-            
+            const url = await uploadImageToCloudinary(file);
             setVisuals(prev => ({ ...prev, backgroundUrl: url }));
             toast.success("Portada actualizada");
         } catch (err) {
@@ -197,7 +195,7 @@ export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({ onClose, onC
                         <h2 className="text-xl font-cyber font-bold text-cyan-400">CREAR AVENTURA</h2>
                         <div className="flex items-center gap-2">
                             {[1, 2, 3].map(i => (
-                                <div key={i} className={`w-3 h-3 rounded-full ${step >= i ? 'bg-cyan-500 shadow-[0_0_10px_cyan]' : 'bg-gray-700'}`} />
+                                <div key={i} className={`w-3 h-3 rounded-full transition-all ${step >= i ? 'bg-cyan-500 shadow-[0_0_10px_cyan]' : 'bg-gray-700'}`} />
                             ))}
                         </div>
                     </div>
@@ -219,7 +217,7 @@ export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({ onClose, onC
                                         <button 
                                             key={t}
                                             onClick={() => handleThemeSelect(t)}
-                                            className={`p-4 rounded border-2 transition-all flex flex-col items-center gap-2 capitalize ${theme === t ? 'border-cyan-500 bg-cyan-900/30 text-cyan-300' : 'border-gray-700 bg-gray-900/50 text-gray-500 hover:border-gray-500'}`}
+                                            className={`p-4 rounded border-2 transition-all flex flex-col items-center gap-2 capitalize ${theme === t ? 'border-cyan-500 bg-cyan-900/30 text-cyan-300' : 'border-gray-700 bg-gray-900/50 text-gray-500 hover:border-gray-500 hover:bg-white/5'}`}
                                         >
                                             <span className="text-2xl">{t === 'fantasy' ? '🐉' : t === 'space' ? '🚀' : t === 'historical' ? '🏛️' : t === 'arcade' ? '🕹️' : t === 'kids' ? '🧸' : '⚙️'}</span>
                                             <span className="text-xs font-bold">{t}</span>
@@ -239,7 +237,7 @@ export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({ onClose, onC
                                             <>
                                                 <img src={visuals.backgroundUrl} className="w-full h-full object-cover" alt="Cover" />
                                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                                                    <button onClick={() => setVisuals(prev => ({...prev, backgroundUrl: ''}))} className="p-2 bg-red-600 rounded-full hover:scale-110 transition-transform"><X className="w-5 h-5 text-white"/></button>
+                                                    <button onClick={() => setVisuals(prev => ({...prev, backgroundUrl: ''}))} className="p-2 bg-red-600 rounded-full hover:scale-110 transition-transform"><Trash2 className="w-5 h-5 text-white"/></button>
                                                 </div>
                                             </>
                                         ) : (
@@ -333,7 +331,7 @@ export const CreateQuestModal: React.FC<CreateQuestModalProps> = ({ onClose, onC
                                             <input type="number" value={res.targetValue} onChange={(e) => updateResource(idx, 'targetValue', parseInt(e.target.value))} className="w-full bg-black border border-gray-600 rounded p-2 text-sm text-white" />
                                         </div>
                                         <button onClick={() => removeResource(idx)} className="p-2 text-red-500 hover:bg-red-900/20 rounded mb-0.5">
-                                            <X className="w-5 h-5" />
+                                            <Trash2 className="w-5 h-5" />
                                         </button>
                                     </div>
                                 ))}

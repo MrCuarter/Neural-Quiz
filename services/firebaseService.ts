@@ -7,7 +7,10 @@ import {
   signOut, 
   onAuthStateChanged as onAuthStateChangedFirebase,
   updateProfile as updateProfileFirebase,
-  signInAnonymously as signInAnonymouslyFirebase
+  signInAnonymously as signInAnonymouslyFirebase,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -48,6 +51,33 @@ const getEnv = (key: string): string => {
     return "";
 };
 
+// --- DATA SANITIZATION HELPER ---
+/**
+ * Recursively converts undefined values to null.
+ * Firestore does not support undefined, so we must ensure all optional fields are null.
+ */
+const sanitizeData = (data: any): any => {
+    if (data === undefined) return null;
+    if (data === null) return null;
+    if (data instanceof Date) return data;
+    
+    if (Array.isArray(data)) {
+        return data.map(item => sanitizeData(item));
+    }
+    
+    if (typeof data === 'object') {
+        const newObj: any = {};
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                newObj[key] = sanitizeData(data[key]);
+            }
+        }
+        return newObj;
+    }
+    
+    return data;
+};
+
 // --- CONFIGURACIÓN DE FIREBASE ---
 const apiKey = getEnv("VITE_API_FIREBASE");
 const isOfflineMode = !apiKey || apiKey.length < 5; // Detect missing key
@@ -81,8 +111,6 @@ if (!isOfflineMode) {
         console.log("🔥 Firebase initialized successfully (Project: una-para-todas).");
     } catch (e) {
         console.error("Firebase init failed:", e);
-        // Fallback to offline mode if init crashes
-        // isOfflineMode === true; // This line did nothing in previous code, just logic flow
     }
 } else {
     console.warn("⚠️ Firebase API Key missing. Running in PREVIEW/OFFLINE mode. Database features will be disabled.");
@@ -104,18 +132,14 @@ if (!isOfflineMode) {
 
 export const onAuthStateChanged = (authInst: any, callback: any) => {
     if (isOfflineMode || !authInst.onAuthStateChanged) {
-        // Simulate "No User" immediately so app renders
         callback(null); 
-        return () => {}; // Dummy unsubscribe
+        return () => {}; 
     }
     return onAuthStateChangedFirebase(authInst, callback);
 };
 
 export const signInWithGoogle = async (): Promise<{ user: any, token: string | null }> => {
-    if (isOfflineMode) {
-        alert("Modo Previsualización: El inicio de sesión real requiere configuración del servidor.");
-        throw new Error("Offline Mode: Auth disabled");
-    }
+    if (isOfflineMode) throw new Error("Offline Mode: Auth disabled");
     try {
         const result = await signInWithPopup(auth, googleProvider);
         const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -125,6 +149,21 @@ export const signInWithGoogle = async (): Promise<{ user: any, token: string | n
         console.error("Error en Google Sign In:", error);
         throw error;
     }
+};
+
+export const registerWithEmail = async (email: string, pass: string) => {
+    if (isOfflineMode) throw new Error("Offline Mode");
+    return createUserWithEmailAndPassword(auth, email, pass);
+};
+
+export const loginWithEmail = async (email: string, pass: string) => {
+    if (isOfflineMode) throw new Error("Offline Mode");
+    return signInWithEmailAndPassword(auth, email, pass);
+};
+
+export const resetPassword = async (email: string) => {
+    if (isOfflineMode) throw new Error("Offline Mode");
+    return sendPasswordResetEmail(auth, email);
 };
 
 export const signInAnonymously = async () => {
@@ -147,14 +186,17 @@ export const updateProfile = async (user: any, profile: any) => {
 // --- 2. FIRESTORE: QUIZZES ---
 
 export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: boolean = false): Promise<string> => {
-    if (isOfflineMode) {
-        console.log("Simulating save:", quiz);
-        return "offline-id-" + Math.random();
-    }
+    if (isOfflineMode) return "offline-id-" + Math.random();
     try {
         const colRef = collection(db, "quizzes");
+        
+        // 1. Sanitize Data (undefined -> null)
+        // Note: We sanitize the quiz object BEFORE merging with serverTimestamp
+        // because serverTimestamp() returns a Sentinel object that we don't want to clone/destroy.
+        const cleanQuiz = sanitizeData(quiz);
+
         const payload: any = { 
-            ...quiz, 
+            ...cleanQuiz, 
             userId, 
             updatedAt: serverTimestamp() 
         };
@@ -185,7 +227,6 @@ export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Quiz));
     } catch (e: any) {
-        console.warn("Falling back to simple query:", e.message);
         const qSimple = query(collection(db, "quizzes"), where("userId", "==", userId));
         const snapshot = await getDocs(qSimple);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Quiz));
@@ -201,8 +242,10 @@ export const deleteQuizFromFirestore = async (quizId: string) => {
 
 export const createEvaluation = async (evaluation: any): Promise<string> => {
     if (isOfflineMode) return "offline-eval-id";
+    // Sanitize evaluation payload as well to be safe
+    const cleanEvaluation = sanitizeData(evaluation);
     const docRef = await addDoc(collection(db, "evaluations"), { 
-        ...evaluation, 
+        ...cleanEvaluation, 
         createdAt: serverTimestamp() 
     });
     return docRef.id;
@@ -219,7 +262,9 @@ export const getEvaluation = async (evaluationId: string): Promise<Evaluation> =
 
 export const saveEvaluationAttempt = async (attempt: any, existingId?: string): Promise<string> => {
     if (isOfflineMode) return "offline-attempt-id";
-    const payload = { ...attempt, timestamp: serverTimestamp() };
+    const cleanAttempt = sanitizeData(attempt);
+    const payload = { ...cleanAttempt, timestamp: serverTimestamp() };
+    
     if (existingId) {
         await updateDoc(doc(db, "attempts", existingId), payload);
         return existingId;
@@ -288,7 +333,8 @@ export const checkAndIncrementRaidLimit = async (userId: string): Promise<boolea
 
 export const updateUserData = async (userId: string, data: TeacherProfile) => {
     if (isOfflineMode) return;
-    await setDoc(doc(db, "users", userId), { profile: data }, { merge: true });
+    const cleanData = sanitizeData(data);
+    await setDoc(doc(db, "users", userId), { profile: cleanData }, { merge: true });
 };
 
 export const getUserData = async (userId: string): Promise<TeacherProfile | null> => {

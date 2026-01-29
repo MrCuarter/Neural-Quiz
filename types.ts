@@ -86,10 +86,13 @@ export interface TeacherProfile {
         twitter?: string;
         linkedin?: string;
         website?: string;
+        instagram?: string; // NEW
+        youtube?: string;   // NEW
     };
 }
 
-// --- CAMPAIGN MODE (UPDATED FASE 5) ---
+// ... rest of the file remains unchanged (Campaign, BossSettings, etc.)
+// Keeping existing exports to ensure no breaking changes
 export type CampaignTheme = 'fantasy' | 'space' | 'historical' | 'arcade' | 'kids' | 'custom';
 
 export interface CampaignMission {
@@ -103,15 +106,15 @@ export interface CampaignMission {
 
 export interface CampaignResource {
     id: string;
-    name: string; // 'Gold', 'HP', 'Fuel'
-    emoji: string; // '🪙', '❤️', '⛽'
-    type: 'accumulate' | 'drain'; // Accumulate = Goal is to get X amount. Drain = Goal is to survive (start high).
+    name: string; 
+    emoji: string; 
+    type: 'accumulate' | 'drain'; 
     startValue: number;
-    targetValue: number; // For accumulate, it's the goal. For drain, it's the max capacity.
+    targetValue: number; 
 }
 
 export interface CampaignVisuals {
-    primaryColor: string; // Hex code
+    primaryColor: string; 
     font: 'sans' | 'serif' | 'mono';
     backgroundUrl?: string;
 }
@@ -121,23 +124,15 @@ export interface Campaign {
     teacherId: string;
     title: string;
     description: string;
-    
-    // Updated Theme Engine
     theme: CampaignTheme;
     visualSettings: CampaignVisuals;
-    
-    // Updated Economy Engine
     resources: CampaignResource[];
-    
-    // Legacy support (Deprecated but kept for type safety on old docs)
     resourceName?: string; 
     resourceEmoji?: string;
     goalAmount?: number;
     currentAmount?: number;
-    
     publicId: string; 
     missions: CampaignMission[];
-    
     createdAt?: any;
 }
 
@@ -151,9 +146,6 @@ export interface CampaignLog {
     amount: number; 
     message: string;
 }
-
-// ... rest of the file (BossSettings, etc.) remains unchanged
-// ... keeping existing exports ...
 
 export interface BossImageConfig {
     idle: string;   
@@ -189,9 +181,7 @@ export interface EvaluationConfig {
     gameMode: 'classic' | 'time_attack' | 'final_boss' | 'raid'; 
     questionCount: number; 
     timeLimit?: number; 
-    
     bossSettings?: BossSettings;
-
     allowSpeedPoints: boolean; 
     allowPowerUps: boolean; 
     showRanking: boolean; 
@@ -203,12 +193,10 @@ export interface EvaluationConfig {
     };
     startDate: string; 
     endDate?: string; 
-    
     raidConfig?: {
         totalBossHP: number; 
         timeLimitMinutes: number;
     };
-    
     campaignId?: string; 
     missionId?: string; 
 }
@@ -239,7 +227,6 @@ export interface EvaluationAttempt {
     timestamp: any; 
     answersSummary?: { correct: number; incorrect: number; total: number };
     isFinished?: boolean; 
-    
     lootFound?: number; 
     resourcesEarned?: number; 
 }
@@ -305,21 +292,17 @@ export interface UniversalDiscoveryReport {
     originalUrl?: string;
     adapterUsed?: string;
     methodUsed?: string;
-    
     blockedByBot: boolean;
     blockedEvidence?: string; 
     parseOk: boolean;
-    
     attempts: DiscoveryAttempt[];
     topLevelKeys?: string[];
     candidatePathsTop5?: { path: string, score: number, sampleKeys: string[] }[];
     selectedPath?: string;
-
     questionsFound: number;
     hasChoices: boolean;
     hasCorrectFlags: boolean;
     hasImages: boolean;
-    
     missing?: {
         options: boolean;
         correct: boolean;

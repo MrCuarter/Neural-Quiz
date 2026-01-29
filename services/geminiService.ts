@@ -118,17 +118,28 @@ const quizRootSchema: Schema = {
 };
 
 // --- SYSTEM PROMPT ---
-const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. 
-Tu misión es generar cuestionarios JSON precisos.
+const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos y trivial.
+Tu misión es generar cuestionarios JSON precisos y libres de errores lógicos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
 Genera "tags" útiles y concisos en el idioma solicitado por el usuario.
 
-REGLAS DE TIPOS DE PREGUNTA:
-1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones. Solo una correcta.
+REGLAS ESTRICTAS DE TIPOS DE PREGUNTA:
+
+1. "Multiple Choice" (Respuesta Única): 
+   - DEBE tener 4 opciones. Solo una correcta.
+
 2. "Fill in the Blank" (Respuesta Corta):
-   - La opción con índice 0 es la respuesta principal perfecta.
-   - Las opciones con índices 1, 2, 3 deben ser VARIACIONES ACEPTADAS o SINÓNIMOS (ej: "II Guerra Mundial", "2ª GM", "Segunda Guerra Mundial").
-   - NO generes distractores falsos para este tipo, solo variaciones válidas.
+   - REGLA DE ORO: La respuesta debe ser un DATO FACTUAL ÚNICO (un nombre propio, una fecha, un elemento químico, una capital).
+   - PROHIBIDO: Preguntas subjetivas, cualidades abstractas o frases abiertas (Ej MAL: "El sol es...", Resp: "Caliente").
+   - ESTRUCTURA DE OPCIONES:
+     * Opción índice 0: Respuesta principal perfecta.
+     * Opción índice 1, 2, 3: SINÓNIMOS REALES o VARIACIONES ORTOGRÁFICAS ACEPTADAS (ej: "II Guerra Mundial", "2ª GM", "Segunda Guerra Mundial").
+     * NUNCA incluyas antónimos ni respuestas incorrectas aquí.
+
+3. "Order" (Ordenar):
+   - Siempre genera al menos 4 elementos para ordenar.
+   - REGLA MATEMÁTICA: Si son números, verifica estrictamente el orden ascendente o descendente (ej: 1, 2, 3, 4). NUNCA generes secuencias desordenadas.
+   - REGLA DE CONTEXTO: Si la secuencia es cíclica (estaciones, días, fases lunares), el enunciado DEBE ESPECIFICAR el punto de partida (Ej: "Ordena las estaciones empezando por el inicio del año escolar" o "...empezando por Enero").
 
 REGLAS DE FEEDBACK:
 - El feedback debe ser puramente educativo, curioso o explicativo.

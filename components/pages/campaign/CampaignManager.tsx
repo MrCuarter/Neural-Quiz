@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { Campaign, CampaignMission, Quiz, CampaignLog } from '../../../types';
 import { createCampaign, getTeacherCampaigns, updateCampaignMissions, injectEvent, subscribeToLogs } from '../../../services/campaignService';
 import { getUserQuizzes } from '../../../services/firebaseService';
-import { CyberButton, CyberCard, CyberInput, CyberSelect } from '../../ui/CyberUI';
+import { CyberButton, CyberCard } from '../../ui/CyberUI';
 import { auth, db } from '../../../services/firebaseService';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { ArrowLeft, Plus, Save, Map, Coins, Zap, Trophy, History, Users, Share2, Copy, Trash2, ArrowUp, ArrowDown, LayoutDashboard } from 'lucide-react';
+import { ArrowLeft, Plus, Map, Zap, History, Share2, Trash2 } from 'lucide-react';
 import { useToast } from '../../ui/Toast';
+import { CreateQuestModal } from './CreateQuestModal';
 
 interface CampaignManagerProps {
     onBack: () => void;
@@ -18,13 +20,6 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
     const [isCreating, setIsCreating] = useState(false);
     const [loading, setLoading] = useState(true);
     
-    // Form State
-    const [formTitle, setFormTitle] = useState("");
-    const [formDesc, setFormDesc] = useState("");
-    const [formTheme, setFormTheme] = useState("fantasy");
-    const [formResourceName, setFormResourceName] = useState("Oro");
-    const [formGoal, setFormGoal] = useState(10000);
-
     const toast = useToast();
 
     // LIVE DATA
@@ -39,14 +34,12 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
     useEffect(() => {
         if (!selectedCampaign?.id) return;
         
-        // 1. Campaign Doc Listener
         const unsubCamp = onSnapshot(doc(db, 'campaigns', selectedCampaign.id), (doc) => {
             if (doc.exists()) {
                 setLiveCampaign({ id: doc.id, ...doc.data() } as Campaign);
             }
         });
 
-        // 2. Logs Listener
         const unsubLogs = subscribeToLogs(selectedCampaign.id, (newLogs) => {
             setLogs(newLogs);
         });
@@ -64,46 +57,37 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
         setLoading(false);
     };
 
-    const handleCreate = async () => {
+    const handleCreate = async (data: Partial<Campaign>) => {
         if (!auth.currentUser) return;
         try {
-            const id = await createCampaign({
+            // Mapping new structured data to campaign object
+            await createCampaign({
                 teacherId: auth.currentUser.uid,
-                title: formTitle,
-                description: formDesc,
-                theme: formTheme as any,
-                resourceName: formResourceName,
-                resourceEmoji: '🪙', // Default for MVP
-                goalAmount: formGoal,
-                missions: [],
-                // Add default visual settings and resources to satisfy Campaign type
-                visualSettings: {
-                    primaryColor: '#f59e0b',
-                    font: 'serif',
-                    backgroundUrl: ''
-                },
-                resources: [
-                    {
-                        id: Math.random().toString(36).substring(7),
-                        name: formResourceName,
-                        emoji: '🪙',
-                        type: 'accumulate',
-                        startValue: 0,
-                        targetValue: formGoal
-                    }
-                ]
+                title: data.title!,
+                description: data.description!,
+                theme: data.theme!,
+                visualSettings: data.visualSettings!,
+                resources: data.resources!,
+                // Legacy support mapping
+                resourceName: data.resources?.[0]?.name || "Puntos",
+                resourceEmoji: data.resources?.[0]?.emoji || "⭐",
+                goalAmount: data.resources?.[0]?.targetValue || 100,
+                missions: []
             });
+            
             toast.success("Campaña creada");
             setIsCreating(false);
             loadCampaigns();
         } catch (e) {
-            toast.error("Error al crear");
+            console.error(e);
+            toast.error("Error al crear campaña");
         }
     };
 
     // --- DM ACTIONS ---
     const handleAddEvent = async (amount: number, msg: string) => {
         if (!liveCampaign?.id) return;
+        // Defaults to first resource for now in simple DM actions
         await injectEvent(liveCampaign.id, amount, msg, 'DM (Profesor)', 'manual_event');
         toast.info("Evento enviado");
     };
@@ -154,10 +138,10 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
     // --- RENDER ---
 
     if (selectedCampaign) {
-        // --- DASHBOARD VIEW ---
         if (!liveCampaign) return <div>Cargando enlace neural...</div>;
 
-        const progress = Math.min(100, (liveCampaign.currentAmount / liveCampaign.goalAmount) * 100);
+        const mainRes = liveCampaign.resources?.[0] || { name: 'Puntos', emoji: '⭐', targetValue: 100 };
+        const progress = Math.min(100, (liveCampaign.currentAmount / mainRes.targetValue) * 100);
 
         return (
             <div className="min-h-screen bg-[#050505] text-white p-4 pb-20 animate-in fade-in">
@@ -181,7 +165,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
                     <div className="space-y-6">
                         {/* PROGRESS CARD */}
                         <CyberCard className="border-yellow-500/30 text-center">
-                            <div className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2">META DE LA CAMPAÑA</div>
+                            <div className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-2">META PRINCIPAL</div>
                             <div className="relative w-40 h-40 mx-auto flex items-center justify-center">
                                 <svg className="w-full h-full transform -rotate-90">
                                     <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-800" />
@@ -192,18 +176,18 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
                                 </div>
                             </div>
                             <div className="mt-4 text-2xl font-mono font-bold text-yellow-300">
-                                {liveCampaign.currentAmount} / {liveCampaign.goalAmount} {liveCampaign.resourceEmoji}
+                                {liveCampaign.currentAmount} / {mainRes.targetValue} {mainRes.emoji}
                             </div>
                         </CyberCard>
 
                         {/* DM ACTIONS */}
                         <CyberCard className="border-purple-500/30">
-                            <h3 className="text-sm font-bold text-purple-400 mb-4 flex items-center gap-2"><Zap className="w-4 h-4"/> ACCIONES DE DUNGEON MASTER</h3>
+                            <h3 className="text-sm font-bold text-purple-400 mb-4 flex items-center gap-2"><Zap className="w-4 h-4"/> ACCIONES DE DM</h3>
                             <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => handleAddEvent(500, "Bonificación Global")} className="p-3 bg-green-900/30 border border-green-600 rounded text-green-200 text-xs hover:bg-green-900/50">+500 {liveCampaign.resourceName}</button>
-                                <button onClick={() => handleAddEvent(-500, "Penalización Global")} className="p-3 bg-red-900/30 border border-red-600 rounded text-red-200 text-xs hover:bg-red-900/50">-500 {liveCampaign.resourceName}</button>
+                                <button onClick={() => handleAddEvent(500, "Bonificación Global")} className="p-3 bg-green-900/30 border border-green-600 rounded text-green-200 text-xs hover:bg-green-900/50">+500 {mainRes.name}</button>
+                                <button onClick={() => handleAddEvent(-500, "Penalización Global")} className="p-3 bg-red-900/30 border border-red-600 rounded text-red-200 text-xs hover:bg-red-900/50">-500 {mainRes.name}</button>
                                 <button onClick={() => handleAddEvent(1000, "Tesoro Encontrado")} className="p-3 bg-yellow-900/30 border border-yellow-600 rounded text-yellow-200 text-xs hover:bg-yellow-900/50">COFRE (+1k)</button>
-                                <button onClick={() => handleAddEvent(-100, "Impuesto Revolucionario")} className="p-3 bg-gray-800 border border-gray-600 rounded text-gray-300 text-xs hover:bg-gray-700">IMPUESTO</button>
+                                <button onClick={() => handleAddEvent(-100, "Impuesto")} className="p-3 bg-gray-800 border border-gray-600 rounded text-gray-300 text-xs hover:bg-gray-700">IMPUESTO</button>
                             </div>
                         </CyberCard>
                     </div>
@@ -275,59 +259,42 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ onBack }) => {
     // --- LIST VIEW ---
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in slide-in-from-right-10 pt-12 pb-20">
+            {isCreating && (
+                <CreateQuestModal 
+                    onClose={() => setIsCreating(false)} 
+                    onCreate={handleCreate} 
+                />
+            )}
+
             <div className="flex justify-between items-center border-b border-gray-800 pb-4">
                 <div className="flex items-center gap-4">
                     <CyberButton variant="ghost" onClick={onBack} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4"/> VOLVER</CyberButton>
                     <h2 className="text-3xl font-cyber text-yellow-400">CAMPAÑAS</h2>
                 </div>
-                {!isCreating && <CyberButton onClick={() => setIsCreating(true)}><Plus className="w-4 h-4 mr-2"/> NUEVA CAMPAÑA</CyberButton>}
+                <CyberButton onClick={() => setIsCreating(true)}><Plus className="w-4 h-4 mr-2"/> NUEVA CAMPAÑA</CyberButton>
             </div>
 
-            {isCreating ? (
-                <CyberCard className="max-w-2xl mx-auto border-yellow-500/50">
-                    <h3 className="font-bold text-xl text-yellow-400 mb-6">DISEÑAR NUEVA AVENTURA</h3>
-                    <div className="space-y-4">
-                        <CyberInput label="TÍTULO ÉPICO" value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Ej: La Búsqueda del Conocimiento"/>
-                        <CyberInput label="MONEDA (NOMBRE)" value={formResourceName} onChange={e => setFormResourceName(e.target.value)} placeholder="Oro, Créditos, Karma..."/>
-                        <CyberInput label="META TOTAL" type="number" value={formGoal} onChange={e => setFormGoal(Number(e.target.value))} />
-                        
-                        <div>
-                            <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest block mb-2">TEMA VISUAL</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {['fantasy', 'cyberpunk', 'space', 'arcade', 'kids'].map(t => (
-                                    <button 
-                                        key={t} 
-                                        onClick={() => setFormTheme(t)} 
-                                        className={`p-2 border rounded capitalize ${formTheme === t ? 'bg-yellow-900/50 border-yellow-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-500'}`}
-                                    >
-                                        {t}
-                                    </button>
-                                ))}
-                            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {loading ? <div>Cargando...</div> : campaigns.map(c => (
+                    <CyberCard key={c.id} className="group hover:border-yellow-500/50 cursor-pointer" onClick={() => setSelectedCampaign(c)}>
+                        <div className="flex justify-between items-start mb-4">
+                            <h3 className="font-bold text-xl text-white font-cyber">{c.title}</h3>
+                            <span className="text-xs bg-gray-900 px-2 py-1 rounded border border-gray-700 uppercase text-gray-400">{c.theme}</span>
                         </div>
-
-                        <div className="flex gap-4 pt-4">
-                            <CyberButton onClick={handleCreate} className="flex-1">CREAR MUNDO</CyberButton>
-                            <CyberButton variant="ghost" onClick={() => setIsCreating(false)}>CANCELAR</CyberButton>
+                        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-2">
+                            <div className="h-full bg-yellow-500" style={{ width: `${(c.currentAmount/(c.resources?.[0]?.targetValue || 100))*100}%` }}></div>
                         </div>
+                        <p className="text-xs font-mono text-gray-400 text-right">
+                            {c.currentAmount} / {c.resources?.[0]?.targetValue || 100} {c.resources?.[0]?.emoji || '⭐'}
+                        </p>
+                    </CyberCard>
+                ))}
+                {campaigns.length === 0 && !loading && (
+                    <div className="col-span-full text-center py-20 border-2 border-dashed border-gray-800 rounded-lg text-gray-500">
+                        No hay campañas activas. ¡Crea una nueva aventura!
                     </div>
-                </CyberCard>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {loading ? <div>Cargando...</div> : campaigns.map(c => (
-                        <CyberCard key={c.id} className="group hover:border-yellow-500/50 cursor-pointer" onClick={() => setSelectedCampaign(c)}>
-                            <div className="flex justify-between items-start mb-4">
-                                <h3 className="font-bold text-xl text-white font-cyber">{c.title}</h3>
-                                <span className="text-xs bg-gray-900 px-2 py-1 rounded border border-gray-700 uppercase text-gray-400">{c.theme}</span>
-                            </div>
-                            <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-2">
-                                <div className="h-full bg-yellow-500" style={{ width: `${(c.currentAmount/c.goalAmount)*100}%` }}></div>
-                            </div>
-                            <p className="text-xs font-mono text-gray-400 text-right">{c.currentAmount} / {c.goalAmount} {c.resourceName}</p>
-                        </CyberCard>
-                    ))}
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
