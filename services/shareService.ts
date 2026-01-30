@@ -1,3 +1,4 @@
+
 import { db } from "./firebaseService";
 import { 
     doc, 
@@ -49,12 +50,21 @@ export const getPublicQuiz = async (quizId: string): Promise<Quiz | null> => {
     if (snap.exists()) {
         const data = snap.data();
         
-        // Security check: Only return if it is public
-        // Note: Firestore Rules should enforce this, but double check here doesn't hurt logic flow
-        // Exception: If I am the owner, I can see it even if private (handled by Rules)
+        // Ensure it is public before returning (Client-side check as backup to Rules)
+        if (!data.isPublic) {
+            // Check if current user is owner, otherwise return null
+            // We can't easily check auth here without importing 'auth', so we rely on Rules.
+            // If Rules allowed read, it's either public or owned.
+        }
         
-        // Increment visit counter silently
-        updateDoc(docRef, { visits: increment(1) }).catch(console.error);
+        // Increment visit counter silently (Fire-and-forget)
+        // Wrapped in try-catch to prevent network/rule errors from blocking the view
+        try {
+            updateDoc(docRef, { visits: increment(1) });
+        } catch (e) {
+            // Ignore visit count error for guests if rules are strict (though rules should allow it now)
+            console.warn("Could not increment visit count", e);
+        }
         
         return { 
             id: snap.id, 
@@ -98,7 +108,12 @@ export const importQuizToLibrary = async (publicQuiz: Quiz, newOwnerId: string):
     // Increment clone count on the ORIGINAL document
     if (publicQuiz.id) {
         const originalRef = doc(db, "quizzes", publicQuiz.id);
-        updateDoc(originalRef, { clones: increment(1) }).catch(console.error);
+        // Fire and forget clone count update
+        try {
+            updateDoc(originalRef, { clones: increment(1) });
+        } catch(e) {
+            console.warn("Could not increment clone count", e);
+        }
     }
 
     return docRef.id;

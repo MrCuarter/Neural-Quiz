@@ -33,7 +33,7 @@ interface LandingV2Props {
 export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     
-    // Función wrapper para proteger navegación
+    // Función wrapper para proteger navegación (SOLO para áreas privadas)
     const handleProtectedNav = (view: string) => {
         if (!user) {
             setIsAuthModalOpen(true);
@@ -89,15 +89,14 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                             >
                                 <BrainCircuit className="w-5 h-5 mr-2" /> CREAR AHORA
                             </CyberButton>
-                            {!user && (
-                                <CyberButton 
-                                    variant="secondary" 
-                                    onClick={handleLoginClick}
-                                    className="h-14 text-lg px-8 border-yellow-500 text-yellow-400 hover:bg-yellow-900/20"
-                                >
-                                    <Lock className="w-5 h-5 mr-2" /> LOGIN
-                                </CyberButton>
-                            )}
+                            {/* BOTÓN EXPLORAR COMUNIDAD (PÚBLICO) */}
+                            <CyberButton 
+                                variant="secondary" 
+                                onClick={() => onNavigate('community')}
+                                className="h-14 text-lg px-8 border-purple-500 text-purple-400 hover:bg-purple-900/20"
+                            >
+                                <Globe className="w-5 h-5 mr-2" /> EXPLORAR
+                            </CyberButton>
                         </div>
                     </div>
 
@@ -202,7 +201,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                 </div>
             </section>
 
-            {/* --- SECCIÓN 3: COMUNIDAD (NUEVA) --- */}
+            {/* --- SECCIÓN 3: COMUNIDAD (PÚBLICA) --- */}
             <section className="py-12 px-4 md:px-8 border-t border-gray-900 bg-gradient-to-b from-[#020617] to-[#0a0a0a]">
                 <div className="max-w-7xl mx-auto space-y-8">
                     <div className="flex items-center justify-between">
@@ -210,7 +209,8 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                             <Globe className="w-6 h-6 text-green-400" />
                             <h2 className="text-2xl font-cyber text-white tracking-wide">ÚLTIMAS CREACIONES DE LA COMUNIDAD</h2>
                         </div>
-                        <CyberButton variant="ghost" onClick={() => handleProtectedNav('community')} className="text-xs">
+                        {/* VER TODO AHORA ES PÚBLICO */}
+                        <CyberButton variant="ghost" onClick={() => onNavigate('community')} className="text-xs">
                             VER TODO <ArrowRight className="w-4 h-4 ml-2" />
                         </CyberButton>
                     </div>
@@ -238,14 +238,15 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                                     </div>
 
                                     <div className="pt-3 border-t border-gray-800 flex gap-2">
+                                        {/* ACCIONES DIRECTAS A COMUNIDAD (PÚBLICO) */}
                                         <button 
-                                            onClick={() => handleProtectedNav('community')}
+                                            onClick={() => onNavigate('community')}
                                             className="flex-1 bg-green-900/20 hover:bg-green-600 text-green-400 hover:text-white py-2 rounded text-xs font-bold transition-all flex items-center justify-center gap-2"
                                         >
                                             <Play className="w-3 h-3" /> JUGAR
                                         </button>
                                         <button 
-                                            onClick={() => handleProtectedNav('community')}
+                                            onClick={() => onNavigate('community')}
                                             className="p-2 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white rounded transition-all"
                                         >
                                             <Copy className="w-3 h-3" />

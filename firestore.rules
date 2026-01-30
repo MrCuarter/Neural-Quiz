@@ -6,14 +6,21 @@ service cloud.firestore {
     // --- 1. QUIZZES (Colección Unificada) ---
     match /quizzes/{quizId} {
       
-      // LECTURA: Permitido si eres el dueño O si el quiz es público
-      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || resource.data.isPublic == true;
+      // LECTURA: Permitido si eres el dueño O si el quiz es público (Acceso Universal)
+      allow read: if resource.data.isPublic == true || (request.auth != null && resource.data.userId == request.auth.uid);
       
       // CREACIÓN: Solo autenticados y asignándose como dueños
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       
-      // EDICIÓN/BORRADO: Solo el dueño
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      // EDICIÓN: 
+      // 1. Dueño puede editar todo.
+      // 2. Público (incluso anónimos) puede incrementar contadores (visits, clones)
+      allow update: if 
+        (request.auth != null && resource.data.userId == request.auth.uid) ||
+        (resource.data.isPublic == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visits', 'clones']));
+      
+      // BORRADO: Solo el dueño
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
     // --- 2. EVALUACIONES ARCADE ---
