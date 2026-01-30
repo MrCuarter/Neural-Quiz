@@ -17,7 +17,6 @@ import {
     Gamepad2,
     Skull,
     Trophy,
-    Zap,
     Users,
     Play,
     Copy,

@@ -130,7 +130,7 @@ interface GenParams {
   language?: string;
   includeFeedback?: boolean;
   tone?: string;
-  customTone?: string; // NEW: Custom Narrative Context
+  customToneContext?: string; // NEW
 }
 
 // *** CRITICAL: HARDCODED PRODUCTION MODEL FOR CHEAP/HIGH QUOTA ***
@@ -175,17 +175,21 @@ function cleanAIResponse(text: string): string {
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
     const ai = getAI();
-    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral', customTone } = params;
+    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral', customToneContext } = params;
     // UPDATED LIMIT TO 50
     const safeCount = Math.min(Math.max(count, 1), 50);
 
-    let prompt = `Generate a Quiz about "${topic}".`;
+    let prompt = "";
+
+    // INJECT CUSTOM CONTEXT
+    if (tone === 'Custom' && customToneContext) {
+        prompt += `CONTEXTO OBLIGATORIO: Adapta TODAS las preguntas y enunciados al siguiente escenario narrativo o temática: '${customToneContext}'. Intenta integrar los problemas dentro de esta historia (ej: si es matemáticas y el tema es piratas, cuenta monedas de oro).\n\n`;
+    }
+
+    prompt += `Generate a Quiz about "${topic}".`;
     prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;
     
-    // --- NARRATIVE INJECTION ---
-    if (tone === 'custom' && customTone) {
-        prompt = `CONTEXTO OBLIGATORIO: Adapta TODAS las preguntas y enunciados al siguiente escenario narrativo o temática: '${customTone}'. Intenta integrar los problemas dentro de esta historia (ej: si es matemáticas y el tema es piratas, cuenta monedas de oro).\n\n` + prompt;
-    } else {
+    if (tone !== 'Custom') {
         prompt += `\nTONE: ${tone.toUpperCase()}. Adapt the wording of questions and feedback to be ${tone}.`;
     }
     

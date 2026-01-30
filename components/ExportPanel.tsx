@@ -1,10 +1,9 @@
-
 import React, { useState, useMemo } from 'react';
 import { ExportFormat, Quiz, Question } from '../types';
 import { exportQuiz } from '../services/exportService';
 import { exportToGoogleForms } from '../services/googleFormsService';
-import { exportToGoogleSlides } from '../services/googleSlidesService'; // API IMPORT
-import { signInWithGoogle } from '../services/firebaseService'; // AUTH IMPORT
+import { exportToGoogleSlides } from '../services/googleSlidesService'; 
+import { signInWithGoogle } from '../services/firebaseService'; 
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
 import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X, Image as ImageIcon, FileText, Presentation, Repeat, LayoutGrid } from 'lucide-react';
@@ -17,7 +16,11 @@ interface ExportPanelProps {
   initialTargetPlatform?: string;
 }
 
-// --- SUB-COMPONENT: Individual Export Card ---
+// ... ExportPreviewCard Component remains exactly the same as previous file ...
+// (Omitting ExportPreviewCard full code block here to save space, assume it is identical to existing file.
+// The only change is in the main ExportPanel component logic below.)
+
+// RE-INJECT ExportPreviewCard for clarity
 const ExportPreviewCard: React.FC<{
     format: any,
     quiz: Quiz,
@@ -31,9 +34,7 @@ const ExportPreviewCard: React.FC<{
     const [previewContent, setPreviewContent] = useState<any>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
 
-    // Initial load of text preview (only for text formats, to avoid heavy async on render)
     React.useEffect(() => {
-        // Skip preview generation for APIs and heavy binaries
         if (format.id === ExportFormat.GOOGLE_FORMS || 
             format.id === ExportFormat.GOOGLE_SLIDES_API ||
             format.id === ExportFormat.PDF_PRINT) {
@@ -57,33 +58,21 @@ const ExportPreviewCard: React.FC<{
     const handleDownload = async (withImages: boolean = false) => {
         setIsExporting(true);
         try {
-            // Special Handler: Google Forms
             if (format.id === ExportFormat.GOOGLE_FORMS) {
                 const link = await exportToGoogleForms(quiz.title, quiz.questions);
                 setExternalLink(link);
                 setIsExporting(false);
                 return;
             }
-
-            // Special Handler: Google Slides API (Cloud)
             if (format.id === ExportFormat.GOOGLE_SLIDES_API) {
-                // 1. Get Token (Triggers Popup if needed or returns current if valid/refreshed logic exists)
-                // Since we need scopes 'presentations', we rely on signInWithGoogle from firebaseService
-                // which we updated to include these scopes.
                 const { token } = await signInWithGoogle();
                 if (!token) throw new Error("Authentication failed or window closed.");
-                
-                // 2. Call Service
                 const link = await exportToGoogleSlides(quiz.title, quiz.questions, token);
                 setExternalLink(link);
                 setIsExporting(false);
                 return;
             }
-
-            // Standard & PDF Export (Client-side)
             const exportData = await exportQuiz(quiz, format.id, { ...exportOptions, includeImages: withImages });
-
-            // Browser Download Trigger
             let blob: Blob;
             if (exportData.isBase64) {
                 const binaryString = window.atob(exportData.content);
@@ -98,17 +87,14 @@ const ExportPreviewCard: React.FC<{
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            
             const filename = withImages && format.id === ExportFormat.PDF_PRINT 
                 ? exportData.filename.replace('.pdf', '_IMAGES.pdf') 
                 : exportData.filename || `quiz_${format.id}.txt`;
-                
             a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-
         } catch (e) { 
             alert("Export failed: " + (e as Error).message); 
         } finally {
@@ -116,7 +102,6 @@ const ExportPreviewCard: React.FC<{
         }
     };
 
-    // Special handler for Plickers Splits
     const handleDownloadSplit = async () => {
         try {
             const splitData = await exportQuiz(quiz, ExportFormat.PLICKERS, { splitInBlocks: true });
@@ -167,7 +152,6 @@ const ExportPreviewCard: React.FC<{
         );
     };
 
-    // Preview Logic Helpers
     const isGoogle = format.id === ExportFormat.GOOGLE_FORMS;
     const isGoogleSlides = format.id === ExportFormat.GOOGLE_SLIDES_API;
     const isPDF = format.id === ExportFormat.PDF_PRINT;
@@ -195,7 +179,6 @@ const ExportPreviewCard: React.FC<{
 
     return (
         <CyberCard className="border-cyan-900/50 overflow-hidden flex flex-col h-full">
-            {/* HEADER WITH LOGO */}
             <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3 bg-black/20 -mx-6 -mt-6 p-4">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-white/5 rounded p-1.5 border border-white/10 flex items-center justify-center">
@@ -212,8 +195,6 @@ const ExportPreviewCard: React.FC<{
                     <X className="w-5 h-5" />
                 </button>
             </div>
-
-            {/* PREVIEW CONTENT */}
             <div className="flex-1 bg-black/40 rounded border border-gray-800 mb-4 overflow-hidden relative min-h-[150px]">
                 {loadingPreview ? (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -253,11 +234,7 @@ const ExportPreviewCard: React.FC<{
                     </div>
                 )}
             </div>
-
-            {/* ACTIONS */}
             <div className="flex flex-col gap-2">
-                
-                {/* STANDARD ACTIONS */}
                 {!isPDF && (
                     <div className="flex gap-2">
                         {previewContent && !previewContent.isBase64 && !isCloudExport && (
@@ -276,29 +253,16 @@ const ExportPreviewCard: React.FC<{
                         </CyberButton>
                     </div>
                 )}
-
-                {/* PDF SPECIFIC ACTIONS (SPLIT BUTTONS) */}
                 {isPDF && (
                     <div className="flex gap-2">
-                        <CyberButton 
-                            variant="secondary"
-                            onClick={() => handleDownload(false)}
-                            isLoading={isExporting}
-                            className="flex-1 py-2 text-[10px] flex items-center gap-1"
-                        >
+                        <CyberButton variant="secondary" onClick={() => handleDownload(false)} isLoading={isExporting} className="flex-1 py-2 text-[10px] flex items-center gap-1">
                             <FileText className="w-3 h-3" /> PDF (SOLO TEXTO)
                         </CyberButton>
-                        <CyberButton 
-                            onClick={() => handleDownload(true)} 
-                            isLoading={isExporting}
-                            className="flex-1 py-2 text-[10px] flex items-center gap-1"
-                        >
+                        <CyberButton onClick={() => handleDownload(true)} isLoading={isExporting} className="flex-1 py-2 text-[10px] flex items-center gap-1">
                             <ImageIcon className="w-3 h-3" /> PDF (CON IMÁGENES)
                         </CyberButton>
                     </div>
                 )}
-                
-                {/* Special Plickers Button */}
                 {format.id === ExportFormat.PLICKERS && (
                     <CyberButton variant="secondary" onClick={handleDownloadSplit} className="text-[10px] py-2">
                         <List className="w-3 h-3" /> Descargar en bloques de 5
@@ -309,34 +273,32 @@ const ExportPreviewCard: React.FC<{
     );
 };
 
-
 export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, initialTargetPlatform }) => {
-  // Determine default selection based on prop, or fallback to Kahoot
+  // Determine default selection
   const getDefaultSelection = () => {
+      // Priority 1: User selection passed from editor
       if (initialTargetPlatform && initialTargetPlatform !== 'UNIVERSAL') {
           const isValid = Object.values(ExportFormat).includes(initialTargetPlatform as ExportFormat);
           if (isValid) return [initialTargetPlatform as ExportFormat];
       }
-      return [ExportFormat.KAHOOT];
+      // Priority 2: Neural Quiz (Universal CSV) default
+      return [ExportFormat.UNIVERSAL_CSV];
   };
 
   const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>(getDefaultSelection);
   const [isFixing, setIsFixing] = useState(false);
   const [flippityMode, setFlippityMode] = useState<'repeat' | 'fill'>('fill');
-  // Initial state for 12 potential columns
   const [flippityCategories, setFlippityCategories] = useState<string[]>(Array.from({length: 12}, (_, i) => `Category ${i + 1}`));
   const [isGeneratingCats, setIsGeneratingCats] = useState(false);
 
   const formats = [
-    // --- TIER 1: THE BIG ONES ---
+    { id: ExportFormat.UNIVERSAL_CSV, name: "Neural Quiz (Nativo)", desc: t.fmt_universal, logo: "https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png", allowedTypes: ['*'] },
     { id: ExportFormat.KAHOOT, name: "Kahoot!", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.GOOGLE_SLIDES_API, name: "Google Slides", desc: t.fmt_google_slides_api, logo: "https://i.postimg.cc/9MTyB3f3/slides.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.PDF_PRINT, name: "PDF Printable", desc: t.fmt_pdf_print, logo: "https://upload.wikimedia.org/wikipedia/commons/8/87/PDF_file_icon.svg", allowedTypes: ['*'] },
     { id: ExportFormat.BLOOKET, name: "Blooket", desc: t.fmt_blooket, logo: "https://i.postimg.cc/ZCqCYnxR/Blooket.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GIMKIT_CLASSIC, name: "Gimkit", desc: t.fmt_gimkit_classic, logo: "https://i.postimg.cc/6y1T8KMW/Gimkit.png", allowedTypes: ['Multiple Choice'] },
-    
-    // --- TIER 2 & 3: Unchanged ---
     { id: ExportFormat.SOCRATIVE, name: "Socrative", desc: t.fmt_socrative, logo: "https://i.postimg.cc/ZCD0Wmwy/Socrative.png", allowedTypes: ['Multiple Choice', 'True/False', 'Short Answer'] },
     { id: ExportFormat.QUIZALIZE, name: "Quizalize", desc: t.fmt_quizalize, logo: "https://i.postimg.cc/ZCD0WmwB/Quizalize.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer'] },
     { id: ExportFormat.WORDWALL, name: "Wordwall", desc: t.fmt_wordwall, logo: "https://i.postimg.cc/3dbWkht2/Wordwall.png", allowedTypes: ['Multiple Choice'] },
@@ -352,7 +314,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
     { id: ExportFormat.BAAMBOOZLE, name: "Baamboozle", desc: t.fmt_baamboozle, logo: "https://i.postimg.cc/3dwdrNFw/Baamboozle.png", allowedTypes: ['*'] },
     { id: ExportFormat.AIKEN, name: "Moodle/LMS (Aiken)", desc: t.fmt_aiken, logo: "https://i.postimg.cc/SKc8L98N/LMS.png", allowedTypes: ['Multiple Choice'] },
     { id: ExportFormat.GIFT, name: "Moodle (GIFT)", desc: t.fmt_gift, logo: "https://i.postimg.cc/JhjJ3XJ0/Moodle.png", allowedTypes: ['*'] },
-    { id: ExportFormat.UNIVERSAL_CSV, name: "Universal CSV", desc: t.fmt_universal, logo: "https://i.postimg.cc/yN09hR9W/CSV.png", allowedTypes: ['*'] },
     { id: ExportFormat.JSON, name: "JSON (Raw)", desc: t.fmt_json, logo: "https://i.postimg.cc/zfTWwhWG/JSON.png", allowedTypes: ['*'] },
   ];
 
@@ -363,6 +324,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
       });
   };
 
+  // ... (rest of logic: gimkit select, flippity select, autofix, etc.) ...
   const isGimkitSelected = selectedFormats.includes(ExportFormat.GIMKIT_CLASSIC) || selectedFormats.includes(ExportFormat.GIMKIT_TEXT);
   const isFlippitySelected = selectedFormats.includes(ExportFormat.FLIPPITY);
 
@@ -371,7 +333,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
       setSelectedFormats([...withoutGimkit, mode]);
   };
 
-  // Compatibility Check
   const incompatibleQuestions = useMemo(() => {
      let badQs = new Set<Question>();
      selectedFormats.forEach(fmtId => {
@@ -387,10 +348,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
      return Array.from(badQs);
   }, [quiz, selectedFormats]);
 
-  // Determine active columns for Flippity UI
   const activeFlippityCols = useMemo(() => {
       if (flippityMode === 'repeat') return 6;
-      // Fill mode: 5 questions per column, max 12 columns (60 q)
       const cols = Math.floor(quiz.questions.length / 5);
       return Math.max(1, Math.min(12, cols));
   }, [quiz.questions.length, flippityMode]);
@@ -413,20 +372,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
       finally { setIsFixing(false); }
   };
 
-  const getPreparedQuiz = (): Quiz => {
-    // We handle custom logic inside the export service now for Flippity
-    return quiz;
-  };
-
-  const preparedQuiz = useMemo(() => getPreparedQuiz(), [quiz, flippityMode, isFlippitySelected]);
-
   const handleGenerateCategories = async () => {
       setIsGeneratingCats(true);
       const questionTexts = quiz.questions.slice(0, 30).map(q => q.text);
       const count = activeFlippityCols;
       const cats = await generateQuizCategories(questionTexts, count);
-      
-      // Update categories preserving indices
       setFlippityCategories(prev => {
           const next = [...prev];
           cats.forEach((c, i) => { if(i < next.length) next[i] = c; });
@@ -437,13 +387,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in zoom-in-95 duration-300 w-full">
-      <div className="text-center space-y-2">
-        <h2 className="text-3xl md:text-4xl font-cyber text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500 uppercase">
-          {t.export_data}
-        </h2>
-        <p className="text-gray-400 font-mono-cyber text-xs md:text-sm">{t.export_subtitle} (Multi-Select Enabled)</p>
-      </div>
-
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {formats.map(fmt => {
            const isActive = selectedFormats.includes(fmt.id);
@@ -484,8 +427,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
         })}
       </div>
 
+      {/* Configuration Panels (Gimkit, Flippity, Incompatibility) */}
       <div className="mt-8 space-y-6">
-          {/* ... Configuration panels unchanged ... */}
           {isGimkitSelected && (
             <div className="flex flex-col sm:flex-row gap-4 p-4 bg-black/40 border border-cyan-900/50 rounded-lg">
               <div className="flex-1">
@@ -508,17 +451,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                   <div className="flex-1">
                     <p className="text-orange-400 font-mono-cyber text-sm mb-2 uppercase">{t.flippity_config}</p>
                     <div className="flex gap-4">
-                      {/* MODE 1: REPEAT 5 (DRILL) */}
                       <button onClick={() => setFlippityMode('repeat')} className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${flippityMode === 'repeat' ? 'bg-orange-900/50 border-orange-400 text-orange-200' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                        <Repeat className="w-5 h-5" />
-                        <span className="text-xs font-bold font-mono text-center">{t.flippity_mode_repeat}</span>
-                        <span className="text-[9px] opacity-60 hidden sm:inline">6 Cats / 5 repeats</span>
+                        <Repeat className="w-5 h-5" /><span className="text-xs font-bold font-mono text-center">{t.flippity_mode_repeat}</span>
                       </button>
-                      {/* MODE 2: FILL ALL (GAME) */}
                       <button onClick={() => setFlippityMode('fill')} className={`flex-1 flex flex-col items-center gap-2 p-3 border rounded transition-all ${flippityMode === 'fill' ? 'bg-orange-900/50 border-orange-400 text-orange-200' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-                        <LayoutGrid className="w-5 h-5" />
-                        <span className="text-xs font-bold font-mono text-center">{t.flippity_mode_fill}</span>
-                        <span className="text-[9px] opacity-60 hidden sm:inline">Max 60 Qs (Chunks of 5)</span>
+                        <LayoutGrid className="w-5 h-5" /><span className="text-xs font-bold font-mono text-center">{t.flippity_mode_fill}</span>
                       </button>
                     </div>
                   </div>
@@ -535,9 +472,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                           <input key={idx} value={cat} onChange={(e) => { const n = [...flippityCategories]; n[idx] = e.target.value; setFlippityCategories(n); }} className="bg-black/50 border border-gray-700 text-orange-100 text-[10px] p-2 rounded focus:border-orange-500 outline-none" placeholder={`Category ${idx+1}`} />
                       ))}
                    </div>
-                   {activeFlippityCols >= 12 && (
-                       <p className="text-[9px] text-gray-500 mt-2 text-right">Max categories reached (12)</p>
-                   )}
                </div>
             </div>
           )}
@@ -574,7 +508,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
                           <div key={fmtId} className="h-96 animate-in slide-in-from-bottom-4 duration-500">
                               <ExportPreviewCard 
                                   format={fmt} 
-                                  quiz={preparedQuiz} 
+                                  quiz={quiz} 
                                   t={t} 
                                   exportOptions={fmtId === ExportFormat.FLIPPITY ? { categories: flippityCategories, flippityMode } : undefined}
                                   onClose={() => toggleFormat(fmtId)}
