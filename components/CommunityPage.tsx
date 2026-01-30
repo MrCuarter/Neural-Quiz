@@ -3,27 +3,30 @@ import React, { useState, useEffect } from 'react';
 import { searchQuizzes } from '../services/communityService';
 import { Quiz } from '../types';
 import { CyberButton, CyberInput, CyberCard } from './ui/CyberUI';
-import { Search, Globe, Gamepad2, User, Calendar, Download, Hash, Loader2 } from 'lucide-react';
+import { Search, Globe, Gamepad2, User, Calendar, Download, Hash, Loader2, Filter } from 'lucide-react';
+import { getTagLabel, Language } from '../utils/translations';
 
 interface CommunityPageProps {
     onBack: () => void;
     onPlay: (quiz: Quiz) => void;
     onImport: (quiz: Quiz) => void;
+    currentLanguage?: string; // App interface language ('es' | 'en')
 }
 
-export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, onImport }) => {
+export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, onImport, currentLanguage = 'es' }) => {
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
+    const [langFilter, setLangFilter] = useState("ALL");
 
     useEffect(() => {
         loadQuizzes();
-    }, []);
+    }, [langFilter]); // Reload when filter changes
 
-    const loadQuizzes = async (term: string = "") => {
+    const loadQuizzes = async (term: string = searchTerm) => {
         setLoading(true);
         try {
-            const results = await searchQuizzes(term);
+            const results = await searchQuizzes(term, langFilter);
             setQuizzes(results);
         } catch (e) {
             console.error(e);
@@ -36,6 +39,20 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, on
         if (e.key === 'Enter') {
             loadQuizzes(searchTerm);
         }
+    };
+
+    // Flag mapping
+    const getLangFlag = (code: string) => {
+        if (code === 'es') return '🇪🇸';
+        if (code === 'en') return '🇬🇧';
+        if (code === 'fr') return '🇫🇷';
+        if (code === 'de') return '🇩🇪';
+        if (code === 'it') return '🇮🇹';
+        if (code === 'pt') return '🇵🇹';
+        if (code === 'ca') return '🏴';
+        if (code === 'eu') return '🏴';
+        if (code === 'gl') return '🏴';
+        return '🌐';
     };
 
     return (
@@ -53,22 +70,43 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, on
                     <CyberButton variant="ghost" onClick={onBack}>VOLVER AL HUB</CyberButton>
                 </div>
 
-                {/* Search Bar */}
-                <div className="relative max-w-2xl mx-auto w-full">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-cyan-500" />
+                {/* Search Bar & Filter */}
+                <div className="flex flex-col md:flex-row gap-4 max-w-4xl mx-auto w-full">
+                    <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <Search className="h-5 w-5 text-cyan-500" />
+                        </div>
+                        <input
+                            type="text"
+                            className="block w-full pl-12 pr-4 py-4 bg-black/50 border-2 border-cyan-900 rounded-lg md:rounded-l-full md:rounded-r-none text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all font-mono text-lg"
+                            placeholder="Buscar por tema..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onKeyDown={handleSearch}
+                        />
                     </div>
-                    <input
-                        type="text"
-                        className="block w-full pl-12 pr-4 py-4 bg-black/50 border-2 border-cyan-900 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all font-mono text-lg"
-                        placeholder="Buscar por tema (ej: historia, ciencia, marvel)..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        onKeyDown={handleSearch}
-                    />
+                    
+                    <div className="flex items-center bg-black/50 border-2 border-cyan-900 rounded-lg md:rounded-l-none md:rounded-r-full px-4 relative min-w-[180px]">
+                        <Filter className="w-5 h-5 text-gray-500 absolute left-4 pointer-events-none" />
+                        <select 
+                            value={langFilter} 
+                            onChange={(e) => setLangFilter(e.target.value)}
+                            className="w-full bg-transparent text-white font-mono text-sm pl-8 py-4 focus:outline-none appearance-none cursor-pointer"
+                        >
+                            <option value="ALL">Todos los Idiomas</option>
+                            <option value="es">🇪🇸 Español</option>
+                            <option value="en">🇬🇧 English</option>
+                            <option value="fr">🇫🇷 Français</option>
+                            <option value="de">🇩🇪 Deutsch</option>
+                            <option value="it">🇮🇹 Italiano</option>
+                            <option value="pt">🇵🇹 Português</option>
+                        </select>
+                        <div className="absolute right-4 pointer-events-none text-gray-500">▼</div>
+                    </div>
+
                     <button 
                         onClick={() => loadQuizzes(searchTerm)}
-                        className="absolute inset-y-1 right-1 px-6 bg-cyan-900/80 hover:bg-cyan-800 text-cyan-200 rounded-full font-bold text-sm transition-colors"
+                        className="px-8 py-4 bg-cyan-900/80 hover:bg-cyan-800 text-cyan-200 rounded-lg md:rounded-full font-bold text-sm transition-colors"
                     >
                         BUSCAR
                     </button>
@@ -87,13 +125,17 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, on
                             </div>
                         ) : (
                             quizzes.map((quiz) => (
-                                <CyberCard key={quiz.id} className="flex flex-col h-full hover:border-cyan-500/50 transition-colors group">
+                                <CyberCard key={quiz.id} className="flex flex-col h-full hover:border-cyan-500/50 transition-colors group relative overflow-hidden">
+                                    {/* Language Badge */}
+                                    <div className="absolute top-2 right-2 text-xl" title={`Idioma: ${quiz.language}`}>
+                                        {getLangFlag(quiz.language || 'es')}
+                                    </div>
+
                                     <div className="flex-1 space-y-4">
-                                        <div className="flex justify-between items-start">
+                                        <div className="flex justify-between items-start pr-8">
                                             <h3 className="text-xl font-bold font-cyber text-white group-hover:text-cyan-300 line-clamp-2">
                                                 {quiz.title}
                                             </h3>
-                                            <Globe className="w-5 h-5 text-gray-600" />
                                         </div>
                                         
                                         <p className="text-sm text-gray-400 font-mono line-clamp-2 min-h-[40px]">
@@ -103,7 +145,9 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, on
                                         <div className="flex flex-wrap gap-2">
                                             {quiz.tags?.slice(0, 4).map(tag => (
                                                 <span key={tag} className="text-[10px] bg-gray-900 border border-gray-700 px-2 py-1 rounded text-cyan-200 flex items-center gap-1">
-                                                    <Hash className="w-3 h-3" /> {tag}
+                                                    <Hash className="w-3 h-3" /> 
+                                                    {/* Translate Tag Here */}
+                                                    {getTagLabel(tag, currentLanguage as Language)}
                                                 </span>
                                             ))}
                                         </div>

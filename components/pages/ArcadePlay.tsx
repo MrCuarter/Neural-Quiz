@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
-import { db } from '../../services/firebaseService'; // Import db for direct snapshot
-import { doc, onSnapshot } from 'firebase/firestore'; // Import firestore functions
+import { db } from '../../services/firebaseService'; 
+import { doc, onSnapshot } from 'firebase/firestore'; 
 import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink, Volume2, VolumeX, Repeat } from 'lucide-react';
+import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink, Volume2, VolumeX, Repeat, Clock } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
 import { PRESET_BOSSES, ASSETS_BASE, DIFFICULTY_SETTINGS, DifficultyStats } from '../../data/bossPresets';
 import { StudentLogin } from '../student/StudentLogin';
@@ -13,7 +13,7 @@ import { RaidPodium } from './live/RaidPodium';
 
 // --- CONSTANTS & TYPES ---
 
-type GameState = 'LOBBY' | 'ROULETTE' | 'PLAYING' | 'FINISH_IT' | 'STATS';
+type GameState = 'LOBBY' | 'WAITING_FOR_HOST' | 'ROULETTE' | 'PLAYING' | 'FINISH_IT' | 'STATS';
 type CombatState = 'IDLE' | 'PLAYER_ATTACK' | 'BOSS_ATTACK' | 'VICTORY' | 'DEFEAT' | 'REVIVE';
 
 type PassiveType = 'agil' | 'answer' | 'certero' | 'escudo' | 'fuerza' | 'suerte' | 'tiempo';
@@ -139,6 +139,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         if (loading) return;
         let track = '';
         if (gameState === 'ROULETTE') track = 'menu';
+        else if (gameState === 'WAITING_FOR_HOST') track = 'menu'; // Lobby Music
         else if (gameState === 'PLAYING') {
             track = 'battlelevel2';
             if (bossConfig?.difficulty === 'easy') track = 'battlelevel1';
@@ -217,25 +218,28 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         init();
     }, [evaluationId, previewConfig]);
 
-    // --- RAID SYNC LISTENER ---
+    // --- REALTIME SYNC (WAITING ROOM & RAID) ---
     useEffect(() => {
         if (!evaluationId || previewConfig) return;
         
-        // Only for Raid Mode: Listen to status changes to trigger Game Over / Victory
-        if (evaluation?.config.gameMode === 'raid') {
-            const unsub = onSnapshot(doc(db, 'evaluations', evaluationId), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    // If teacher sets status to finished, force end game
-                    if (data.status === 'finished') {
-                        setCombatState('VICTORY'); // Or neutral end state
-                        finishGame('WIN');
-                    }
+        const unsub = onSnapshot(doc(db, 'evaluations', evaluationId), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                
+                // LOBBY LOGIC: Move to game when active
+                if (gameState === 'WAITING_FOR_HOST' && data.status === 'active') {
+                    setGameState('ROULETTE');
                 }
-            });
-            return () => unsub();
-        }
-    }, [evaluationId, evaluation?.config.gameMode]);
+
+                // RAID LOGIC: End game if finished by teacher
+                if (data.status === 'finished') {
+                    setCombatState('VICTORY'); // Or neutral end state
+                    finishGame('WIN');
+                }
+            }
+        });
+        return () => unsub();
+    }, [evaluationId, gameState, previewConfig]);
 
     // --- TIMER LOGIC ---
     useEffect(() => {
@@ -250,10 +254,34 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         return () => clearInterval(timerRef.current);
     }, [gameState, combatState, timeLeft]);
 
-    const handleStart = (alias: string, rName?: string) => {
+    const handleStart = async (alias: string, rName?: string) => {
         setNickname(alias);
-        setRealName(rName); // Save Real Name
-        setGameState('ROULETTE');
+        setRealName(rName);
+        
+        // CHECK IF WAITING ROOM IS NEEDED
+        // If status is 'waiting', go to lobby.
+        // If status is 'active', go straight to roulette.
+        if (evaluation?.status === 'waiting' && !previewConfig && evaluationId) {
+            setGameState('WAITING_FOR_HOST');
+            // REGISTER PLAYER IN LOBBY (Create 0 score attempt)
+            // This allows the teacher to see the list
+            try {
+                const docId = await saveEvaluationAttempt({
+                    evaluationId,
+                    nickname: alias,
+                    realName: rName,
+                    score: 0,
+                    totalTime: 0,
+                    accuracy: 0,
+                    answersSummary: { correct: 0, incorrect: 0, total: 0 }
+                });
+                setSavedAttemptId(docId);
+            } catch (e) {
+                console.error("Error registering in lobby", e);
+            }
+        } else {
+            setGameState('ROULETTE');
+        }
     };
 
     const handleRouletteEnd = (passive: PassiveType) => {
@@ -663,6 +691,24 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 classId={evaluation?.classId} // PASS CLASS ID
                 onJoin={handleStart} 
             />
+        );
+    }
+
+    if (gameState === 'WAITING_FOR_HOST') {
+        return (
+            <div className="min-h-screen bg-black flex flex-col items-center justify-center text-center p-6 space-y-8 animate-in fade-in">
+                <div className="w-32 h-32 rounded-full border-4 border-cyan-500/50 flex items-center justify-center bg-cyan-900/10 animate-pulse shadow-[0_0_30px_cyan]">
+                    <Clock className="w-16 h-16 text-cyan-400" />
+                </div>
+                <div>
+                    <h2 className="text-2xl md:text-3xl font-cyber text-white mb-2">ESPERANDO AL MAESTRO...</h2>
+                    <p className="text-gray-400 font-mono text-sm">Tu conexión está establecida.</p>
+                </div>
+                <div className="p-4 bg-gray-900 border border-gray-700 rounded-lg">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">OPERADOR</div>
+                    <div className="text-xl font-bold text-cyan-300">{nickname}</div>
+                </div>
+            </div>
         );
     }
 

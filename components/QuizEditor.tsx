@@ -221,7 +221,59 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const validateQuestion = (q: Question) => { const hasText = q.text.trim().length > 0; if (q.questionType === QUESTION_TYPES.OPEN_ENDED || q.questionType === QUESTION_TYPES.POLL) return hasText; if (q.questionType === QUESTION_TYPES.FILL_GAP) return hasText && q.options.length > 0 && q.options[0].text.trim().length > 0; if (q.questionType === QUESTION_TYPES.ORDER) return hasText && q.options.length >= 2 && q.options.every(o => o.text.trim().length > 0); const ids = q.correctOptionIds && q.correctOptionIds.length > 0 ? q.correctOptionIds : (q.correctOptionId ? [q.correctOptionId] : []); const hasCorrect = ids.length > 0 && q.options.some(o => ids.includes(o.id)); const hasOptions = q.options.filter(o => o.text.trim().length > 0).length >= 2; return hasText && hasCorrect && hasOptions; };
   const handleEnhanceQuestion = async (q: Question) => { setEnhancingId(q.id); try { const enhancedQ = await enhanceQuestion(q, quiz.description || "", currentLanguage); setQuiz(prev => ({ ...prev, questions: prev.questions.map(oldQ => oldQ.id === q.id ? { ...enhancedQ, id: oldQ.id } : oldQ) })); } catch (e) { alert("Could not enhance question."); } finally { setEnhancingId(null); } };
   const ensureOptions = (q: Question) => { if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.POLL) && q.options.length === 0) { const newOpts = [{ id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }]; updateQuestion(q.id, { options: newOpts }); } else if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length === 0) { updateQuestion(q.id, { options: [{ id: uuid(), text: '' }] }); } };
-  const handleAiGenerate = async () => { if (!aiTopic.trim()) return; setIsGenerating(true); try { const platformTypes = PLATFORM_SPECS[targetPlatform].types; const aiResult = await generateQuizQuestions({ topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: aiLanguage }); const newQuestions: Question[] = aiResult.questions.map((gq: any) => { const qId = uuid(); const options: Option[] = gq.options.map((opt: any) => ({ id: opt.id || uuid(), text: opt.text })); return { id: qId, text: gq.text, options: options, correctOptionId: gq.correctOptionId || options[0]?.id || "", correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []), timeLimit: 30, questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE, feedback: gq.feedback, imageUrl: gq.imageUrl, imageSearchQuery: gq.imageSearchQuery, fallback_category: gq.fallback_category }; }); setQuiz(prev => { const updatedQs = [...prev.questions, ...newQuestions]; const newTags = Array.from(new Set([...(prev.tags || []), ...(aiResult.tags || [])])); setTimeout(() => setCurrentPage(Math.ceil(updatedQs.length / ITEMS_PER_PAGE)), 50); return { ...prev, questions: updatedQs, tags: newTags }; }); setAiTopic(''); setShowAiModal(false); } catch (e: any) { alert(t.alert_fail + ": " + e.message); } finally { setIsGenerating(false); } };
+  
+  const handleAiGenerate = async () => { 
+      if (!aiTopic.trim()) return; 
+      setIsGenerating(true); 
+      try { 
+          const platformTypes = PLATFORM_SPECS[targetPlatform].types; 
+          const aiResult = await generateQuizQuestions({ topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: aiLanguage }); 
+          
+          const newQuestions: Question[] = aiResult.questions.map((gq: any) => { 
+              const qId = uuid(); 
+              const options: Option[] = gq.options.map((opt: any) => ({ id: opt.id || uuid(), text: opt.text })); 
+              return { 
+                  id: qId, 
+                  text: gq.text, 
+                  options: options, 
+                  correctOptionId: gq.correctOptionId || options[0]?.id || "", 
+                  correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []), 
+                  timeLimit: 30, 
+                  questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE, 
+                  feedback: gq.feedback, 
+                  imageUrl: gq.imageUrl, 
+                  imageSearchQuery: gq.imageSearchQuery, 
+                  fallback_category: gq.fallback_category 
+              }; 
+          }); 
+          
+          // MAP LANGUAGE TO CODE
+          const langMap: Record<string, string> = { 
+              'Spanish': 'es', 'English': 'en', 'French': 'fr', 'German': 'de', 'Italian': 'it', 
+              'Portuguese': 'pt', 'Catalan': 'ca', 'Basque': 'eu', 'Galician': 'gl' 
+          };
+          const langCode = langMap[aiLanguage] || 'en';
+
+          setQuiz(prev => { 
+              const updatedQs = [...prev.questions, ...newQuestions]; 
+              const newTags = Array.from(new Set([...(prev.tags || []), ...(aiResult.tags || [])])); 
+              setTimeout(() => setCurrentPage(Math.ceil(updatedQs.length / ITEMS_PER_PAGE)), 50); 
+              return { 
+                  ...prev, 
+                  questions: updatedQs, 
+                  tags: newTags,
+                  language: langCode // SAVE LANGUAGE HERE
+              }; 
+          }); 
+          setAiTopic(''); 
+          setShowAiModal(false); 
+      } catch (e: any) { 
+          alert(t.alert_fail + ": " + e.message); 
+      } finally { 
+          setIsGenerating(false); 
+      } 
+  };
+
   const handleAddTag = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && newTag.trim()) { const currentTags = quiz.tags || []; if (!currentTags.includes(newTag.trim())) { setQuiz(prev => ({ ...prev, tags: [...currentTags, newTag.trim()] })); } setNewTag(''); } };
   const removeTag = (tag: string) => { setQuiz(prev => ({ ...prev, tags: (prev.tags || []).filter(t => t !== tag) })); };
   const getGroupedTypeOptions = () => { const allowedTypes = PLATFORM_SPECS[targetPlatform].types; const validationGroup = [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); const noValidationGroup = [QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); return [{ label: "CON VALIDACIÓN DE RESPUESTA", options: validationGroup }, { label: "SIN VALIDACIÓN DE RESPUESTA", options: noValidationGroup }]; };

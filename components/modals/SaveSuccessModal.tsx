@@ -3,6 +3,7 @@ import React from 'react';
 import { Quiz } from '../../types';
 import { CyberCard, CyberButton } from '../ui/CyberUI';
 import { CheckCircle2, Globe, User, Calendar, Hash, ArrowRight, X, Lock } from 'lucide-react';
+import { getTagLabel, Language } from '../../utils/translations';
 
 interface SaveSuccessModalProps {
     isOpen: boolean;
@@ -17,6 +18,9 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({ isOpen, onCl
 
     const authorName = user?.displayName || "Usuario";
     const dateStr = new Date().toLocaleDateString();
+
+    // Assume Spanish interface for now, or pass it as prop if dynamic switching is live in editor
+    const currentLang: Language = 'es'; 
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-300">
@@ -74,7 +78,7 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({ isOpen, onCl
                             <div className="flex flex-wrap gap-1 mb-3 relative z-10">
                                 {(quiz.tags || ['Educación']).slice(0, 2).map(tag => (
                                     <span key={tag} className="text-[9px] bg-cyan-950/50 border border-cyan-700/50 px-1.5 py-0.5 rounded text-cyan-200 flex items-center gap-1">
-                                        <Hash className="w-2 h-2" /> {tag}
+                                        <Hash className="w-2 h-2" /> {getTagLabel(tag, currentLang)}
                                     </span>
                                 ))}
                             </div>

@@ -1,6 +1,62 @@
 
 export type Language = 'es' | 'en';
 
+// --- TAG TRANSLATION DICTIONARY ---
+const COMMON_TAGS: Record<string, { es: string, en: string }> = {
+    // Subjects
+    'history': { es: 'Historia', en: 'History' },
+    'science': { es: 'Ciencia', en: 'Science' },
+    'math': { es: 'Matemáticas', en: 'Math' },
+    'mathematics': { es: 'Matemáticas', en: 'Mathematics' },
+    'geography': { es: 'Geografía', en: 'Geography' },
+    'literature': { es: 'Literatura', en: 'Literature' },
+    'physics': { es: 'Física', en: 'Physics' },
+    'chemistry': { es: 'Química', en: 'Chemistry' },
+    'biology': { es: 'Biología', en: 'Biology' },
+    'art': { es: 'Arte', en: 'Art' },
+    'music': { es: 'Música', en: 'Music' },
+    'philosophy': { es: 'Filosofía', en: 'Philosophy' },
+    'language': { es: 'Lengua', en: 'Language' },
+    'english': { es: 'Inglés', en: 'English' },
+    'spanish': { es: 'Español', en: 'Spanish' },
+    'economics': { es: 'Economía', en: 'Economics' },
+    'technology': { es: 'Tecnología', en: 'Technology' },
+    'computing': { es: 'Informática', en: 'Computing' },
+    
+    // Topics / Misc
+    'education': { es: 'Educación', en: 'Education' },
+    'general knowledge': { es: 'Cultura General', en: 'General Knowledge' },
+    'trivia': { es: 'Trivia', en: 'Trivia' },
+    'cinema': { es: 'Cine', en: 'Cinema' },
+    'movies': { es: 'Películas', en: 'Movies' },
+    'sports': { es: 'Deportes', en: 'Sports' },
+    'football': { es: 'Fútbol', en: 'Football' },
+    'animals': { es: 'Animales', en: 'Animals' },
+    'nature': { es: 'Naturaleza', en: 'Nature' },
+    'space': { es: 'Espacio', en: 'Space' },
+    'universe': { es: 'Universo', en: 'Universe' },
+    'primary': { es: 'Primaria', en: 'Primary' },
+    'secondary': { es: 'Secundaria', en: 'Secondary' },
+    'high school': { es: 'Bachillerato', en: 'High School' },
+    'kids': { es: 'Niños', en: 'Kids' },
+    'fun': { es: 'Diversión', en: 'Fun' },
+    'games': { es: 'Juegos', en: 'Games' }
+};
+
+/**
+ * Returns the translated label for a tag if it exists in the dictionary.
+ * Otherwise returns the tag capitalized.
+ */
+export const getTagLabel = (tag: string, lang: Language): string => {
+    if (!tag) return "";
+    const lower = tag.toLowerCase().trim();
+    if (COMMON_TAGS[lower]) {
+        return COMMON_TAGS[lower][lang];
+    }
+    // Fallback: Capitalize first letter
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+};
+
 export const translations = {
   es: {
     app_subtitle: "SISTEMA DE CONVERSIÓN UNIVERSAL",

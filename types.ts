@@ -62,6 +62,7 @@ export interface Quiz {
   description: string;
   questions: Question[];
   tags?: string[]; // Organization tags
+  language?: string; // NEW: 'es', 'en', 'fr', etc.
   createdAt?: any; // Timestamp
   updatedAt?: any; // Timestamp
   

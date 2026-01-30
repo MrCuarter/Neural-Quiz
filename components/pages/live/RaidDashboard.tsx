@@ -4,7 +4,7 @@ import { db } from '../../../services/firebaseService';
 import { doc, onSnapshot, collection, query, where, updateDoc } from 'firebase/firestore';
 import { Evaluation, EvaluationAttempt } from '../../../types';
 import { CyberCard, CyberButton } from '../../ui/CyberUI';
-import { Skull, Clock, Trophy, Users, AlertTriangle, Swords, Volume2, VolumeX } from 'lucide-react';
+import { Skull, Clock, Trophy, Users, AlertTriangle, Swords, Volume2, VolumeX, Play, Copy, CheckCircle2, Loader2 } from 'lucide-react';
 import { ASSETS_BASE } from '../../../data/bossPresets';
 import { RaidPodium } from './RaidPodium';
 
@@ -26,10 +26,12 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
     const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
     const [totalDamage, setTotalDamage] = useState(0);
     const [participants, setParticipants] = useState(0);
+    const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]); // New for Lobby
     const [bossState, setBossState] = useState<'idle' | 'damage' | 'attack' | 'dead'>('idle');
     const [timeLeft, setTimeLeft] = useState(0);
     const [gameStatus, setGameStatus] = useState<'waiting' | 'active' | 'victory' | 'defeat'>('waiting');
     const [isMuted, setIsMuted] = useState(false);
+    const [copiedLink, setCopiedLink] = useState(false);
     
     // FX States
     const [shake, setShake] = useState(false);
@@ -44,41 +46,39 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
                 const data = { id: snap.id, ...snap.data() } as Evaluation;
                 setEvaluation(data);
                 
-                // Initialize timer if just loaded
-                if (data.status === 'active' && timeLeft === 0 && data.config.raidConfig) {
-                    // Simple calc: EndDate - Now. 
-                    // Better: Assuming 'raidConfig.timeLimitMinutes' was set, calculate remaining.
-                    // For MVP simplicity, let's assume teacher starts timer manually or it runs from creation?
-                    // Actually, let's rely on a local timer that syncs.
-                    // Or purely rely on 'endDate' in config? 
-                    // Let's use endDate in config.
-                    if (data.config.endDate) {
-                        const end = new Date(data.config.endDate).getTime();
-                        const now = Date.now();
-                        setTimeLeft(Math.max(0, Math.floor((end - now) / 1000)));
+                // Sync Local Status with DB Status
+                if (data.status) {
+                    // Map DB status to local gameStatus type if needed, or use directly
+                    // 'waiting' | 'active' | 'finished' -> 'waiting' | 'active' | 'victory'/'defeat'
+                    if (data.status === 'active' && gameStatus === 'waiting') {
+                        setGameStatus('active');
+                        playSound('battlelevel3', isMuted);
                     }
                 }
-                
-                if (data.status === 'finished') {
-                    // Check win condition
-                    // We need totalDamage here, which comes from the other listener.
-                    // Logic handled in effect below.
+
+                // Initialize timer logic
+                if (data.status === 'active' && data.config.endDate) {
+                    const end = new Date(data.config.endDate).getTime();
+                    const now = Date.now();
+                    const remaining = Math.max(0, Math.floor((end - now) / 1000));
+                    setTimeLeft(remaining);
                 }
             }
         });
 
-        // 2. Listen to Attempts (Damage Stream)
+        // 2. Listen to Attempts (Damage Stream & Players)
         const qAttempts = query(collection(db, 'attempts'), where('evaluationId', '==', evaluationId));
         const unsubAttempts = onSnapshot(qAttempts, (snap) => {
             let dmg = 0;
-            const uniqueUsers = new Set();
+            const uniqueUsers = new Set<string>();
             snap.forEach(doc => {
                 const att = doc.data() as EvaluationAttempt;
                 dmg += att.score; // Score = Damage in Raid Mode
-                uniqueUsers.add(att.nickname);
+                if (att.nickname) uniqueUsers.add(att.nickname);
             });
             setTotalDamage(dmg);
             setParticipants(uniqueUsers.size);
+            setLobbyPlayers(Array.from(uniqueUsers));
         });
 
         return () => {
@@ -94,9 +94,8 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
         const maxHP = evaluation.config.raidConfig.totalBossHP;
         const currentHP = maxHP - totalDamage;
 
-        // Check Damage Event
-        if (totalDamage > prevDamageRef.current) {
-            const diff = totalDamage - prevDamageRef.current;
+        // Check Damage Event (Only if active)
+        if (gameStatus === 'active' && totalDamage > prevDamageRef.current) {
             // Trigger FX
             setBossState('damage');
             setShake(true);
@@ -112,15 +111,20 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
         prevDamageRef.current = totalDamage;
 
         // Check Win/Loss
-        if (currentHP <= 0 && gameStatus !== 'victory') {
-            setGameStatus('victory');
-            setBossState('dead');
-            playSound('win', isMuted);
-            finishRaid('victory');
-        } else if (timeLeft <= 0 && gameStatus === 'active' && currentHP > 0) {
-            setGameStatus('defeat');
-            playSound('gameover', isMuted);
-            finishRaid('defeat');
+        if (gameStatus === 'active') {
+            if (currentHP <= 0) {
+                setGameStatus('victory');
+                setBossState('dead');
+                playSound('win', isMuted);
+                finishRaid('victory');
+            } else if (timeLeft <= 0 && evaluation.status === 'active') { // Ensure we rely on synced status too
+                // Allow a small buffer for timer sync issues
+                if (timeLeft === 0) {
+                    setGameStatus('defeat');
+                    playSound('gameover', isMuted);
+                    finishRaid('defeat');
+                }
+            }
         }
 
     }, [totalDamage, timeLeft, evaluation, gameStatus]);
@@ -130,7 +134,7 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
         let interval: any;
         if (gameStatus === 'active' && timeLeft > 0) {
             interval = setInterval(() => {
-                setTimeLeft(prev => prev - 1);
+                setTimeLeft(prev => Math.max(0, prev - 1));
             }, 1000);
         }
         return () => clearInterval(interval);
@@ -138,11 +142,13 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
 
     const finishRaid = async (result: 'victory' | 'defeat') => {
         const evalRef = doc(db, 'evaluations', evaluationId);
-        await updateDoc(evalRef, { 
-            status: 'finished',
-            isActive: false,
-            // Store result in config or root? Let's assume just status finished is enough
-        });
+        // Only update if not already finished to avoid loops
+        if (evaluation?.status !== 'finished') {
+            await updateDoc(evalRef, { 
+                status: 'finished',
+                isActive: false
+            });
+        }
     };
 
     const startGame = async () => {
@@ -156,12 +162,17 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
             'config.endDate': endDate
         });
         
-        setGameStatus('active');
-        setTimeLeft(durationMin * 60);
-        playSound('battlelevel3', isMuted); // Start BGM
+        // Local state update happens via snapshot listener for consistency
     };
 
-    if (!evaluation) return <div className="bg-black min-h-screen text-white flex items-center justify-center"><p>Conectando a Neural Link...</p></div>;
+    const copyLink = () => {
+        const url = `${window.location.origin}/play/${evaluationId}`;
+        navigator.clipboard.writeText(url);
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2000);
+    };
+
+    if (!evaluation) return <div className="bg-black min-h-screen text-white flex items-center justify-center"><Loader2 className="animate-spin mr-2"/> Conectando a Neural Link...</div>;
 
     const bossSettings = evaluation.config.bossSettings;
     const maxHP = evaluation.config.raidConfig?.totalBossHP || 1000;
@@ -169,11 +180,82 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
     const hpPercent = (currentHP / maxHP) * 100;
 
     // --- VIEW: PODIUM ---
-    if (gameStatus === 'victory' || gameStatus === 'defeat') {
-        return <RaidPodium evaluationId={evaluationId} result={gameStatus} bossName={bossSettings?.bossName || "Boss"} />;
+    if (gameStatus === 'victory' || gameStatus === 'defeat' || (evaluation.status === 'finished')) {
+        return <RaidPodium evaluationId={evaluationId} result={gameStatus === 'victory' ? 'victory' : 'defeat'} bossName={bossSettings?.bossName || "Boss"} />;
     }
 
-    // --- VIEW: DASHBOARD ---
+    // --- VIEW: LOBBY (WAITING ROOM) ---
+    if (evaluation.status === 'waiting' || gameStatus === 'waiting') {
+        return (
+            <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-cyber">
+                {/* Background Boss Preview */}
+                <div className="absolute inset-0 z-0 opacity-20 flex items-center justify-center">
+                    <img src={bossSettings?.images.idle} className="h-full object-cover grayscale" alt="Boss BG" />
+                </div>
+
+                <div className="z-10 w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8">
+                    
+                    {/* LEFT: BOSS INFO & START */}
+                    <div className="space-y-6">
+                        <CyberCard className="border-red-500/50 p-8 text-center bg-black/80 backdrop-blur-md">
+                            <Skull className="w-16 h-16 text-red-500 mx-auto mb-4 animate-pulse" />
+                            <h2 className="text-3xl font-black mb-1 uppercase text-red-100">{bossSettings?.bossName}</h2>
+                            <p className="text-red-400 font-mono text-sm mb-6">NIVEL DE AMENAZA: {bossSettings?.difficulty}</p>
+                            
+                            <div className="bg-red-950/30 border border-red-900/50 p-4 rounded-lg mb-6">
+                                <div className="text-4xl font-mono font-bold text-white mb-2">{participants}</div>
+                                <div className="text-xs text-red-300 uppercase tracking-widest">JUGADORES LISTOS</div>
+                            </div>
+
+                            <CyberButton 
+                                onClick={startGame} 
+                                className="w-full h-16 text-xl font-black tracking-widest bg-red-600 hover:bg-red-500 border-none shadow-[0_0_30px_rgba(220,38,38,0.5)] animate-pulse"
+                            >
+                                <Swords className="w-6 h-6 mr-3" /> COMENZAR RAID
+                            </CyberButton>
+                        </CyberCard>
+
+                        <div 
+                            className="bg-black/60 border border-gray-700 rounded-lg p-4 flex items-center justify-between cursor-pointer hover:border-cyan-500 transition-colors"
+                            onClick={copyLink}
+                        >
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-gray-400 uppercase tracking-widest">ENLACE DE ACCESO</span>
+                                <span className="text-cyan-400 font-mono text-sm truncate max-w-[200px]">{window.location.origin}/play/{evaluationId}</span>
+                            </div>
+                            <div className="p-2 bg-gray-800 rounded text-white">
+                                {copiedLink ? <CheckCircle2 className="w-5 h-5 text-green-400"/> : <Copy className="w-5 h-5"/>}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* RIGHT: PLAYER LIST */}
+                    <CyberCard className="border-cyan-500/30 bg-black/80 backdrop-blur-md flex flex-col h-[500px]">
+                        <div className="flex items-center gap-2 border-b border-gray-800 pb-4 mb-4">
+                            <Users className="w-5 h-5 text-cyan-400" />
+                            <h3 className="font-bold text-white">SALA DE ESPERA</h3>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
+                            {lobbyPlayers.length === 0 ? (
+                                <div className="text-center text-gray-500 py-20 animate-pulse">Esperando conexiones...</div>
+                            ) : (
+                                lobbyPlayers.map((player, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 p-3 bg-gray-900/50 rounded border border-gray-800 animate-in slide-in-from-left-4 fade-in">
+                                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_lime]"></div>
+                                        <span className="font-mono text-cyan-100 font-bold">{player}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </CyberCard>
+
+                </div>
+            </div>
+        );
+    }
+
+    // --- VIEW: ACTIVE DASHBOARD ---
     return (
         <div className={`min-h-screen bg-[#050505] text-white relative overflow-hidden font-cyber ${shake ? 'animate-shake' : ''}`}>
             
@@ -188,7 +270,7 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
                         <span className="bg-red-900/50 text-red-200 px-3 py-1 rounded border border-red-500 text-sm font-bold animate-pulse">RAID EN CURSO</span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400 font-mono text-sm">
-                        <Users className="w-4 h-4" /> {participants} Raiders conectados
+                        <Users className="w-4 h-4" /> {participants} Raiders luchando
                     </div>
                 </div>
 
@@ -239,21 +321,6 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
                     </div>
                 </div>
             </div>
-
-            {/* START OVERLAY */}
-            {gameStatus === 'waiting' && (
-                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
-                    <CyberCard className="w-full max-w-lg text-center p-12 border-red-500/50 shadow-[0_0_100px_rgba(220,38,38,0.4)] animate-in zoom-in">
-                        <Skull className="w-24 h-24 text-red-500 mx-auto mb-6 animate-pulse" />
-                        <h2 className="text-4xl font-black font-cyber text-white mb-2">SISTEMA RAID LISTO</h2>
-                        <p className="text-gray-400 font-mono mb-8">Esperando a que los estudiantes se unan. Inicia cuando estés listo.</p>
-                        <div className="text-2xl font-mono text-cyan-400 mb-8">{participants} Conectados</div>
-                        <CyberButton onClick={startGame} className="w-full h-16 text-2xl font-black tracking-widest bg-red-600 hover:bg-red-500 border-none shadow-[0_0_30px_red]">
-                            <Swords className="w-8 h-8 mr-3" /> INICIAR BATALLA
-                        </CyberButton>
-                    </CyberCard>
-                </div>
-            )}
 
         </div>
     );
