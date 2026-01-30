@@ -1,20 +1,21 @@
-
 import { getSafeImageUrl } from "./imageProxyService";
 
 // Helper to safely get environment variables
 const getEnv = (key: string): string => {
     try {
         // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) {
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
             // @ts-ignore
-            return import.meta.env[key] || "";
+            return import.meta.env[key];
         }
     } catch (e) {}
+    
     try {
-        if (typeof process !== 'undefined' && process.env) {
+        if (typeof process !== 'undefined' && process.env && process.env[key]) {
             return process.env[key] || "";
         }
     } catch (e) {}
+    
     return "";
 };
 
@@ -202,7 +203,7 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
             return result;
         }
     } catch (e) {
-        // Silent fail
+        console.warn(`⚠️ Unsplash falló para "${query}", saltando a Pexels...`, e);
     }
 
     // 2. Try Pexels
@@ -210,7 +211,7 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
         const result = await fetchPexels(query);
         if (result) return result;
     } catch (e) {
-        // Silent fail
+        console.warn(`⚠️ Pexels falló para "${query}", saltando a Pixabay...`, e);
     }
 
     // 3. Try Pixabay
@@ -218,9 +219,10 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
         const result = await fetchPixabay(query);
         if (result) return result;
     } catch (e) {
-        // Silent fail
+        console.warn(`⚠️ Pixabay falló para "${query}", usando Fallback...`, e);
     }
 
     // 4. Fallback (Secure GitHub CDN)
+    console.warn(`[ImageService] 🏳️ All providers failed for "${query}". Using GitHub Fallback.`);
     return getRandomFallback();
 };

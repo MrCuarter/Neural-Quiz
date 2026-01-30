@@ -1,8 +1,7 @@
-
 import React, { useEffect, useState } from 'react';
 import { Globe, HelpCircle, LogIn, LogOut, User, LayoutGrid, Home, MonitorPlay } from 'lucide-react';
 import { Language, translations } from '../utils/translations';
-import { auth, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
+import { auth, signInWithGoogle, logoutFirebase, onAuthStateChanged } from '../services/firebaseService';
 
 interface HeaderProps {
   language: Language;
@@ -10,11 +9,10 @@ interface HeaderProps {
   onHelp: () => void;
   onMyQuizzes: () => void;
   onHome: () => void;
-  onTeacherHub: () => void;
-  onLogin: () => void;
+  onTeacherHub: () => void; // New Callback
 }
 
-export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes, onHome, onTeacherHub, onLogin }) => {
+export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, onMyQuizzes, onHome, onTeacherHub }) => {
   const [user, setUser] = useState<any>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
@@ -34,6 +32,10 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
     }
   }, []);
 
+  const handleLogin = async () => {
+      try { await signInWithGoogle(); } catch (e) { alert("Error al iniciar sesión."); }
+  };
+
   const handleLogout = async () => {
       await logoutFirebase();
   };
@@ -47,7 +49,6 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
 
   return (
     <header className="sticky top-0 z-40 bg-[#020617]/90 backdrop-blur-md border-b border-gray-800 transition-colors duration-300">
-      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center h-auto sm:h-16 py-3 sm:py-0 gap-3 sm:gap-0">
         
         {/* SECCIÓN IZQUIERDA: LOGO GRÁFICO + TEXTO */}
@@ -78,9 +79,17 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                             <MonitorPlay className="w-4 h-4" /> HUB DOCENTE
                         </button>
 
+                        <button 
+                            onClick={onMyQuizzes}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-cyan-950/30 border border-cyan-500/30 rounded hover:bg-cyan-900/50 text-cyan-300 transition-all group hidden md:flex"
+                        >
+                            <LayoutGrid className="w-4 h-4" />
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider">MIS QUIZES</span>
+                        </button>
+
                         <div className="flex items-center gap-2 px-2 py-1 bg-gray-900 border border-gray-800 rounded">
                             {user.photoURL ? (
-                                <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-gray-700 object-cover" />
+                                <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-gray-700" />
                             ) : (
                                 <User className="w-4 h-4 text-cyan-400" />
                             )}
@@ -91,11 +100,11 @@ export const Header: React.FC<HeaderProps> = ({ language, setLanguage, onHelp, o
                     </div>
                  ) : (
                     <button 
-                        onClick={onLogin}
+                        onClick={handleLogin}
                         className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/20 border border-blue-500/50 rounded hover:bg-blue-900/40 text-blue-200 transition-all group"
                     >
                         <LogIn className="w-3 h-3" />
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider">ACCESO</span>
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider">LOGIN</span>
                     </button>
                  )
              )}

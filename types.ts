@@ -1,6 +1,4 @@
 
-// ... existing imports
-
 export interface Option {
   id: string;
   text: string;
@@ -17,147 +15,86 @@ export interface Question {
   id: string;
   text: string;
   options: Option[];
-  correctOptionId: string; 
-  correctOptionIds?: string[];
-  timeLimit?: number; 
+  correctOptionId: string; // Deprecated but kept for backward compat (primary answer)
+  correctOptionIds?: string[]; // THE UPGRADE: Supports multiple correct answers
+  timeLimit?: number; // seconds
   imageUrl?: string;
-  imageCredit?: ImageCredit;
+  imageCredit?: ImageCredit; // NEW: Legal attribution
   videoUrl?: string;
   audioUrl?: string;
   feedback?: string;
-  questionType?: string; 
+  questionType?: string; // e.g. "Multiple Choice"
   
-  imageSearchQuery?: string; 
-  fallback_category?: string; 
+  // ANTI-SPOILER IMAGE SEARCH
+  imageSearchQuery?: string; // RENAMED: AI Generated English Keywords
+  fallback_category?: string; // AI suggested category for local images
 
+  // FORENSIC ANALYSIS FIELDS
   reconstructed?: boolean;
   sourceEvidence?: string;
   imageReconstruction?: "direct" | "partial" | "inferred" | "none";
 
+  // ENHANCE AI FIELDS
   explanation?: string;
-  confidenceScore?: number; 
+  confidenceScore?: number; // 0-1
   qualityFlags?: {
       ambiguous?: boolean;
       needsHumanReview?: boolean;
       duplicateOptions?: boolean;
   };
   
+  // DATA INTEGRITY FLAGS (New)
   needsEnhanceAI?: boolean;
   enhanceReason?: string;
 
+  // SHORT ANSWER CONFIG (New)
   matchConfig?: {
-      caseSensitive?: boolean; 
-      ignoreAccents?: boolean; 
-      exactMatch?: boolean; 
+      caseSensitive?: boolean; // Default false
+      ignoreAccents?: boolean; // Default true
+      exactMatch?: boolean; // Default false (allows trimming)
   };
 }
 
 export interface Quiz {
-  id?: string; 
-  userId?: string; 
+  id?: string; // Firestore Document ID
+  userId?: string; // Owner UID
   title: string;
   description: string;
   questions: Question[];
-  tags?: string[]; 
-  createdAt?: any; 
-  updatedAt?: any; 
+  tags?: string[]; // Organization tags
+  createdAt?: any; // Timestamp
+  updatedAt?: any; // Timestamp
   
+  // COLLABORATIVE FIELDS
   isPublic?: boolean;
   allowCloning?: boolean;
-  authorName?: string; 
-  originalAuthorId?: string; 
+  authorName?: string; // For display in public library
+  originalAuthorId?: string; // To track lineage
   visits?: number;
   clones?: number;
 }
 
+// --- CLASS MANAGEMENT (NEW FASE 2) ---
 export interface ClassGroup {
     id?: string;
     teacherId: string;
     name: string;
-    students: string[]; 
+    students: string[]; // List of real names
     createdAt?: any;
 }
 
-export interface TeacherProfile {
-    bio?: string;
-    school?: string;
-    role?: string;
-    socials?: {
-        twitter?: string;
-        linkedin?: string;
-        website?: string;
-        instagram?: string; // NEW
-        youtube?: string;   // NEW
-    };
-}
-
-// ... rest of the file remains unchanged (Campaign, BossSettings, etc.)
-// Keeping existing exports to ensure no breaking changes
-export type CampaignTheme = 'fantasy' | 'space' | 'historical' | 'arcade' | 'kids' | 'custom';
-
-export interface CampaignMission {
-    id: string;
-    quizId: string;
-    title: string; 
-    unlockDate?: string; 
-    status: 'locked' | 'active' | 'finished';
-    multiplier: number; 
-}
-
-export interface CampaignResource {
-    id: string;
-    name: string; 
-    emoji: string; 
-    type: 'accumulate' | 'drain'; 
-    startValue: number;
-    targetValue: number; 
-}
-
-export interface CampaignVisuals {
-    primaryColor: string; 
-    font: 'sans' | 'serif' | 'mono';
-    backgroundUrl?: string;
-}
-
-export interface Campaign {
-    id?: string;
-    teacherId: string;
-    title: string;
-    description: string;
-    theme: CampaignTheme;
-    visualSettings: CampaignVisuals;
-    resources: CampaignResource[];
-    resourceName?: string; 
-    resourceEmoji?: string;
-    goalAmount?: number;
-    currentAmount?: number;
-    publicId: string; 
-    missions: CampaignMission[];
-    createdAt?: any;
-}
-
-export interface CampaignLog {
-    id?: string;
-    campaignId: string;
-    timestamp: any;
-    studentAlias: string;
-    realName?: string; 
-    action: 'quiz_completed' | 'loot_found' | 'manual_event';
-    amount: number; 
-    message: string;
-}
-
+// --- BOSS BATTLE CONFIG ---
 export interface BossImageConfig {
-    idle: string;   
-    damage?: string; 
-    defeat: string; 
-    win: string;    
-    badge?: string; 
+    idle: string;   // Normal state
+    damage?: string; // Taking damage (optional)
+    defeat: string; // Boss HP 0
+    win: string;    // Player HP 0
+    badge?: string; // Boss Avatar for selection/intro
 }
 
 export interface BossSettings {
     bossName: string;
-    imageId?: string; 
+    imageId?: string; // Added to fix type error
     images: BossImageConfig;
     health: {
         bossHP: number;
@@ -171,67 +108,71 @@ export interface BossSettings {
     };
     mechanics: {
         enablePowerUps: boolean;
-        finishHimMove: boolean; 
+        finishHimMove: boolean; // "Golpe de Gracia" (Retry failed questions at the end to kill boss)
     };
-    badgeUrl?: string; 
-    attackVoice?: string; 
+    badgeUrl?: string; // Added
+    attackVoice?: string; // Added
 }
 
+// --- EVALUATION (ARCADE MODE) ---
 export interface EvaluationConfig {
-    gameMode: 'classic' | 'time_attack' | 'final_boss' | 'raid'; 
+    gameMode: 'classic' | 'time_attack' | 'final_boss' | 'raid'; // ADDED 'raid'
     questionCount: number; 
-    timeLimit?: number; 
+    timeLimit?: number; // Global time limit for Time Attack (seconds)
+    
+    // RPG SETTINGS (Only for final_boss & raid)
     bossSettings?: BossSettings;
-    allowSpeedPoints: boolean; 
-    allowPowerUps: boolean; 
-    showRanking: boolean; 
-    showCorrectAnswer?: boolean; 
+
+    allowSpeedPoints: boolean; // More points for faster answers
+    allowPowerUps: boolean; // Enable items/jokers
+    showRanking: boolean; // Show leaderboard to student
+    showCorrectAnswer?: boolean; // Added
     feedbackMessages: {
-        high: string; 
-        medium: string; 
-        low: string; 
+        high: string; // > 90%
+        medium: string; // 60-90%
+        low: string; // < 60%
     };
-    startDate: string; 
-    endDate?: string; 
+    startDate: string; // ISO String
+    endDate?: string; // ISO String (Optional)
+    
+    // RAID SPECIFIC
     raidConfig?: {
-        totalBossHP: number; 
+        totalBossHP: number; // Calculated based on students
         timeLimitMinutes: number;
     };
-    campaignId?: string; 
-    missionId?: string; 
 }
 
 export interface Evaluation {
     id?: string;
     quizId: string;
-    quizTitle: string; 
+    quizTitle: string; // Denormalized for display
     hostUserId: string;
-    classId?: string; 
-    title: string; 
+    classId?: string; // NEW: Link to a ClassGroup
+    title: string; // Evaluation specific title (e.g. "Examen Matemáticas 3ºB")
     config: EvaluationConfig;
     createdAt: any;
     isActive: boolean;
-    status?: 'waiting' | 'active' | 'finished' | 'paused'; 
-    questions: Question[]; 
-    participants?: number; 
+    status?: 'waiting' | 'active' | 'finished' | 'paused'; // New detailed status
+    questions: Question[]; // Snapshot of questions at launch time
+    participants?: number; // Counter
 }
 
 export interface EvaluationAttempt {
     id?: string;
     evaluationId: string;
-    nickname: string; 
-    realName?: string; 
-    score: number; 
-    totalTime: number; 
-    accuracy: number; 
-    timestamp: any; 
+    nickname: string; // BATTLE ALIAS (Shown in public ranking)
+    realName?: string; // NEW: REAL NAME (Shown to teacher only)
+    score: number; // Represents DAMAGE in Raid Mode
+    totalTime: number; // Seconds
+    accuracy: number; // Percentage 0-100
+    timestamp: any; // ServerTimestamp
     answersSummary?: { correct: number; incorrect: number; total: number };
-    isFinished?: boolean; 
-    lootFound?: number; 
-    resourcesEarned?: number; 
+    isFinished?: boolean; // For Raid mode to know if student is still playing
 }
 
+// --- GAME TYPES ---
 export type GameMode = 'JEOPARDY' | 'HEX_CONQUEST';
+
 export type DistributionMode = 'STANDARD' | 'RIGGED' | 'SPLIT';
 
 export interface JeopardyConfig {
@@ -242,9 +183,9 @@ export interface JeopardyConfig {
     usePowerUps: boolean;
     randomEvents: boolean;
     catchUpLogic: boolean;
-    distributionMode: DistributionMode; 
-    selectedQuestionIds: string[]; 
-    categories: string[]; 
+    distributionMode: DistributionMode; // New: Logic for question mapping
+    selectedQuestionIds: string[]; // New: Manual selection
+    categories: string[]; // New: Custom category headers
 }
 
 export type PowerUpType = 'DOUBLE' | 'STEAL' | 'BOMB' | 'SWAP' | 'SHIELD';
@@ -260,58 +201,29 @@ export interface PowerUp {
 export interface GameTeam {
     id: string;
     name: string;
-    score: number; 
+    score: number; // Points in Jeopardy, Gold in Hex
     inventory: PowerUp[];
-    usedInventory: PowerUp[]; 
+    usedInventory: PowerUp[]; // History of consumed items
     shielded: boolean;
-    multiplier: number; 
+    multiplier: number; // For x2 potion
     avatarColor: string;
 }
 
+// HEX CONQUEST SPECIFIC
 export interface HexCell {
     id: number;
-    ownerId: string | null; 
-    isLocked: boolean; 
-    isShielded: boolean; 
+    ownerId: string | null; // Team ID or null (Neutral)
+    isLocked: boolean; // Rock
+    isShielded: boolean; // Shield
     row: number;
     col: number;
 }
 
-// --- NEURAL RACE TYPES ---
-export type RaceTeamColor = 'red' | 'blue' | 'green' | 'yellow';
-export type RacePowerUp = 'boost' | 'shield' | 'freeze' | 'swap';
-
-export interface RacePlayer {
-    id: string;
-    name: string;
-    team: RaceTeamColor;
-    streak: number;
-    inventory: RacePowerUp | null;
-}
-
-export interface RaceTeamState {
-    score: number; // 0 to 100% progress
-    members: string[]; // Player IDs
-    activeEffects: { type: RacePowerUp; expiresAt: number }[]; 
-}
-
-export interface RaceSession {
-    id: string;
-    pin: string;
-    status: 'waiting' | 'racing' | 'finished';
-    hostId: string;
-    quizId: string;
-    quizTitle: string;
-    currentQuestionIndex: number; 
-    teams: Record<RaceTeamColor, RaceTeamState>;
-    players: Record<string, RacePlayer>;
-    createdAt: any;
-}
-
+// ... rest of the file remains unchanged ...
 export interface DiscoveryAttempt {
     method: 'api_proxy' | 'jina_reader' | 'html_embedded' | 'direct_fetch';
     finalUrl: string;
-    status: number; 
+    status: number; // 0 if network error
     contentType?: string;
     length: number;
     parseOk: boolean;
@@ -323,17 +235,25 @@ export interface UniversalDiscoveryReport {
     originalUrl?: string;
     adapterUsed?: string;
     methodUsed?: string;
+    
+    // Status
     blockedByBot: boolean;
-    blockedEvidence?: string; 
+    blockedEvidence?: string; // e.g. "Cloudflare Challenge found"
     parseOk: boolean;
+    
+    // Forensic Trace
     attempts: DiscoveryAttempt[];
     topLevelKeys?: string[];
     candidatePathsTop5?: { path: string, score: number, sampleKeys: string[] }[];
     selectedPath?: string;
+
+    // Metrics
     questionsFound: number;
     hasChoices: boolean;
     hasCorrectFlags: boolean;
     hasImages: boolean;
+    
+    // Quality / Missing Data
     missing?: {
         options: boolean;
         correct: boolean;
@@ -342,6 +262,7 @@ export interface UniversalDiscoveryReport {
     };
 }
 
+// Alias for backward compatibility if needed
 export type KahootDiscoveryReport = UniversalDiscoveryReport;
 
 export interface KahootCardResponse {
@@ -357,33 +278,33 @@ export interface KahootCardResponse {
 }
 
 export enum ExportFormat {
-  UNIVERSAL_CSV = 'UNIVERSAL_CSV', 
-  GOOGLE_FORMS = 'GOOGLE_FORMS', 
-  GOOGLE_SLIDES_API = 'GOOGLE_SLIDES_API', 
-  PDF_PRINT = 'PDF_PRINT', 
-  BLOOKET = 'BLOOKET', 
-  WAYGROUND = 'WAYGROUND', 
-  KAHOOT = 'KAHOOT', 
-  SOCRATIVE = 'SOCRATIVE', 
-  QUIZALIZE = 'QUIZALIZE', 
-  IDOCEO = 'IDOCEO', 
-  PLICKERS = 'PLICKERS', 
-  BAAMBOOZLE = 'BAAMBOOZLE', 
-  GIMKIT_CLASSIC = 'GIMKIT_CLASSIC', 
-  GIMKIT_TEXT = 'GIMKIT_TEXT', 
-  GENIALLY = 'GENIALLY', 
-  WORDWALL = 'WORDWALL', 
-  FLIPPITY = 'FLIPPITY', 
-  SANDBOX = 'SANDBOX', 
-  WOOCLAP = 'WOOCLAP', 
-  QUIZLET_QA = 'QUIZLET_QA', 
-  QUIZLET_AQ = 'QUIZLET_AQ', 
-  DECKTOYS_QA = 'DECKTOYS_QA', 
-  DECKTOYS_AQ = 'DECKTOYS_AQ', 
+  UNIVERSAL_CSV = 'UNIVERSAL_CSV', // The Master Format
+  GOOGLE_FORMS = 'GOOGLE_FORMS', // Google Forms API
+  GOOGLE_SLIDES_API = 'GOOGLE_SLIDES_API', // Google Slides API (Direct)
+  PDF_PRINT = 'PDF_PRINT', // New: Printable PDF
+  BLOOKET = 'BLOOKET', // Blooket CSV
+  WAYGROUND = 'WAYGROUND', // Wayground XLSX
+  KAHOOT = 'KAHOOT', // Kahoot XLSX
+  SOCRATIVE = 'SOCRATIVE', // Socrative XLSX
+  QUIZALIZE = 'QUIZALIZE', // Quizalize CSV
+  IDOCEO = 'IDOCEO', // iDoceo XLSX
+  PLICKERS = 'PLICKERS', // Plickers Text
+  BAAMBOOZLE = 'BAAMBOOZLE', // Via Kahoot
+  GIMKIT_CLASSIC = 'GIMKIT_CLASSIC', // Gimkit Classic CSV
+  GIMKIT_TEXT = 'GIMKIT_TEXT', // Gimkit Text Input CSV
+  GENIALLY = 'GENIALLY', // Genially XLSX
+  WORDWALL = 'WORDWALL', // Wordwall Text
+  FLIPPITY = 'FLIPPITY', // Flippity (6 or 30 Qs)
+  SANDBOX = 'SANDBOX', // Sandbox Education (Text)
+  WOOCLAP = 'WOOCLAP', // Wooclap JSON
+  QUIZLET_QA = 'QUIZLET_QA', // Question [TAB] Answer
+  QUIZLET_AQ = 'QUIZLET_AQ', // Answer [TAB] Question
+  DECKTOYS_QA = 'DECKTOYS_QA', // DeckToys Question -> Answer
+  DECKTOYS_AQ = 'DECKTOYS_AQ', // DeckToys Answer -> Question
   CSV_GENERIC = 'CSV_GENERIC',
-  AIKEN = 'AIKEN', 
+  AIKEN = 'AIKEN', // Moodle/Blackboard standard text
   JSON = 'JSON',
-  GIFT = 'GIFT', 
+  GIFT = 'GIFT', // Moodle advanced
 }
 
 export interface GeneratedFile {
@@ -393,24 +314,26 @@ export interface GeneratedFile {
   isBase64?: boolean;
 }
 
+// SHARED CONSTANTS
+
 export const QUESTION_TYPES = {
-    MULTIPLE_CHOICE: 'Multiple Choice', 
+    MULTIPLE_CHOICE: 'Multiple Choice', // Single correct
     TRUE_FALSE: 'True/False',
-    FILL_GAP: 'Fill in the Blank', 
-    OPEN_ENDED: 'Pregunta Abierta', 
-    MULTI_SELECT: 'Multi-Select (Checkbox)', 
-    POLL: 'Encuesta', 
+    FILL_GAP: 'Fill in the Blank', // NOW USED AS SHORT ANSWER
+    OPEN_ENDED: 'Pregunta Abierta', // RENAMED
+    MULTI_SELECT: 'Multi-Select (Checkbox)', // Multiple correct
+    POLL: 'Encuesta', // RENAMED
     ORDER: 'Order / Sort'
 };
 
 export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
     'UNIVERSAL': { 
-        name: 'Neural Quiz (Nativo)', 
+        name: 'Universal / Generic', 
         types: Object.values(QUESTION_TYPES) 
     },
     [ExportFormat.PDF_PRINT]: {
         name: 'Printable PDF',
-        types: Object.values(QUESTION_TYPES) 
+        types: Object.values(QUESTION_TYPES) // Supports almost everything visually
     },
     [ExportFormat.GOOGLE_SLIDES_API]: {
         name: 'Google Slides (Cloud API)',
@@ -447,13 +370,13 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     [ExportFormat.GENIALLY]: { 
         name: 'Genially', 
         types: [
-            QUESTION_TYPES.MULTIPLE_CHOICE, 
-            QUESTION_TYPES.MULTI_SELECT,    
-            QUESTION_TYPES.TRUE_FALSE,      
-            QUESTION_TYPES.ORDER,           
-            QUESTION_TYPES.FILL_GAP,        
-            QUESTION_TYPES.OPEN_ENDED,      
-            QUESTION_TYPES.POLL             
+            QUESTION_TYPES.MULTIPLE_CHOICE, // Elección única
+            QUESTION_TYPES.MULTI_SELECT,    // Elección múltiple
+            QUESTION_TYPES.TRUE_FALSE,      // Verdadero o falso
+            QUESTION_TYPES.ORDER,           // Ordenar
+            QUESTION_TYPES.FILL_GAP,        // Rellenar huecos / Respuesta corta
+            QUESTION_TYPES.OPEN_ENDED,      // Respuesta abierta
+            QUESTION_TYPES.POLL             // Encuesta
         ] 
     },
     [ExportFormat.WAYGROUND]: { 

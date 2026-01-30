@@ -1,16 +1,11 @@
-
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
-  onAuthStateChanged as onAuthStateChangedFirebase,
-  updateProfile as updateProfileFirebase,
-  signInAnonymously as signInAnonymouslyFirebase,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail
+  onAuthStateChanged,
+  updateProfile // Added for TeacherHub profile update
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -27,14 +22,14 @@ import {
   serverTimestamp,
   limit,
   setDoc,
-  increment,
-  Timestamp
+  increment
 } from "firebase/firestore";
-import { getStorage, deleteObject, ref } from "firebase/storage"; 
+import { getStorage } from "firebase/storage"; // Added Storage
 import { getAnalytics } from "firebase/analytics";
-import { Quiz, Evaluation, EvaluationAttempt, TeacherProfile } from "../types";
+import { Quiz, Evaluation, EvaluationAttempt } from "../types";
 
-// --- HELPER FOR SAFE ENV ACCESS ---
+// --- 0. HELPER PARA CARGA SEGURA DE VARIABLES DE ENTORNO ---
+// Evita el crash "Cannot read properties of undefined" en entornos sin env vars
 const getEnv = (key: string): string => {
     try {
         // @ts-ignore
@@ -42,308 +37,434 @@ const getEnv = (key: string): string => {
             // @ts-ignore
             return import.meta.env[key] || "";
         }
-    } catch (e) {}
-    try {
-        if (typeof process !== 'undefined' && process.env) {
-            return process.env[key] || "";
-        }
-    } catch (e) {}
+    } catch (e) {
+        // Silencioso en caso de error de acceso
+    }
     return "";
 };
 
-// --- DATA SANITIZATION HELPER ---
-/**
- * Recursively converts undefined values to null.
- * Firestore does not support undefined, so we must ensure all optional fields are null.
- */
-const sanitizeData = (data: any): any => {
-    if (data === undefined) return null;
-    if (data === null) return null;
-    if (data instanceof Date) return data;
-    
-    if (Array.isArray(data)) {
-        return data.map(item => sanitizeData(item));
-    }
-    
-    if (typeof data === 'object') {
-        const newObj: any = {};
-        for (const key in data) {
-            if (Object.prototype.hasOwnProperty.call(data, key)) {
-                newObj[key] = sanitizeData(data[key]);
-            }
-        }
-        return newObj;
-    }
-    
-    return data;
-};
-
-// --- CONFIGURACIÓN DE FIREBASE ---
+// --- 1. CONFIGURACIÓN DEL PROYECTO ---
 const apiKey = getEnv("VITE_API_FIREBASE");
-const isOfflineMode = !apiKey || apiKey.length < 5; // Detect missing key
+const authDomain = getEnv("VITE_AUTH_DOMAIN");
+const projectId = getEnv("VITE_PROJECT_ID");
 
-let app: any;
-let dbInstance: any;
-let authInstance: any;
-let storageInstance: any;
+// Detección de entorno sin conexión
+const isOfflineMode = !apiKey || apiKey === "undefined";
 
-if (!isOfflineMode) {
-    try {
-        // DATOS CORRECTOS PROYECTO ORIGINAL (UNA-PARA-TODAS)
-        const firebaseConfig = {
-          apiKey: apiKey,
-          authDomain: "una-para-todas.firebaseapp.com",
-          projectId: "una-para-todas",
-          storageBucket: "una-para-todas.firebasestorage.app",
-          messagingSenderId: "1005385021667",
-          appId: "1:1005385021667:web:b0c13438ab526d29bcadd6"
-        };
-        
-        // Prevent multiple initializations
-        app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-        dbInstance = getFirestore(app);
-        authInstance = getAuth(app);
-        storageInstance = getStorage(app);
-        
-        if (typeof window !== 'undefined') {
-            try { getAnalytics(app); } catch (e) {}
-        }
-        console.log("🔥 Firebase initialized successfully (Project: una-para-todas).");
-    } catch (e) {
-        console.error("Firebase init failed:", e);
-    }
-} else {
-    console.warn("⚠️ Firebase API Key missing. Running in PREVIEW/OFFLINE mode. Database features will be disabled.");
+if (isOfflineMode) {
+    console.warn(
+        "%c⚠️ [FIREBASE] MODO PREVIEW SIN CONEXIÓN", 
+        "background: #f59e0b; color: #000; padding: 4px; font-weight: bold; border-radius: 4px;"
+    );
+    console.warn("No se detectaron claves de API. La interfaz cargará, pero la autenticación y base de datos no funcionarán.");
 }
 
-// Exports (Safe wrappers)
-export const db = dbInstance || {};
-export const auth = authInstance || { currentUser: null }; 
-export const storage = storageInstance || {};
+const firebaseConfig = { 
+  apiKey: apiKey || "DEV_MODE_DUMMY_KEY", 
+  authDomain: authDomain || "dev-mode.firebaseapp.com", 
+  projectId: projectId || "dev-mode-project", 
+  storageBucket: getEnv("VITE_STORAGE_BUCKET") || "una-para-todas.firebasestorage.app", 
+  messagingSenderId: getEnv("VITE_MESSAGING_SENDER_ID") || "1005385021667", 
+  appId: getEnv("VITE_APP_ID") || "1:1005385021667:web:b0c13438ab526d29bcadd6", 
+  measurementId: getEnv("VITE_MEASUREMENT_ID") || "G-M5VDERWPRJ" 
+};
+
+// --- 2. INICIALIZACIÓN ---
+const app = initializeApp(firebaseConfig);
+
+// Inicializar Analytics solo si estamos en un entorno de navegador y hay conexión
+let analytics;
+if (typeof window !== 'undefined' && !isOfflineMode) {
+  try {
+      analytics = getAnalytics(app);
+  } catch (e) {
+      console.warn("Analytics failed to load:", e);
+  }
+}
+
+export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const storage = getStorage(app); // EXPORT STORAGE
+
+// --- 3. CONFIGURACIÓN CRÍTICA DEL PROVEEDOR (SCOPES) ---
 export const googleProvider = new GoogleAuthProvider();
 
+// Scopes reducidos para verificación de Google. 
+// 'drive.file' permite a la app ver y editar solo los archivos que ella misma ha creado.
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+
+// Exportamos onAuthStateChanged y updateProfile para uso en componentes
+export { onAuthStateChanged, updateProfile };
+
 if (!isOfflineMode) {
-    googleProvider.addScope('https://www.googleapis.com/auth/forms.body');
-    googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-    googleProvider.addScope('https://www.googleapis.com/auth/presentations');
+    console.log("🔥 Firebase (NPM) inicializado correctamente.");
 }
 
-// --- 1. AUTHENTICATION WRAPPERS ---
-
-export const onAuthStateChanged = (authInst: any, callback: any) => {
-    if (isOfflineMode || !authInst.onAuthStateChanged) {
-        callback(null); 
-        return () => {}; 
-    }
-    return onAuthStateChangedFirebase(authInst, callback);
-};
+// --- 4. FUNCIONES DE AUTENTICACIÓN ---
 
 export const signInWithGoogle = async (): Promise<{ user: any, token: string | null }> => {
-    if (isOfflineMode) throw new Error("Offline Mode: Auth disabled");
+  if (isOfflineMode) {
+      alert("Modo Preview: El inicio de sesión no está disponible sin claves de API.");
+      return { user: null, token: null };
+  }
+  try {
+    // Usamos el provider configurado arriba
+    const result = await signInWithPopup(auth, googleProvider);
+    
+    // Recuperar el Access Token de Google (CRUCIAL para las APIs de Google Slides)
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken || null;
+    
+    if (!token) {
+        console.warn("⚠️ Login exitoso pero no se recibió Access Token. La exportación a Slides podría fallar.");
+    }
+    
+    return { user: result.user, token };
+  } catch (error) {
+    console.error("Error al iniciar sesión con Google:", error);
+    throw error;
+  }
+};
+
+export const logoutFirebase = async () => {
+  if (isOfflineMode) return;
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error("Error al cerrar sesión:", error);
+  }
+};
+
+// --- 5. FUNCIONES DE GESTIÓN DE DATOS (FIRESTORE) ---
+
+/**
+ * Guardar o Actualizar un Quiz
+ */
+export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: boolean = false): Promise<string> => {
+    if (isOfflineMode) {
+        console.warn("Save canceled: Offline Mode");
+        throw new Error("No se puede guardar en modo Preview/Offline.");
+    }
+
+    // Verificación de usuario
+    const currentUser = auth.currentUser;
+    const effectiveUid = currentUser?.uid || userId;
+
+    if (!effectiveUid) {
+        console.error("CRITICAL SAVE ERROR: No User ID available.");
+        alert("Error crítico: No se puede guardar sin un usuario autenticado.");
+        throw new Error("User ID is undefined or null");
+    }
+
+    // REFACTOR: 'quizzes' collection
+    const collectionRef = collection(db, "quizzes");
+    
+    // Construimos el objeto base
+    const rawData = {
+        userId: effectiveUid,
+        title: quiz.title || "Untitled Quiz",
+        description: quiz.description || "",
+        questions: quiz.questions || [],
+        tags: quiz.tags || []
+    };
+
+    // Limpieza de 'undefined' para Firestore
+    let cleanData: any;
     try {
-        const result = await signInWithPopup(auth, googleProvider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        const token = credential?.accessToken || null;
-        return { user: result.user, token };
-    } catch (error) {
-        console.error("Error en Google Sign In:", error);
+        cleanData = JSON.parse(JSON.stringify(rawData));
+    } catch (e) {
+        console.error("Error al limpiar datos JSON:", e);
+        throw new Error("Failed to sanitize quiz data");
+    }
+
+    try {
+        if (quiz.id && !asCopy) {
+            // --- UPDATE FLOW ---
+            const payload = {
+                ...cleanData,
+                updatedAt: serverTimestamp()
+            };
+
+            // REFACTOR: 'quizzes' collection
+            const docRef = doc(db, "quizzes", quiz.id);
+            await updateDoc(docRef, payload);
+            return quiz.id;
+
+        } else {
+            // --- CREATE FLOW ---
+            if (asCopy) {
+                cleanData.title = `${cleanData.title} (Copy)`;
+            }
+            
+            const payload = { 
+                ...cleanData, 
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp() 
+            };
+
+            const docRef = await addDoc(collectionRef, payload);
+            return docRef.id;
+        }
+    } catch (e: any) {
+        console.error("🔥 Error al guardar en Firestore.");
+        console.error(">> Datos:", cleanData); 
+        console.error(">> Error:", e);
+        throw e;
+    }
+};
+
+/**
+ * CHECK AND INCREMENT RAID LIMIT
+ * Enforces 3 Raids per day limit per teacher.
+ */
+export const checkAndIncrementRaidLimit = async (userId: string): Promise<boolean> => {
+    if (isOfflineMode) return true; // Bypass in offline
+    
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const userRef = doc(db, "users", userId);
+    
+    try {
+        const userSnap = await getDoc(userRef);
+        
+        // Initial state if user doc doesn't exist or no raid data
+        let currentCount = 0;
+        let lastRaidDate = "";
+
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            if (data.dailyRaids) {
+                currentCount = data.dailyRaids.count || 0;
+                lastRaidDate = data.dailyRaids.date || "";
+            }
+        }
+
+        // Reset if new day
+        if (lastRaidDate !== today) {
+            currentCount = 0;
+        }
+
+        if (currentCount >= 3) {
+            return false; // Limit reached
+        }
+
+        // Increment and Update
+        await setDoc(userRef, {
+            dailyRaids: {
+                date: today,
+                count: currentCount + 1
+            }
+        }, { merge: true });
+
+        return true;
+    } catch (e) {
+        console.error("Error checking raid limit:", e);
+        // Fail open if error (allow play) or strict? Let's strictly require it but log error.
+        // For UX, return true if error to avoid blocking due to network glitch on this specific check?
+        // Let's assume we allow it if check fails to be nice.
+        return true; 
+    }
+};
+
+/**
+ * Create a new Arcade Evaluation
+ */
+export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<string> => {
+    if (isOfflineMode) throw new Error("Offline Mode");
+    try {
+        const payload = {
+            ...evaluation,
+            createdAt: serverTimestamp(),
+            isActive: true,
+            status: 'active', // Explicit status
+            participants: 0
+        };
+        
+        // Sanitize to remove undefined
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        
+        const docRef = await addDoc(collection(db, "evaluations"), cleanPayload);
+        return docRef.id;
+    } catch (error: any) {
+        console.error("Error creating evaluation:", error);
         throw error;
     }
 };
 
-export const registerWithEmail = async (email: string, pass: string) => {
+/**
+ * Get Evaluation by ID (Public Access)
+ */
+export const getEvaluation = async (evaluationId: string): Promise<Evaluation> => {
     if (isOfflineMode) throw new Error("Offline Mode");
-    return createUserWithEmailAndPassword(auth, email, pass);
-};
-
-export const loginWithEmail = async (email: string, pass: string) => {
-    if (isOfflineMode) throw new Error("Offline Mode");
-    return signInWithEmailAndPassword(auth, email, pass);
-};
-
-export const resetPassword = async (email: string) => {
-    if (isOfflineMode) throw new Error("Offline Mode");
-    return sendPasswordResetEmail(auth, email);
-};
-
-export const signInAnonymously = async () => {
-    if (isOfflineMode) {
-        return { user: { uid: "guest_offline", isAnonymous: true } };
-    }
-    return signInAnonymouslyFirebase(auth);
-};
-
-export const logoutFirebase = async () => {
-    if (isOfflineMode) return;
-    await signOut(auth);
-};
-
-export const updateProfile = async (user: any, profile: any) => {
-    if (isOfflineMode) return;
-    return updateProfileFirebase(user, profile);
-};
-
-// --- 2. FIRESTORE: QUIZZES ---
-
-export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: boolean = false): Promise<string> => {
-    if (isOfflineMode) return "offline-id-" + Math.random();
     try {
-        const colRef = collection(db, "quizzes");
+        const docRef = doc(db, "evaluations", evaluationId);
+        const snap = await getDoc(docRef);
         
-        // 1. Sanitize Data (undefined -> null)
-        // Note: We sanitize the quiz object BEFORE merging with serverTimestamp
-        // because serverTimestamp() returns a Sentinel object that we don't want to clone/destroy.
-        const cleanQuiz = sanitizeData(quiz);
-
-        const payload: any = { 
-            ...cleanQuiz, 
-            userId, 
-            updatedAt: serverTimestamp() 
-        };
-
-        if (!quiz.id || asCopy) {
-            payload.createdAt = serverTimestamp();
-            delete payload.id; 
-            const docRef = await addDoc(colRef, payload);
-            return docRef.id;
+        if (snap.exists()) {
+            return { id: snap.id, ...snap.data() } as Evaluation;
         } else {
-            await updateDoc(doc(db, "quizzes", quiz.id), payload);
-            return quiz.id;
+            throw new Error("Evaluation not found");
         }
-    } catch (e) { 
-        console.error("Error saving quiz:", e);
-        throw e; 
+    } catch (error) {
+        console.error("Error fetching evaluation:", error);
+        throw error;
     }
 };
 
+/**
+ * Save Evaluation Attempt (Leaderboard Data / Raid Damage)
+ * Now handles updates for existing attempts (optional)
+ */
+export const saveEvaluationAttempt = async (attempt: Omit<EvaluationAttempt, 'id' | 'timestamp'>, existingId?: string): Promise<string> => {
+    if (isOfflineMode) {
+        console.warn("Saving attempt mocked in Offline Mode");
+        return "mock-attempt-id";
+    }
+    
+    try {
+        const payload = {
+            ...attempt,
+            timestamp: serverTimestamp()
+        };
+        
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        
+        if (existingId) {
+            const docRef = doc(db, "attempts", existingId);
+            await updateDoc(docRef, cleanPayload);
+            return existingId;
+        } else {
+            const docRef = await addDoc(collection(db, "attempts"), cleanPayload);
+            return docRef.id;
+        }
+    } catch (error) {
+        console.error("Error saving attempt:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get Leaderboard for Evaluation
+ * Sorts by Score (DESC) then Total Time (ASC)
+ */
+export const getEvaluationLeaderboard = async (evaluationId: string, limitCount = 50): Promise<EvaluationAttempt[]> => {
+    if (isOfflineMode) return []; // Mock data handled in component?
+    
+    try {
+        // Requires composite index in Firestore: score DESC, totalTime ASC
+        const q = query(
+            collection(db, "attempts"),
+            where("evaluationId", "==", evaluationId),
+            orderBy("score", "desc"),
+            orderBy("totalTime", "asc"),
+            limit(limitCount)
+        );
+        
+        const snapshot = await getDocs(q);
+        const attempts: EvaluationAttempt[] = [];
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            attempts.push({
+                id: doc.id,
+                ...data,
+                // Convert server timestamp to Date if needed, handling potential null pending writes
+                timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+            } as EvaluationAttempt);
+        });
+        
+        return attempts;
+    } catch (error: any) {
+        // Fallback for missing index error
+        if (error.code === 'failed-precondition' || error.message.includes('index')) {
+            console.warn("⚠️ Missing Firestore Index for Leaderboard. Falling back to client-side sort.");
+            
+            const qSimple = query(
+                collection(db, "attempts"),
+                where("evaluationId", "==", evaluationId)
+            );
+            const snapshot = await getDocs(qSimple);
+            const rawAttempts: EvaluationAttempt[] = [];
+            snapshot.forEach(doc => rawAttempts.push({ id: doc.id, ...doc.data() } as EvaluationAttempt));
+            
+            // Client-side Sort
+            return rawAttempts.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score; // Score DESC
+                return a.totalTime - b.totalTime; // Time ASC
+            }).slice(0, limitCount);
+        }
+        console.error("Error fetching leaderboard:", error);
+        return [];
+    }
+};
+
+/**
+ * Obtener Quizzes del Usuario con Fallback de Índice
+ */
 export const getUserQuizzes = async (userId: string): Promise<Quiz[]> => {
     if (isOfflineMode) return [];
     try {
-        const q = query(
-            collection(db, "quizzes"), 
-            where("userId", "==", userId), 
-            orderBy("createdAt", "desc")
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Quiz));
-    } catch (e: any) {
-        const qSimple = query(collection(db, "quizzes"), where("userId", "==", userId));
-        const snapshot = await getDocs(qSimple);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Quiz));
+        // REFACTOR: 'quizzes' collection and 'createdAt' sort
+        try {
+            const q = query(
+                collection(db, "quizzes"),
+                where("userId", "==", userId),
+                orderBy("createdAt", "desc") // REFACTOR: createdAt desc
+            );
+            const querySnapshot = await getDocs(q);
+            return mapSnapshotToQuizzes(querySnapshot);
+
+        } catch (indexError: any) {
+            // FALLBACK: Si falta el índice, hacemos consulta simple y ordenamos en cliente
+            if (indexError.code === 'failed-precondition' || indexError.message.includes('index')) {
+                console.warn("⚠️ FALTA ÍNDICE EN FIRESTORE. Usando fallback en cliente.");
+                
+                const qSimple = query(
+                    collection(db, "quizzes"),
+                    where("userId", "==", userId)
+                );
+                const snapshot = await getDocs(qSimple);
+                const results = mapSnapshotToQuizzes(snapshot);
+                // Ordenar en memoria (REFACTOR: createdAt)
+                return results.sort((a, b) => {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt : new Date();
+                    const dateB = b.createdAt instanceof Date ? b.createdAt : new Date();
+                    return dateB.getTime() - dateA.getTime();
+                });
+            }
+            throw indexError;
+        }
+    } catch (e) {
+        console.error("Error fetching quizzes:", e);
+        throw e;
     }
 };
 
+// Helper para mapear documentos a objetos Quiz
+const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
+    const quizzes: Quiz[] = [];
+    snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        quizzes.push({
+            id: doc.id,
+            ...data,
+            // Convertir Timestamp de Firestore a Date JS
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date()
+        });
+    });
+    return quizzes;
+}
+
+/**
+ * Borrar Quiz
+ */
 export const deleteQuizFromFirestore = async (quizId: string) => {
     if (isOfflineMode) return;
-    await deleteDoc(doc(db, "quizzes", quizId));
-};
-
-// --- 3. EVALUATIONS & GAMEPLAY ---
-
-export const createEvaluation = async (evaluation: any): Promise<string> => {
-    if (isOfflineMode) return "offline-eval-id";
-    // Sanitize evaluation payload as well to be safe
-    const cleanEvaluation = sanitizeData(evaluation);
-    const docRef = await addDoc(collection(db, "evaluations"), { 
-        ...cleanEvaluation, 
-        createdAt: serverTimestamp() 
-    });
-    return docRef.id;
-};
-
-export const getEvaluation = async (evaluationId: string): Promise<Evaluation> => {
-    if (isOfflineMode) throw new Error("Offline mode");
-    const snap = await getDoc(doc(db, "evaluations", evaluationId));
-    if (snap.exists()) {
-        return { id: snap.id, ...snap.data() } as Evaluation;
-    }
-    throw new Error("Evaluation not found");
-};
-
-export const saveEvaluationAttempt = async (attempt: any, existingId?: string): Promise<string> => {
-    if (isOfflineMode) return "offline-attempt-id";
-    const cleanAttempt = sanitizeData(attempt);
-    const payload = { ...cleanAttempt, timestamp: serverTimestamp() };
-    
-    if (existingId) {
-        await updateDoc(doc(db, "attempts", existingId), payload);
-        return existingId;
-    } else {
-        const ref = await addDoc(collection(db, "attempts"), payload);
-        return ref.id;
-    }
-};
-
-export const getEvaluationLeaderboard = async (evaluationId: string, limitCount = 50): Promise<EvaluationAttempt[]> => {
-    if (isOfflineMode) return [];
     try {
-        const q = query(
-            collection(db, "attempts"), 
-            where("evaluationId", "==", evaluationId), 
-            orderBy("score", "desc"), 
-            limit(limitCount)
-        );
-        const snap = await getDocs(q);
-        return snap.docs.map(d => ({ id: d.id, ...d.data() } as EvaluationAttempt));
+        // REFACTOR: 'quizzes' collection
+        await deleteDoc(doc(db, "quizzes", quizId));
     } catch (e) {
-        const q = query(collection(db, "attempts"), where("evaluationId", "==", evaluationId));
-        const snap = await getDocs(q);
-        let data = snap.docs.map(d => ({ id: d.id, ...d.data() } as EvaluationAttempt));
-        return data.sort((a,b) => b.score - a.score).slice(0, limitCount);
+        console.error("Error deleting quiz:", e);
+        throw e;
     }
-};
-
-// --- 4. RAID LIMIT LOGIC (REAL) ---
-
-export const checkAndIncrementRaidLimit = async (userId: string): Promise<boolean> => {
-    if (isOfflineMode) return true;
-    const userRef = doc(db, "users", userId);
-    const snap = await getDoc(userRef);
-    
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0]; 
-
-    if (!snap.exists()) {
-        await setDoc(userRef, { 
-            raidLimit: { date: todayStr, count: 1 } 
-        }, { merge: true });
-        return true;
-    }
-
-    const data = snap.data();
-    const raidData = data.raidLimit || { date: '', count: 0 };
-
-    if (raidData.date !== todayStr) {
-        await updateDoc(userRef, { 
-            raidLimit: { date: todayStr, count: 1 } 
-        });
-        return true;
-    } else {
-        if (raidData.count >= 3) {
-            return false;
-        }
-        await updateDoc(userRef, {
-            "raidLimit.count": increment(1)
-        });
-        return true;
-    }
-};
-
-// --- 5. USER DATA & STORAGE ---
-
-export const updateUserData = async (userId: string, data: TeacherProfile) => {
-    if (isOfflineMode) return;
-    const cleanData = sanitizeData(data);
-    await setDoc(doc(db, "users", userId), { profile: cleanData }, { merge: true });
-};
-
-export const getUserData = async (userId: string): Promise<TeacherProfile | null> => {
-    if (isOfflineMode) return null;
-    const snap = await getDoc(doc(db, "users", userId));
-    return snap.exists() ? snap.data().profile : null;
-};
-
-export const deleteFile = async (url: string) => {
-    if (isOfflineMode) return;
-    try { await deleteObject(ref(storage, url)); } catch(e) {}
 };

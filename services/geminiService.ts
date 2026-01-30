@@ -1,54 +1,34 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 import { validateQuizQuestions } from "../utils/validation";
-
-// --- HELPER FOR SAFE ENV ACCESS ---
-const getEnv = (key: string): string => {
-    try {
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) {
-            // @ts-ignore
-            return import.meta.env[key] || "";
-        }
-    } catch (e) {}
-    try {
-        if (typeof process !== 'undefined' && process.env) {
-            return process.env[key] || "";
-        }
-    } catch (e) {}
-    return "";
-};
 
 // --- API KEY MANAGEMENT ---
 let currentKeyIndex = 0;
 
 const getAPIKeys = (): string[] => {
   const keys: string[] = [];
-  const k1 = getEnv("VITE_API_KEY");
-  const k2 = getEnv("API_KEY");
-  const k3 = getEnv("VITE_GOOGLE_API_KEY");
-  
-  if(k1) keys.push(k1);
-  if(k2) keys.push(k2);
-  if(k3) keys.push(k3);
-
+  try {
+    // @ts-ignore
+    if (import.meta.env.VITE_API_KEY) keys.push(import.meta.env.VITE_API_KEY);
+    // @ts-ignore
+    if (import.meta.env.API_KEY) keys.push(import.meta.env.API_KEY);
+    // @ts-ignore
+    if (import.meta.env.VITE_GOOGLE_API_KEY) keys.push(import.meta.env.VITE_GOOGLE_API_KEY);
+  } catch (e) {}
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.VITE_API_KEY) keys.push(process.env.VITE_API_KEY);
+      if (process.env.API_KEY) keys.push(process.env.API_KEY);
+    }
+  } catch(e) {}
   return Array.from(new Set(keys)).filter(k => !!k && k.length > 10 && !k.includes("undefined"));
 };
 
 const getAI = () => {
   const keys = getAPIKeys();
   if (keys.length === 0) {
-      // Return a dummy instance or one that will fail gracefully later
-      // But we can't create GoogleGenAI with empty key usually.
-      // We'll throw only when generateContent is CALLED, not on init.
-      return {
-          models: {
-              generateContent: async () => {
-                  throw new Error("Preview Mode: No Google API Key found. Configure VITE_API_KEY.");
-              }
-          }
-      } as unknown as GoogleGenAI;
+      if (process.env.API_KEY) return new GoogleGenAI({ apiKey: process.env.API_KEY });
+      return new GoogleGenAI({ apiKey: "dummy" }); 
   }
   if (currentKeyIndex >= keys.length) currentKeyIndex = 0;
   const activeKey = keys[currentKeyIndex];
@@ -118,28 +98,17 @@ const quizRootSchema: Schema = {
 };
 
 // --- SYSTEM PROMPT ---
-const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos y trivial.
-Tu misión es generar cuestionarios JSON precisos y libres de errores lógicos.
+const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. 
+Tu misión es generar cuestionarios JSON precisos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
-Genera "tags" útiles y concisos en el idioma solicitado por el usuario.
+Genera "tags" útiles.
 
-REGLAS ESTRICTAS DE TIPOS DE PREGUNTA:
-
-1. "Multiple Choice" (Respuesta Única): 
-   - DEBE tener 4 opciones. Solo una correcta.
-
+REGLAS DE TIPOS DE PREGUNTA:
+1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones. Solo una correcta.
 2. "Fill in the Blank" (Respuesta Corta):
-   - REGLA DE ORO: La respuesta debe ser un DATO FACTUAL ÚNICO (un nombre propio, una fecha, un elemento químico, una capital).
-   - PROHIBIDO: Preguntas subjetivas, cualidades abstractas o frases abiertas (Ej MAL: "El sol es...", Resp: "Caliente").
-   - ESTRUCTURA DE OPCIONES:
-     * Opción índice 0: Respuesta principal perfecta.
-     * Opción índice 1, 2, 3: SINÓNIMOS REALES o VARIACIONES ORTOGRÁFICAS ACEPTADAS (ej: "II Guerra Mundial", "2ª GM", "Segunda Guerra Mundial").
-     * NUNCA incluyas antónimos ni respuestas incorrectas aquí.
-
-3. "Order" (Ordenar):
-   - Siempre genera al menos 4 elementos para ordenar.
-   - REGLA MATEMÁTICA: Si son números, verifica estrictamente el orden ascendente o descendente (ej: 1, 2, 3, 4). NUNCA generes secuencias desordenadas.
-   - REGLA DE CONTEXTO: Si la secuencia es cíclica (estaciones, días, fases lunares), el enunciado DEBE ESPECIFICAR el punto de partida (Ej: "Ordena las estaciones empezando por el inicio del año escolar" o "...empezando por Enero").
+   - La opción con índice 0 es la respuesta principal perfecta.
+   - Las opciones con índices 1, 2, 3 deben ser VARIACIONES ACEPTADAS o SINÓNIMOS (ej: "II Guerra Mundial", "2ª GM", "Segunda Guerra Mundial").
+   - NO generes distractores falsos para este tipo, solo variaciones válidas.
 
 REGLAS DE FEEDBACK:
 - El feedback debe ser puramente educativo, curioso o explicativo.
@@ -160,7 +129,6 @@ interface GenParams {
   language?: string;
   includeFeedback?: boolean;
   tone?: string;
-  gamification?: string; // NEW PARAM
 }
 
 // *** CRITICAL: HARDCODED PRODUCTION MODEL FOR CHEAP/HIGH QUOTA ***
@@ -205,37 +173,19 @@ function cleanAIResponse(text: string): string {
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
     const ai = getAI();
-    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral', gamification } = params;
+    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral' } = params;
     // UPDATED LIMIT TO 50
     const safeCount = Math.min(Math.max(count, 1), 50);
 
-    // --- PROMPT ENGINEERING: STRICT INSTRUCTIONS ---
-    let prompt = `ROLE: Educational Content Generator.`;
+    let prompt = `Generate a Quiz about "${topic}".`;
+    prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;
+    prompt += `\nTONE: ${tone.toUpperCase()}. Adapt the wording of questions and feedback to be ${tone}.`;
     
-    // 1. CORE TASK
-    prompt += `\nTASK: Generate a Quiz about "${topic}".`;
-    prompt += `\nOUTPUT LANGUAGE: ${language}.`;
-    prompt += `\nQUANTITY: Exactly ${safeCount} questions.`;
+    if (types.length > 0) prompt += `\nInclude these types if possible: ${types.join(', ')}.`;
+    if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
+    if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
 
-    // 2. AUDIENCE & TONE (CRITICAL)
-    prompt += `\n\nTARGET AUDIENCE (AGE/LEVEL): ${age}. Ensure vocabulary and complexity are appropriate for this group.`;
-    prompt += `\nTONE: ${tone.toUpperCase()}. The wording of questions and feedback MUST match this tone.`;
-
-    // 3. GAMIFICATION / THEME (HIGHEST PRIORITY INSTRUCTION)
-    if (gamification && gamification.trim().length > 0) {
-        prompt += `\n\n!!! GAMIFICATION THEME ACTIVE: "${gamification}" !!!`;
-        prompt += `\nINSTRUCTION: You MUST adapt the narrative style, vocabulary, and scenarios of the questions to fit the "${gamification}" universe.`;
-        prompt += `\nEXAMPLE: If theme is "Pirates", use terms like "Captain", "Treasure", "Ship". If "Harry Potter", use magical terms.`;
-        prompt += `\nHowever, ensure the educational content/answers remain factual and correct. Only the "flavor" text should be gamified.`;
-    }
-
-    // 4. TYPES & CONTENT
-    if (types.length > 0) prompt += `\n\nALLOWED QUESTION TYPES: ${types.join(', ')}.`;
-    if (context) prompt += `\n\nSOURCE MATERIAL (CONTEXT):\n${context.substring(0, 30000)}`;
-    if (urls && urls.length > 0) prompt += `\n\nREFERENCE URLS:\n${urls.join('\n')}`;
-
-    // 5. FINAL JSON INSTRUCTION
-    prompt += `\n\nGenerate valid JSON matching the schema. Generate 3-5 short tags in 'tags' array.`;
+    prompt += `\n\nGenerate exactly ${safeCount} questions.`;
 
     const response = await ai.models.generateContent({
       model: MODEL_NAME,

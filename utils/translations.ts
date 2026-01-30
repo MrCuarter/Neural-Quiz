@@ -154,7 +154,7 @@ export const translations = {
     preview_binary_unavailable: "VISTA PREVIA NO DISPONIBLE (BINARIO)",
     
     // Format Descriptions (SHORTENED)
-    fmt_universal: "Formato Neural Quiz. Incluye media y feedback. Ideal copias de seguridad.",
+    fmt_universal: "Formato Maestro. Incluye media y feedback. Ideal copias de seguridad.",
     fmt_pdf_print: "Genera un examen listo para imprimir + Hoja de Respuestas.",
     fmt_google_slides_api: "Crea la presentación DIRECTAMENTE en tu Google Drive.",
     fmt_google_forms: "Crea automáticamente el Formulario en tu Drive. Requiere login.",
@@ -367,7 +367,7 @@ export const translations = {
     preview_binary_unavailable: "PREVIEW UNAVAILABLE (BINARY)",
     
     // Format Descriptions (SHORTENED)
-    fmt_universal: "Neural Quiz Format. Includes media & feedback. Best for backups.",
+    fmt_universal: "Master Format with media & feedback. Best for backups.",
     fmt_pdf_print: "Generates a clean Exam PDF + Answer Key page.",
     fmt_google_slides_api: "Creates Presentation DIRECTLY in your Drive.",
     fmt_google_forms: "Auto-creates Form in Drive. Requires login.",

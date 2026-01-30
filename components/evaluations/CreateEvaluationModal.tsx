@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Quiz, Evaluation, EvaluationConfig, BossSettings, ClassGroup } from '../../types';
 import { createEvaluation, auth, storage, checkAndIncrementRaidLimit } from '../../services/firebaseService';
@@ -16,11 +17,10 @@ interface CreateEvaluationModalProps {
     onClose: () => void;
     quiz: Quiz;
     user: any;
-    onGoToDashboard?: () => void;
-    initialGameMode?: 'classic' | 'time_attack' | 'final_boss' | 'raid';
+    onGoToDashboard?: () => void; 
 }
 
-export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ isOpen, onClose, quiz, user, onGoToDashboard, initialGameMode = 'classic' }) => {
+export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ isOpen, onClose, quiz, user, onGoToDashboard }) => {
     const toast = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [createdUrl, setCreatedUrl] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
     const [selectedClassId, setSelectedClassId] = useState<string>("none");
 
     // Game Mode Config
-    const [gameMode, setGameMode] = useState<'classic' | 'time_attack' | 'final_boss' | 'raid'>(initialGameMode);
+    const [gameMode, setGameMode] = useState<'classic' | 'time_attack' | 'final_boss' | 'raid'>('classic');
     const [questionCount, setQuestionCount] = useState(0);
     const [timeLimit, setTimeLimit] = useState(180); 
     const [countWarning, setCountWarning] = useState(false);
@@ -92,11 +92,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
             setCountWarning(false);
             handleSelectPreset('kryon_v');
             loadClasses();
-            
-            // Set initial mode if provided
-            if (initialGameMode) setGameMode(initialGameMode);
         }
-    }, [isOpen, quiz, initialGameMode]);
+    }, [isOpen, quiz]);
 
     useEffect(() => {
         // Auto-calculate Raid Boss HP
