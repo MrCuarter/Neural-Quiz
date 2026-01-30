@@ -11,6 +11,7 @@ import { publishQuiz } from '../services/communityService';
 import { uploadImageToCloudinary } from '../services/cloudinaryService'; 
 import { useToast } from './ui/Toast';
 import { PublishModal } from './PublishModal'; 
+import { SaveSuccessModal } from './modals/SaveSuccessModal'; // NEW IMPORT
 import { ImagePickerModal } from './ui/ImagePickerModal';
 import { ImageResult } from '../services/imageService';
 import { getUserQuizzes, saveQuizToFirestore } from '../services/firebaseService';
@@ -19,8 +20,8 @@ import * as XLSX from 'xlsx';
 interface QuizEditorProps {
   quiz: Quiz;
   setQuiz: React.Dispatch<React.SetStateAction<Quiz>>;
-  onExport: () => void; // Now navigates to Export Hub
-  onSave: (asCopy?: boolean) => Promise<void>; // Return promise for chaining
+  onExport: () => void; 
+  onSave: (asCopy?: boolean) => Promise<void>; 
   isSaving?: boolean;
   user?: any;
   showImportOptions?: boolean;
@@ -53,6 +54,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   
   // Share/Publish State
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false); // NEW STATE
   const [isPublishing, setIsPublishing] = useState(false);
   
   // Add to Existing State
@@ -117,18 +119,17 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }
   };
 
-  // --- SAVE & PUBLISH FLOW ---
+  // --- SAVE & PUBLISH FLOW MODIFIED ---
   const handleSaveAndPrompt = async () => {
       try {
           await onSave(false); // Save first
           if (user) {
-              // If user is logged in, encourage publishing
               if (!quiz.isPublic) {
-                  setTimeout(() => {
-                      if(confirm("¡Guardado! ¿Quieres compartir este quiz con la comunidad para ayudar a otros profes?")) {
-                          setShowPublishModal(true);
-                      }
-                  }, 500);
+                  // Show the new beautiful Success Modal instead of native confirm
+                  setShowSaveSuccessModal(true);
+              } else {
+                  // Already public, just notify save
+                  // Toast handled in onSave
               }
           }
       } catch(e) {
@@ -136,9 +137,13 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       }
   };
 
+  // NEW: Transition from Success Modal to Publish Modal
+  const handleProceedToPublish = () => {
+      setShowSaveSuccessModal(false);
+      setShowPublishModal(true);
+  };
+
   // ... (Standard handlers: AddToExisting, Publish, ImagePicker, CRUD) ...
-  // Keep all existing logic for addQuestion, updateQuestion, etc.
-  // [Code omitted for brevity as it is identical to previous version, only UI structure changes below]
   
   const handleOpenAddToExisting = async () => {
       if (!user) { toast.warning("Inicia sesión para usar esta función."); return; }
@@ -202,83 +207,24 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       updateQuestion(qId, { options: updatedOptions });
   };
 
-  // CRUD
-  const addQuestion = () => {
-    const newQ: Question = { id: uuid(), text: '', options: [{id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}], correctOptionId: '', correctOptionIds: [], timeLimit: 20, questionType: QUESTION_TYPES.MULTIPLE_CHOICE };
-    newQ.correctOptionId = newQ.options[0].id; newQ.correctOptionIds = [newQ.options[0].id];
-    setQuiz(prev => { const newQs = [...prev.questions, newQ]; setTimeout(() => setCurrentPage(Math.ceil(newQs.length / ITEMS_PER_PAGE)), 50); return { ...prev, questions: newQs }; });
-    setExpandedQuestionId(newQ.id);
-  };
-  const duplicateQuestion = (qId: string) => {
-      const original = quiz.questions.find(q => q.id === qId); if (!original) return;
-      const newOptions = original.options.map(o => ({...o, id: uuid()}));
-      const newCorrectIds = (original.correctOptionIds || []).map(oldId => { const idx = original.options.findIndex(o => o.id === oldId); return idx !== -1 ? newOptions[idx].id : null; }).filter(id => id !== null) as string[];
-      const clone: Question = { ...original, id: uuid(), text: `${original.text} (Copia)`, options: newOptions, correctOptionIds: newCorrectIds, correctOptionId: newCorrectIds[0] || "" };
-      setQuiz(prev => { const index = prev.questions.findIndex(q => q.id === qId); const newQs = [...prev.questions]; newQs.splice(index + 1, 0, clone); return { ...prev, questions: newQs }; });
-      toast.info("Pregunta duplicada");
-  };
-  const removeQuestion = (id: string, e?: React.MouseEvent) => {
-    if(e) e.stopPropagation();
-    if(confirm(t.delete_confirm)) { setQuiz(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) })); if (expandedQuestionId === id) setExpandedQuestionId(null); }
-  };
+  // CRUD (Condensed)
+  const addQuestion = () => { const newQ: Question = { id: uuid(), text: '', options: [{id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}], correctOptionId: '', correctOptionIds: [], timeLimit: 20, questionType: QUESTION_TYPES.MULTIPLE_CHOICE }; newQ.correctOptionId = newQ.options[0].id; newQ.correctOptionIds = [newQ.options[0].id]; setQuiz(prev => { const newQs = [...prev.questions, newQ]; setTimeout(() => setCurrentPage(Math.ceil(newQs.length / ITEMS_PER_PAGE)), 50); return { ...prev, questions: newQs }; }); setExpandedQuestionId(newQ.id); };
+  const duplicateQuestion = (qId: string) => { const original = quiz.questions.find(q => q.id === qId); if (!original) return; const newOptions = original.options.map(o => ({...o, id: uuid()})); const newCorrectIds = (original.correctOptionIds || []).map(oldId => { const idx = original.options.findIndex(o => o.id === oldId); return idx !== -1 ? newOptions[idx].id : null; }).filter(id => id !== null) as string[]; const clone: Question = { ...original, id: uuid(), text: `${original.text} (Copia)`, options: newOptions, correctOptionIds: newCorrectIds, correctOptionId: newCorrectIds[0] || "" }; setQuiz(prev => { const index = prev.questions.findIndex(q => q.id === qId); const newQs = [...prev.questions]; newQs.splice(index + 1, 0, clone); return { ...prev, questions: newQs }; }); toast.info("Pregunta duplicada"); };
+  const removeQuestion = (id: string, e?: React.MouseEvent) => { if(e) e.stopPropagation(); if(confirm(t.delete_confirm)) { setQuiz(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) })); if (expandedQuestionId === id) setExpandedQuestionId(null); } };
   const updateQuestion = (id: string, updates: Partial<Question>) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => q.id === id ? { ...q, ...updates } : q) })); };
   const updateOption = (qId: string, oId: string, text: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; return { ...q, options: q.options.map(o => o.id === oId ? { ...o, text } : o) }; }) })); };
   const addOption = (qId: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; if (q.options.length >= 6 && q.questionType !== QUESTION_TYPES.FILL_GAP) return q; return { ...q, options: [...q.options, { id: uuid(), text: '' }] }; }) })); };
   const removeOption = (qId: string, oId: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; if (q.options.length <= 2 && q.questionType !== QUESTION_TYPES.FILL_GAP) return q; if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length <= 1) return q; return { ...q, options: q.options.filter(o => o.id !== oId) }; }) })); };
-  const handleCorrectSelection = (q: Question, optionId: string) => {
-      if (q.questionType === QUESTION_TYPES.POLL) return;
-      if (q.questionType === QUESTION_TYPES.MULTI_SELECT) {
-          let currentIds = q.correctOptionIds || []; if (currentIds.length === 0 && q.correctOptionId) currentIds = [q.correctOptionId];
-          if (currentIds.includes(optionId)) { currentIds = currentIds.filter(id => id !== optionId); } else { currentIds = [...currentIds, optionId]; }
-          updateQuestion(q.id, { correctOptionIds: currentIds, correctOptionId: currentIds.length > 0 ? currentIds[0] : "" });
-      } else { updateQuestion(q.id, { correctOptionId: optionId, correctOptionIds: [optionId] }); }
-  };
-  const handleTypeChange = (qId: string, newType: string) => {
-     const question = quiz.questions.find(q => q.id === qId); if (!question) return;
-     let updates: Partial<Question> = { questionType: newType };
-     if (newType === QUESTION_TYPES.TRUE_FALSE) { const trueId = uuid(); updates.options = [{ id: trueId, text: t.q_tf_true }, { id: uuid(), text: t.q_tf_false }]; updates.correctOptionId = trueId; updates.correctOptionIds = [trueId]; } 
-     else if (newType === QUESTION_TYPES.ORDER) { updates.correctOptionId = ""; updates.correctOptionIds = []; const newOpts = []; for(let i=0; i<4; i++) newOpts.push({id: uuid(), text: ''}); updates.options = newOpts; } 
-     else if (newType === QUESTION_TYPES.FILL_GAP) { if (question.options.length === 0) { updates.options = [{ id: uuid(), text: '' }]; } updates.correctOptionId = question.options[0]?.id || ""; updates.correctOptionIds = [question.options[0]?.id || ""]; updates.matchConfig = { ignoreAccents: true, caseSensitive: false }; } 
-     else if (newType === QUESTION_TYPES.OPEN_ENDED) { updates.options = [{ id: uuid(), text: '' }]; updates.correctOptionId = ""; updates.correctOptionIds = []; updates.feedback = ""; }
-     updateQuestion(qId, updates);
-  };
+  const handleCorrectSelection = (q: Question, optionId: string) => { if (q.questionType === QUESTION_TYPES.POLL) return; if (q.questionType === QUESTION_TYPES.MULTI_SELECT) { let currentIds = q.correctOptionIds || []; if (currentIds.length === 0 && q.correctOptionId) currentIds = [q.correctOptionId]; if (currentIds.includes(optionId)) { currentIds = currentIds.filter(id => id !== optionId); } else { currentIds = [...currentIds, optionId]; } updateQuestion(q.id, { correctOptionIds: currentIds, correctOptionId: currentIds.length > 0 ? currentIds[0] : "" }); } else { updateQuestion(q.id, { correctOptionId: optionId, correctOptionIds: [optionId] }); } };
+  const handleTypeChange = (qId: string, newType: string) => { const question = quiz.questions.find(q => q.id === qId); if (!question) return; let updates: Partial<Question> = { questionType: newType }; if (newType === QUESTION_TYPES.TRUE_FALSE) { const trueId = uuid(); updates.options = [{ id: trueId, text: t.q_tf_true }, { id: uuid(), text: t.q_tf_false }]; updates.correctOptionId = trueId; updates.correctOptionIds = [trueId]; } else if (newType === QUESTION_TYPES.ORDER) { updates.correctOptionId = ""; updates.correctOptionIds = []; const newOpts = []; for(let i=0; i<4; i++) newOpts.push({id: uuid(), text: ''}); updates.options = newOpts; } else if (newType === QUESTION_TYPES.FILL_GAP) { if (question.options.length === 0) { updates.options = [{ id: uuid(), text: '' }]; } updates.correctOptionId = question.options[0]?.id || ""; updates.correctOptionIds = [question.options[0]?.id || ""]; updates.matchConfig = { ignoreAccents: true, caseSensitive: false }; } else if (newType === QUESTION_TYPES.OPEN_ENDED) { updates.options = [{ id: uuid(), text: '' }]; updates.correctOptionId = ""; updates.correctOptionIds = []; updates.feedback = ""; } updateQuestion(qId, updates); };
   const toggleExpand = (id: string) => { setExpandedQuestionId(prev => prev === id ? null : id); };
-  const validateQuestion = (q: Question) => {
-    const hasText = q.text.trim().length > 0;
-    if (q.questionType === QUESTION_TYPES.OPEN_ENDED || q.questionType === QUESTION_TYPES.POLL) return hasText;
-    if (q.questionType === QUESTION_TYPES.FILL_GAP) return hasText && q.options.length > 0 && q.options[0].text.trim().length > 0;
-    if (q.questionType === QUESTION_TYPES.ORDER) return hasText && q.options.length >= 2 && q.options.every(o => o.text.trim().length > 0);
-    const ids = q.correctOptionIds && q.correctOptionIds.length > 0 ? q.correctOptionIds : (q.correctOptionId ? [q.correctOptionId] : []);
-    const hasCorrect = ids.length > 0 && q.options.some(o => ids.includes(o.id));
-    const hasOptions = q.options.filter(o => o.text.trim().length > 0).length >= 2;
-    return hasText && hasCorrect && hasOptions;
-  };
-  const handleEnhanceQuestion = async (q: Question) => {
-      setEnhancingId(q.id);
-      try { const enhancedQ = await enhanceQuestion(q, quiz.description || "", currentLanguage); setQuiz(prev => ({ ...prev, questions: prev.questions.map(oldQ => oldQ.id === q.id ? { ...enhancedQ, id: oldQ.id } : oldQ) })); } catch (e) { alert("Could not enhance question."); } finally { setEnhancingId(null); }
-  };
-  const ensureOptions = (q: Question) => {
-      if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.POLL) && q.options.length === 0) { const newOpts = [{ id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }]; updateQuestion(q.id, { options: newOpts }); } 
-      else if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length === 0) { updateQuestion(q.id, { options: [{ id: uuid(), text: '' }] }); }
-  };
-  const handleAiGenerate = async () => {
-    if (!aiTopic.trim()) return; setIsGenerating(true);
-    try {
-      const platformTypes = PLATFORM_SPECS[targetPlatform].types;
-      const aiResult = await generateQuizQuestions({ topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: aiLanguage });
-      const newQuestions: Question[] = aiResult.questions.map((gq: any) => { const qId = uuid(); const options: Option[] = gq.options.map((opt: any) => ({ id: opt.id || uuid(), text: opt.text })); return { id: qId, text: gq.text, options: options, correctOptionId: gq.correctOptionId || options[0]?.id || "", correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []), timeLimit: 30, questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE, feedback: gq.feedback, imageUrl: gq.imageUrl, imageSearchQuery: gq.imageSearchQuery, fallback_category: gq.fallback_category }; });
-      setQuiz(prev => { const updatedQs = [...prev.questions, ...newQuestions]; const newTags = Array.from(new Set([...(prev.tags || []), ...(aiResult.tags || [])])); setTimeout(() => setCurrentPage(Math.ceil(updatedQs.length / ITEMS_PER_PAGE)), 50); return { ...prev, questions: updatedQs, tags: newTags }; });
-      setAiTopic(''); setShowAiModal(false);
-    } catch (e: any) { alert(t.alert_fail + ": " + e.message); } finally { setIsGenerating(false); }
-  };
+  const validateQuestion = (q: Question) => { const hasText = q.text.trim().length > 0; if (q.questionType === QUESTION_TYPES.OPEN_ENDED || q.questionType === QUESTION_TYPES.POLL) return hasText; if (q.questionType === QUESTION_TYPES.FILL_GAP) return hasText && q.options.length > 0 && q.options[0].text.trim().length > 0; if (q.questionType === QUESTION_TYPES.ORDER) return hasText && q.options.length >= 2 && q.options.every(o => o.text.trim().length > 0); const ids = q.correctOptionIds && q.correctOptionIds.length > 0 ? q.correctOptionIds : (q.correctOptionId ? [q.correctOptionId] : []); const hasCorrect = ids.length > 0 && q.options.some(o => ids.includes(o.id)); const hasOptions = q.options.filter(o => o.text.trim().length > 0).length >= 2; return hasText && hasCorrect && hasOptions; };
+  const handleEnhanceQuestion = async (q: Question) => { setEnhancingId(q.id); try { const enhancedQ = await enhanceQuestion(q, quiz.description || "", currentLanguage); setQuiz(prev => ({ ...prev, questions: prev.questions.map(oldQ => oldQ.id === q.id ? { ...enhancedQ, id: oldQ.id } : oldQ) })); } catch (e) { alert("Could not enhance question."); } finally { setEnhancingId(null); } };
+  const ensureOptions = (q: Question) => { if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.POLL) && q.options.length === 0) { const newOpts = [{ id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }]; updateQuestion(q.id, { options: newOpts }); } else if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length === 0) { updateQuestion(q.id, { options: [{ id: uuid(), text: '' }] }); } };
+  const handleAiGenerate = async () => { if (!aiTopic.trim()) return; setIsGenerating(true); try { const platformTypes = PLATFORM_SPECS[targetPlatform].types; const aiResult = await generateQuizQuestions({ topic: aiTopic, count: aiCount, types: platformTypes, age: 'Universal', language: aiLanguage }); const newQuestions: Question[] = aiResult.questions.map((gq: any) => { const qId = uuid(); const options: Option[] = gq.options.map((opt: any) => ({ id: opt.id || uuid(), text: opt.text })); return { id: qId, text: gq.text, options: options, correctOptionId: gq.correctOptionId || options[0]?.id || "", correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []), timeLimit: 30, questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE, feedback: gq.feedback, imageUrl: gq.imageUrl, imageSearchQuery: gq.imageSearchQuery, fallback_category: gq.fallback_category }; }); setQuiz(prev => { const updatedQs = [...prev.questions, ...newQuestions]; const newTags = Array.from(new Set([...(prev.tags || []), ...(aiResult.tags || [])])); setTimeout(() => setCurrentPage(Math.ceil(updatedQs.length / ITEMS_PER_PAGE)), 50); return { ...prev, questions: updatedQs, tags: newTags }; }); setAiTopic(''); setShowAiModal(false); } catch (e: any) { alert(t.alert_fail + ": " + e.message); } finally { setIsGenerating(false); } };
   const handleAddTag = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && newTag.trim()) { const currentTags = quiz.tags || []; if (!currentTags.includes(newTag.trim())) { setQuiz(prev => ({ ...prev, tags: [...currentTags, newTag.trim()] })); } setNewTag(''); } };
   const removeTag = (tag: string) => { setQuiz(prev => ({ ...prev, tags: (prev.tags || []).filter(t => t !== tag) })); };
-  const getGroupedTypeOptions = () => {
-      const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
-      const validationGroup = [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t }));
-      const noValidationGroup = [QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t }));
-      return [{ label: "CON VALIDACIÓN DE RESPUESTA", options: validationGroup }, { label: "SIN VALIDACIÓN DE RESPUESTA", options: noValidationGroup }];
-  };
+  const getGroupedTypeOptions = () => { const allowedTypes = PLATFORM_SPECS[targetPlatform].types; const validationGroup = [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); const noValidationGroup = [QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); return [{ label: "CON VALIDACIÓN DE RESPUESTA", options: validationGroup }, { label: "SIN VALIDACIÓN DE RESPUESTA", options: noValidationGroup }]; };
   const getTypeIcon = (type?: string) => { if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />; if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />; if (type === QUESTION_TYPES.OPEN_ENDED) return <MessageSquare className="w-4 h-4" />; if (type === QUESTION_TYPES.ORDER) return <ListOrdered className="w-4 h-4" />; if (type === QUESTION_TYPES.MULTI_SELECT) return <CheckSquare className="w-4 h-4" />; return <Zap className="w-4 h-4" />; };
   const getTypeColor = (type?: string) => { if (type === QUESTION_TYPES.TRUE_FALSE) return "text-blue-400 bg-blue-900/30 border-blue-500/50"; if (type === QUESTION_TYPES.FILL_GAP) return "text-yellow-400 bg-yellow-900/30 border-yellow-500/50"; if (type === QUESTION_TYPES.OPEN_ENDED) return "text-pink-400 bg-pink-900/30 border-pink-500/50"; if (type === QUESTION_TYPES.ORDER) return "text-purple-400 bg-purple-900/30 border-purple-500/50"; if (type === QUESTION_TYPES.MULTI_SELECT) return "text-green-400 bg-green-900/30 border-green-500/50"; return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; };
 
@@ -292,6 +238,13 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           onConfirm={handleConfirmPublish}
           initialTags={quiz.tags || []}
           isPublishing={isPublishing}
+      />
+      <SaveSuccessModal 
+          isOpen={showSaveSuccessModal}
+          onClose={() => setShowSaveSuccessModal(false)}
+          onPublishRequest={handleProceedToPublish}
+          quiz={quiz}
+          user={user}
       />
       <ImagePickerModal
           isOpen={showImagePicker}
@@ -473,12 +426,10 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                 <>
                     <div className="grid gap-4 mb-6">
                       {getCurrentPageQuestions().map((q) => {
-                        const index = quiz.questions.findIndex(ql => ql.id === q.id); // Real index
+                        const index = quiz.questions.findIndex(ql => ql.id === q.id); 
                         const isValid = validateQuestion(q);
                         const isExpanded = expandedQuestionId === q.id;
-                        const isEnhancing = enhancingId === q.id;
-
-                        // --- CORRECT ANSWER LOGIC ---
+                        
                         const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
                                            ? q.correctOptionIds 
                                            : (q.correctOptionId ? [q.correctOptionId] : []);
@@ -543,7 +494,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               {isExpanded && (
                                   <div className="space-y-6 mt-6 border-t border-gray-800 pt-6 animate-in slide-in-from-top-2 cursor-default" onClick={e => e.stopPropagation()}>
                                       {/* ... (Existing expanded question content preserved) ... */}
-                                      {/* TYPE & TIMER ROW */}
                                       <div className="flex flex-col md:flex-row gap-4">
                                           <div className="flex-1">
                                               <CyberSelect 
@@ -598,7 +548,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
                                       {/* OPTIONS AREA */}
                                       <div className="bg-black/20 p-4 rounded border border-gray-800/50">
-                                          {/* --- STANDARD OPTIONS (MC, MS, TF, POLL, ORDER) --- */}
                                           {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE || q.questionType === QUESTION_TYPES.POLL || q.questionType === QUESTION_TYPES.ORDER || !q.questionType) && (
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   {q.options.map((opt, i) => {
@@ -645,7 +594,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   )}
                                               </div>
                                           )}
-                                          {/* ... Other types (Fill Gap, etc) omitted for brevity but should be here ... */}
+                                          
                                       </div>
 
                                       <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
