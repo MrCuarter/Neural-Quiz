@@ -2,10 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getEvaluation, saveEvaluationAttempt } from '../../services/firebaseService';
 import { db } from '../../services/firebaseService'; 
-import { doc, onSnapshot } from 'firebase/firestore'; 
-import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option } from '../../types';
+import { doc, onSnapshot, updateDoc, collection, query, where } from 'firebase/firestore'; 
+import { Evaluation, Question, BossSettings, QUESTION_TYPES, Option, EvaluationAttempt } from '../../types';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
-import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink, Volume2, VolumeX, Repeat, Clock } from 'lucide-react';
+import { Loader2, AlertTriangle, Backpack, Skull, Sword, CheckSquare, ArrowUp, ArrowDown, ExternalLink, Volume2, VolumeX, Repeat, Clock, Users, Zap, User } from 'lucide-react';
 import { Leaderboard } from './Leaderboard';
 import { PRESET_BOSSES, ASSETS_BASE, DIFFICULTY_SETTINGS, DifficultyStats } from '../../data/bossPresets';
 import { StudentLogin } from '../student/StudentLogin';
@@ -22,6 +22,8 @@ type PotionType = 'salud' | 'veneno' | 'vulnerable' | 'esquiva' | 'fuerzatemp';
 interface ItemData { id: string; name: string; description: string; image: string; }
 interface StatusEffect { type: PotionType; turns: number; }
 interface BattleStats { totalDamage: number; maxCrit: number; dodges: number; potionsUsed: number; potionsStolen: number; correctAnswers: number; totalAnswers: number; }
+
+const AVATARS = ['🦁', '🐯', '🐻', '🐼', '🐨', '🐸', '🐙', '🦄', '🐲', '👽', '🤖', '👻', '🤡', '🤠', '🎃', '💀', '🔥', '⚡', '🚀', '💎'];
 
 const PASSIVES: Record<PassiveType, ItemData> = {
     agil: { id: 'agil', name: 'Reflejos Felinos', description: '20% Evasión.', image: `${ASSETS_BASE}/elements/agil.png` },
@@ -69,6 +71,8 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
     // IDENTITY
     const [nickname, setNickname] = useState("");
     const [realName, setRealName] = useState<string | undefined>(undefined);
+    const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[Math.floor(Math.random() * AVATARS.length)]);
+    const [lobbyPeers, setLobbyPeers] = useState<EvaluationAttempt[]>([]);
 
     const [score, setScore] = useState(0);
     const [streak, setStreak] = useState(0);
@@ -241,6 +245,21 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         return () => unsub();
     }, [evaluationId, gameState, previewConfig]);
 
+    // --- LOBBY PEERS LISTENER ---
+    useEffect(() => {
+        if (gameState === 'WAITING_FOR_HOST' && evaluationId && !previewConfig) {
+            const q = query(collection(db, 'attempts'), where('evaluationId', '==', evaluationId));
+            const unsub = onSnapshot(q, (snap) => {
+                const peers: EvaluationAttempt[] = [];
+                snap.forEach(d => peers.push(d.data() as EvaluationAttempt));
+                // Remove self
+                const others = peers.filter(p => p.nickname !== nickname);
+                setLobbyPeers(others);
+            });
+            return () => unsub();
+        }
+    }, [gameState, evaluationId, nickname]);
+
     // --- TIMER LOGIC ---
     useEffect(() => {
         if ((gameState === 'PLAYING' || gameState === 'FINISH_IT') && combatState === 'IDLE' && timeLeft > 0) {
@@ -270,6 +289,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                     evaluationId,
                     nickname: alias,
                     realName: rName,
+                    avatarId: selectedAvatar, // Save Avatar
                     score: 0,
                     totalTime: 0,
                     accuracy: 0,
@@ -281,6 +301,13 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             }
         } else {
             setGameState('ROULETTE');
+        }
+    };
+
+    const updateAvatarSelection = async (avatar: string) => {
+        setSelectedAvatar(avatar);
+        if (savedAttemptId && !previewConfig) {
+            await updateDoc(doc(db, 'attempts', savedAttemptId), { avatarId: avatar });
         }
     };
 
@@ -423,6 +450,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             // In Raid mode, score = total damage dealt. We persist it incrementally.
             saveEvaluationAttempt({
                 evaluationId, nickname, realName,
+                avatarId: selectedAvatar,
                 score: battleStats.totalDamage + damage, // Accumulate
                 totalTime: 0, // Not critical for raid sync
                 accuracy: 0 // Calculated at end
@@ -555,6 +583,7 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
                 evaluationId, 
                 nickname, 
                 realName, // SAVE REAL NAME
+                avatarId: selectedAvatar,
                 score: battleStats.totalDamage, // Use damage as score for raid consistency
                 totalTime: Math.floor((Date.now() - startTimeRef.current) / 1000),
                 accuracy: (battleStats.correctAnswers / Math.max(1, battleStats.totalAnswers)) * 100,
@@ -696,18 +725,74 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
     if (gameState === 'WAITING_FOR_HOST') {
         return (
-            <div className="min-h-screen bg-black flex flex-col items-center justify-center text-center p-6 space-y-8 animate-in fade-in">
-                <div className="w-32 h-32 rounded-full border-4 border-cyan-500/50 flex items-center justify-center bg-cyan-900/10 animate-pulse shadow-[0_0_30px_cyan]">
-                    <Clock className="w-16 h-16 text-cyan-400" />
-                </div>
-                <div>
-                    <h2 className="text-2xl md:text-3xl font-cyber text-white mb-2">ESPERANDO AL MAESTRO...</h2>
-                    <p className="text-gray-400 font-mono text-sm">Tu conexión está establecida.</p>
-                </div>
-                <div className="p-4 bg-gray-900 border border-gray-700 rounded-lg">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">OPERADOR</div>
-                    <div className="text-xl font-bold text-cyan-300">{nickname}</div>
-                </div>
+            <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-white overflow-hidden relative">
+                {/* Background Grid */}
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.8)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.8)_1px,transparent_1px)] bg-[size:40px_40px] opacity-20 pointer-events-none"></div>
+                
+                <CyberCard className="w-full max-w-lg border-cyan-500/30 p-8 flex flex-col gap-6 relative z-10">
+                    
+                    {/* Header */}
+                    <div className="text-center space-y-2">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-cyan-900/30 border border-cyan-500/50 mb-2 animate-pulse">
+                            <Clock className="w-8 h-8 text-cyan-400" />
+                        </div>
+                        <h2 className="text-2xl font-cyber font-bold text-cyan-100">SALA DE ESPERA</h2>
+                        <p className="text-gray-400 text-sm font-mono">Esperando a que el profesor inicie...</p>
+                    </div>
+
+                    {/* Identity Card */}
+                    <div className="bg-gray-900/50 p-4 rounded border border-gray-700 flex flex-col items-center gap-3">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest">TU IDENTIDAD</div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-4xl">{selectedAvatar}</div>
+                            <div className="text-left">
+                                <div className="text-xl font-bold text-white">{nickname}</div>
+                                {realName && <div className="text-xs text-gray-400">{realName}</div>}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Avatar Selector */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest block text-center">CAMBIAR AVATAR</label>
+                        <div className="grid grid-cols-5 gap-2 max-h-32 overflow-y-auto custom-scrollbar bg-black/40 p-2 rounded border border-gray-800">
+                            {AVATARS.map(avatar => (
+                                <button
+                                    key={avatar}
+                                    onClick={() => updateAvatarSelection(avatar)}
+                                    className={`text-xl p-2 rounded hover:bg-gray-700 transition-colors ${selectedAvatar === avatar ? 'bg-cyan-900/50 border border-cyan-500' : ''}`}
+                                >
+                                    {avatar}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Tips / PowerUps Info */}
+                    <div className="bg-purple-900/20 border border-purple-500/30 p-4 rounded-lg">
+                        <h4 className="text-xs font-bold text-purple-300 mb-2 flex items-center gap-2">
+                            <Zap className="w-3 h-3" /> CONSEJO TÁCTICO
+                        </h4>
+                        <p className="text-xs text-purple-100/80 leading-relaxed">
+                            Responde rápido para ganar más puntos. ¡Mantén tu racha de aciertos para desbloquear objetos especiales y hacer daño crítico al Jefe!
+                        </p>
+                    </div>
+
+                    {/* Peer List */}
+                    <div className="border-t border-gray-800 pt-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-gray-500 uppercase flex items-center gap-1"><Users className="w-3 h-3"/> EQUIPO ({lobbyPeers.length + 1})</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-center max-h-24 overflow-y-auto custom-scrollbar">
+                            {lobbyPeers.map((peer, i) => (
+                                <div key={i} className="bg-gray-800 px-2 py-1 rounded text-[10px] text-gray-300 border border-gray-700 flex items-center gap-1 animate-in zoom-in">
+                                    <span>{peer.avatarId || '🤖'}</span> {peer.nickname}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                </CyberCard>
             </div>
         );
     }
@@ -818,7 +903,9 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
             <div className="absolute top-4 right-4 flex flex-col items-end gap-1 z-30 pointer-events-none">
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
-                        <span className="font-cyber font-bold text-sm md:text-xl text-green-400">{nickname}</span>
+                        <span className="font-cyber font-bold text-sm md:text-xl text-green-400 flex items-center gap-2">
+                            {selectedAvatar} {nickname}
+                        </span>
                         {realName && <span className="text-[9px] text-gray-500 font-mono">({realName})</span>}
                         <span className="text-[9px] md:text-xs text-gray-400 font-mono">LVL {1 + Math.floor(score/1000)}</span>
                     </div>

@@ -163,6 +163,7 @@ export interface EvaluationAttempt {
     evaluationId: string;
     nickname: string; // BATTLE ALIAS (Shown in public ranking)
     realName?: string; // NEW: REAL NAME (Shown to teacher only)
+    avatarId?: string; // NEW: Emoji Avatar
     score: number; // Represents DAMAGE in Raid Mode
     totalTime: number; // Seconds
     accuracy: number; // Percentage 0-100

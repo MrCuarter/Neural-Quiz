@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, ArrowRightCircle } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, ArrowRightCircle, Rocket } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
@@ -419,6 +419,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           {quiz.questions.length > 0 && (
               <div className="w-full lg:w-64 flex-shrink-0 lg:sticky lg:top-24 max-h-[calc(100vh-100px)] flex flex-col gap-4">
                   
+                  {/* NEW: LAUNCH BUTTON IN SIDEBAR */}
+                  <CyberButton 
+                      onClick={() => onPlay(quiz)}
+                      className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 border-none shadow-lg text-white font-black"
+                  >
+                      <Rocket className="w-4 h-4 mr-2" /> LANZAR ARCADE
+                  </CyberButton>
+
                   {/* TOC */}
                   <div className="bg-black/40 border border-gray-800 rounded-lg overflow-hidden flex flex-col flex-1 max-h-[400px]">
                       <div className="p-3 border-b border-gray-800 bg-gray-900/50 font-mono text-xs font-bold text-gray-400 flex items-center justify-between">
@@ -673,6 +681,17 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                             </CyberButton>
                         </div>
                     )}
+
+                    {/* NEW: LAUNCH BUTTON AT BOTTOM */}
+                    <div className="mt-8 mb-4">
+                        <button 
+                            onClick={() => onPlay(quiz)}
+                            className="w-full py-4 rounded-xl border-2 border-yellow-500/50 bg-yellow-900/20 hover:bg-yellow-900/40 hover:border-yellow-400 text-yellow-100 font-cyber font-bold tracking-widest flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(234,179,8,0.1)] hover:shadow-[0_0_30px_rgba(234,179,8,0.3)] group"
+                        >
+                            <Gamepad2 className="w-6 h-6 group-hover:animate-bounce" /> 
+                            LANZAR EN MODO ARCADE
+                        </button>
+                    </div>
 
                     {/* --- NEW FOOTER ACTION BAR (PHASE 1 END) --- */}
                     <div className="mt-8 pt-8 border-t-2 border-gray-800 flex flex-col md:flex-row gap-4 items-center justify-end">

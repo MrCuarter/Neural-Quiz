@@ -26,10 +26,9 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
     const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
     const [totalDamage, setTotalDamage] = useState(0);
     const [participants, setParticipants] = useState(0);
-    const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]); // New for Lobby
+    const [lobbyPlayers, setLobbyPlayers] = useState<{name: string, avatar: string}[]>([]); // Improved Type
     const [bossState, setBossState] = useState<'idle' | 'damage' | 'attack' | 'dead'>('idle');
     const [timeLeft, setTimeLeft] = useState(0);
-    const [gameStatus, setGameStatus] = useState<'waiting' | 'active' | 'victory' | 'defeat'>('waiting');
     const [isMuted, setIsMuted] = useState(false);
     const [copiedLink, setCopiedLink] = useState(false);
     
@@ -46,17 +45,12 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
                 const data = { id: snap.id, ...snap.data() } as Evaluation;
                 setEvaluation(data);
                 
-                // Sync Local Status with DB Status
-                if (data.status) {
-                    // Map DB status to local gameStatus type if needed, or use directly
-                    // 'waiting' | 'active' | 'finished' -> 'waiting' | 'active' | 'victory'/'defeat'
-                    if (data.status === 'active' && gameStatus === 'waiting') {
-                        setGameStatus('active');
-                        playSound('battlelevel3', isMuted);
-                    }
+                // Play Start Sound if switching to active
+                if (data.status === 'active' && (!evaluation || evaluation.status === 'waiting')) {
+                    playSound('battlelevel3', isMuted);
                 }
 
-                // Initialize timer logic
+                // Sync timer
                 if (data.status === 'active' && data.config.endDate) {
                     const end = new Date(data.config.endDate).getTime();
                     const now = Date.now();
@@ -70,15 +64,22 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
         const qAttempts = query(collection(db, 'attempts'), where('evaluationId', '==', evaluationId));
         const unsubAttempts = onSnapshot(qAttempts, (snap) => {
             let dmg = 0;
-            const uniqueUsers = new Set<string>();
+            const playersMap = new Map<string, {name: string, avatar: string}>();
+            
             snap.forEach(doc => {
                 const att = doc.data() as EvaluationAttempt;
                 dmg += att.score; // Score = Damage in Raid Mode
-                if (att.nickname) uniqueUsers.add(att.nickname);
+                if (att.nickname) {
+                    playersMap.set(att.nickname, { 
+                        name: att.nickname, 
+                        avatar: att.avatarId || '🤖' 
+                    });
+                }
             });
+            
             setTotalDamage(dmg);
-            setParticipants(uniqueUsers.size);
-            setLobbyPlayers(Array.from(uniqueUsers));
+            setParticipants(playersMap.size);
+            setLobbyPlayers(Array.from(playersMap.values()));
         });
 
         return () => {
@@ -89,13 +90,19 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
 
     // --- GAME LOOP & FX ---
     useEffect(() => {
-        if (!evaluation?.config.raidConfig) return;
+        // SAFETY CHECK: Do not run logic if not loaded or not active
+        if (!evaluation || !evaluation.config.raidConfig) return;
+        
+        // IMPORTANT: If status is waiting, ignore damage calculations to prevent early game over
+        if (evaluation.status === 'waiting') {
+            return; 
+        }
 
         const maxHP = evaluation.config.raidConfig.totalBossHP;
         const currentHP = maxHP - totalDamage;
 
         // Check Damage Event (Only if active)
-        if (gameStatus === 'active' && totalDamage > prevDamageRef.current) {
+        if (evaluation.status === 'active' && totalDamage > prevDamageRef.current) {
             // Trigger FX
             setBossState('damage');
             setShake(true);
@@ -111,34 +118,30 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
         prevDamageRef.current = totalDamage;
 
         // Check Win/Loss
-        if (gameStatus === 'active') {
+        if (evaluation.status === 'active') {
             if (currentHP <= 0) {
-                setGameStatus('victory');
-                setBossState('dead');
+                // VICTORY CONDITION MET
                 playSound('win', isMuted);
                 finishRaid('victory');
-            } else if (timeLeft <= 0 && evaluation.status === 'active') { // Ensure we rely on synced status too
-                // Allow a small buffer for timer sync issues
-                if (timeLeft === 0) {
-                    setGameStatus('defeat');
-                    playSound('gameover', isMuted);
-                    finishRaid('defeat');
-                }
+            } else if (timeLeft <= 0 && evaluation.config.endDate) { // Ensure endDate is set
+                // TIME UP
+                playSound('gameover', isMuted);
+                finishRaid('defeat');
             }
         }
 
-    }, [totalDamage, timeLeft, evaluation, gameStatus]);
+    }, [totalDamage, timeLeft, evaluation]);
 
-    // --- TIMER ---
+    // --- TIMER TICK ---
     useEffect(() => {
         let interval: any;
-        if (gameStatus === 'active' && timeLeft > 0) {
+        if (evaluation?.status === 'active' && timeLeft > 0) {
             interval = setInterval(() => {
                 setTimeLeft(prev => Math.max(0, prev - 1));
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [gameStatus, timeLeft]);
+    }, [evaluation?.status, timeLeft]);
 
     const finishRaid = async (result: 'victory' | 'defeat') => {
         const evalRef = doc(db, 'evaluations', evaluationId);
@@ -161,8 +164,6 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
             status: 'active',
             'config.endDate': endDate
         });
-        
-        // Local state update happens via snapshot listener for consistency
     };
 
     const copyLink = () => {
@@ -172,20 +173,30 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
         setTimeout(() => setCopiedLink(false), 2000);
     };
 
-    if (!evaluation) return <div className="bg-black min-h-screen text-white flex items-center justify-center"><Loader2 className="animate-spin mr-2"/> Conectando a Neural Link...</div>;
+    // --- RENDER PROTECTION: LOADING ---
+    if (!evaluation) {
+        return (
+            <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-red-500 mb-4"/> 
+                <span className="font-cyber text-red-400 animate-pulse">ESTABLECIENDO ENLACE NEURAL...</span>
+            </div>
+        );
+    }
 
     const bossSettings = evaluation.config.bossSettings;
     const maxHP = evaluation.config.raidConfig?.totalBossHP || 1000;
     const currentHP = Math.max(0, maxHP - totalDamage);
     const hpPercent = (currentHP / maxHP) * 100;
 
-    // --- VIEW: PODIUM ---
-    if (gameStatus === 'victory' || gameStatus === 'defeat' || (evaluation.status === 'finished')) {
-        return <RaidPodium evaluationId={evaluationId} result={gameStatus === 'victory' ? 'victory' : 'defeat'} bossName={bossSettings?.bossName || "Boss"} />;
+    // --- VIEW: PODIUM (ONLY IF FINISHED) ---
+    if (evaluation.status === 'finished') {
+        // Determine result based on damage. If HP > 0, it was a defeat (timeout).
+        const result = currentHP <= 0 ? 'victory' : 'defeat';
+        return <RaidPodium evaluationId={evaluationId} result={result} bossName={bossSettings?.bossName || "Boss"} />;
     }
 
     // --- VIEW: LOBBY (WAITING ROOM) ---
-    if (evaluation.status === 'waiting' || gameStatus === 'waiting') {
+    if (evaluation.status === 'waiting') {
         return (
             <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-cyber">
                 {/* Background Boss Preview */}
@@ -193,18 +204,26 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
                     <img src={bossSettings?.images.idle} className="h-full object-cover grayscale" alt="Boss BG" />
                 </div>
 
-                <div className="z-10 w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="z-10 w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
                     
                     {/* LEFT: BOSS INFO & START */}
-                    <div className="space-y-6">
+                    <div className="space-y-6 flex flex-col justify-center">
                         <CyberCard className="border-red-500/50 p-8 text-center bg-black/80 backdrop-blur-md">
                             <Skull className="w-16 h-16 text-red-500 mx-auto mb-4 animate-pulse" />
-                            <h2 className="text-3xl font-black mb-1 uppercase text-red-100">{bossSettings?.bossName}</h2>
-                            <p className="text-red-400 font-mono text-sm mb-6">NIVEL DE AMENAZA: {bossSettings?.difficulty}</p>
+                            <h2 className="text-4xl font-black mb-2 uppercase text-red-100">{bossSettings?.bossName}</h2>
+                            <div className="inline-block bg-red-950/50 border border-red-500/30 px-3 py-1 rounded text-red-300 text-xs font-mono mb-6">
+                                NIVEL DE AMENAZA: {bossSettings?.difficulty.toUpperCase()}
+                            </div>
                             
-                            <div className="bg-red-950/30 border border-red-900/50 p-4 rounded-lg mb-6">
-                                <div className="text-4xl font-mono font-bold text-white mb-2">{participants}</div>
-                                <div className="text-xs text-red-300 uppercase tracking-widest">JUGADORES LISTOS</div>
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="bg-black/40 p-3 rounded border border-gray-800">
+                                    <div className="text-gray-500 text-[10px] uppercase">VIDA BOSS</div>
+                                    <div className="text-xl font-mono text-red-400">{maxHP} HP</div>
+                                </div>
+                                <div className="bg-black/40 p-3 rounded border border-gray-800">
+                                    <div className="text-gray-500 text-[10px] uppercase">TIEMPO LÍMITE</div>
+                                    <div className="text-xl font-mono text-blue-400">{evaluation.config.raidConfig?.timeLimitMinutes} MIN</div>
+                                </div>
                             </div>
 
                             <CyberButton 
@@ -221,7 +240,7 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
                         >
                             <div className="flex flex-col">
                                 <span className="text-[10px] text-gray-400 uppercase tracking-widest">ENLACE DE ACCESO</span>
-                                <span className="text-cyan-400 font-mono text-sm truncate max-w-[200px]">{window.location.origin}/play/{evaluationId}</span>
+                                <span className="text-cyan-400 font-mono text-sm truncate max-w-[200px] md:max-w-[300px]">{window.location.origin}/play/{evaluationId}</span>
                             </div>
                             <div className="p-2 bg-gray-800 rounded text-white">
                                 {copiedLink ? <CheckCircle2 className="w-5 h-5 text-green-400"/> : <Copy className="w-5 h-5"/>}
@@ -231,21 +250,33 @@ export const RaidDashboard: React.FC<RaidDashboardProps> = ({ evaluationId }) =>
 
                     {/* RIGHT: PLAYER LIST */}
                     <CyberCard className="border-cyan-500/30 bg-black/80 backdrop-blur-md flex flex-col h-[500px]">
-                        <div className="flex items-center gap-2 border-b border-gray-800 pb-4 mb-4">
-                            <Users className="w-5 h-5 text-cyan-400" />
-                            <h3 className="font-bold text-white">SALA DE ESPERA</h3>
+                        <div className="flex items-center justify-between border-b border-gray-800 pb-4 mb-4">
+                            <div className="flex items-center gap-2">
+                                <Users className="w-5 h-5 text-cyan-400" />
+                                <h3 className="font-bold text-white">SALA DE ESPERA</h3>
+                            </div>
+                            <span className="bg-cyan-900/30 text-cyan-300 px-2 py-1 rounded text-xs font-mono">
+                                {participants} LISTOS
+                            </span>
                         </div>
                         
-                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
                             {lobbyPlayers.length === 0 ? (
-                                <div className="text-center text-gray-500 py-20 animate-pulse">Esperando conexiones...</div>
+                                <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2 opacity-50">
+                                    <Loader2 className="w-8 h-8 animate-spin" />
+                                    <span className="text-xs font-mono">ESPERANDO SEÑAL...</span>
+                                </div>
                             ) : (
-                                lobbyPlayers.map((player, idx) => (
-                                    <div key={idx} className="flex items-center gap-3 p-3 bg-gray-900/50 rounded border border-gray-800 animate-in slide-in-from-left-4 fade-in">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_lime]"></div>
-                                        <span className="font-mono text-cyan-100 font-bold">{player}</span>
-                                    </div>
-                                ))
+                                <div className="grid grid-cols-2 gap-2">
+                                    {lobbyPlayers.map((player, idx) => (
+                                        <div key={idx} className="flex items-center gap-3 p-2 bg-gray-900/50 rounded border border-gray-800 animate-in zoom-in-95">
+                                            <div className="w-8 h-8 rounded bg-black flex items-center justify-center text-xl border border-gray-700">
+                                                {player.avatar}
+                                            </div>
+                                            <span className="font-mono text-cyan-100 text-sm truncate">{player.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </CyberCard>
