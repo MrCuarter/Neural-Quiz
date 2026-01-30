@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
 import { QuizEditor } from './components/QuizEditor';
-import { ExportPanel } from './components/ExportPanel';
+import { ExportHub } from './components/pages/ExportHub';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HelpView } from './components/HelpView';
@@ -18,10 +18,10 @@ import { ArcadePlay } from './components/pages/ArcadePlay';
 import { LandingV2 } from './components/pages/LandingV2'; 
 import { TeacherHub } from './components/pages/TeacherHub'; 
 import { ClassesManager } from './components/pages/ClassesManager'; 
-import { RaidDashboard } from './components/pages/live/RaidDashboard'; // NEW
+import { RaidDashboard } from './components/pages/live/RaidDashboard'; 
 import { translations, Language } from './utils/translations';
 import { CyberButton, CyberInput, CyberTextArea, CyberSelect, CyberCard, CyberProgressBar, CyberCheckbox } from './components/ui/CyberUI';
-import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2, LayoutTemplate } from 'lucide-react';
+import { BrainCircuit, FileUp, Sparkles, PenTool, ArrowLeft, Link as LinkIcon, UploadCloud, FilePlus, ClipboardPaste, AlertTriangle, Sun, Moon, Gamepad2, Check, Globe, CheckCircle2, LayoutTemplate, ChevronDown, ChevronUp } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz, enhanceQuestionsWithOptions } from './services/geminiService';
 import { detectAndParseStructure } from './services/importService';
 import { extractTextFromPDF } from './services/pdfService';
@@ -32,8 +32,7 @@ import { searchImage } from './services/imageService';
 import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
-// Types
-type ViewState = 'home' | 'landing_v2' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play' | 'raid_dashboard';
+type ViewState = 'home' | 'landing_v2' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'export_hub' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play' | 'raid_dashboard';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -65,12 +64,10 @@ const DEFAULT_GAME_CONFIG: JeopardyConfig = {
     categories: []
 };
 
-// --- STEPPER COMPONENT ---
 const Stepper: React.FC = () => {
-    return null; // Placeholder as per requirements
+    return null; 
 };
 
-// --- MAIN APP COMPONENT (Inner) ---
 const NeuralApp: React.FC = () => {
   const [view, setView] = useState<ViewState>('home');
   const [quiz, setQuiz] = useState<Quiz>(initialQuiz);
@@ -83,13 +80,13 @@ const NeuralApp: React.FC = () => {
   const t = translations[language] || translations['en'] || translations['es'];
   const toast = useToast();
 
-  // URL Parsing State
   const [sharedQuizId, setSharedQuizId] = useState<string | null>(null);
   const [arcadeEvalId, setArcadeEvalId] = useState<string | null>(null); 
-  const [raidDashboardId, setRaidDashboardId] = useState<string | null>(null); // NEW
+  const [raidDashboardId, setRaidDashboardId] = useState<string | null>(null);
 
-  // AI Generation State
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
+  const [showContext, setShowContext] = useState(false); // Collapsible Context
+
   const [genParams, setGenParams] = useState<{
     topic: string;
     count: number | string;
@@ -98,7 +95,8 @@ const NeuralApp: React.FC = () => {
     context: string;
     urls: string; 
     tone: string;
-    language: string; // NEW PARAMETER
+    language: string; 
+    customTone: string; // New Custom Tone
   }>({
     topic: '',
     count: 5,
@@ -107,18 +105,17 @@ const NeuralApp: React.FC = () => {
     context: '',
     urls: '',
     tone: 'Neutral',
-    language: 'Spanish' // Default
+    language: 'Spanish',
+    customTone: '' 
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState(''); 
   const [dragActive, setDragActive] = useState(false);
   const contextFileInputRef = useRef<HTMLInputElement>(null);
   
-  // Progress Bar State
   const [genProgress, setGenProgress] = useState(0);
   const [isGenSuccess, setIsGenSuccess] = useState(false);
 
-  // Conversion State
   const [convertTab, setConvertTab] = useState<'upload' | 'paste' | 'url'>('upload');
   const [textToConvert, setTextToConvert] = useState('');
   const [urlToConvert, setUrlToConvert] = useState('');
@@ -133,7 +130,6 @@ const NeuralApp: React.FC = () => {
   const [tempQuizInfo, setTempQuizInfo] = useState<{ title: string; desc: string }>({ title: '', desc: '' });
   const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
 
-  // GAME STATE
   const [gameQuiz, setGameQuiz] = useState<Quiz | null>(null);
   const [gameTeams, setGameTeams] = useState<GameTeam[]>([]);
   const [gameConfig, setGameConfig] = useState<JeopardyConfig>(DEFAULT_GAME_CONFIG);
@@ -147,22 +143,19 @@ const NeuralApp: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // --- URL HANDLER (SHARE LINK & ARCADE) ---
   useEffect(() => {
       const path = window.location.pathname;
       const params = new URLSearchParams(window.location.search);
       
-      // 1. ARCADE PLAY ROUTE (/play/:id)
       if (path.startsWith('/play/')) {
           const evalId = path.split('/play/')[1];
           if (evalId && evalId.length > 0) {
               setArcadeEvalId(evalId);
               setView('arcade_play');
-              return; // Stop further checks
+              return; 
           }
       }
 
-      // 2. RAID DASHBOARD ROUTE (/raid/:id)
       if (path.startsWith('/raid/')) {
           const raidId = path.split('/raid/')[1];
           if (raidId && raidId.length > 0) {
@@ -172,13 +165,11 @@ const NeuralApp: React.FC = () => {
           }
       }
       
-      // 3. NEW HOME ROUTE (/new-home)
       if (path.startsWith('/new-home')) {
           setView('landing_v2');
           return;
       }
 
-      // 4. SHARE ID QUERY PARAM (?shareId=...)
       const shareId = params.get('shareId');
       if (shareId) {
           setSharedQuizId(shareId);
@@ -259,7 +250,6 @@ const NeuralApp: React.FC = () => {
 
       setIsSaving(true);
       try {
-          // Augment with author name for metadata
           const enrichedQuiz = { ...quiz, authorName: user.displayName || "Usuario" };
           const docId = await saveQuizToFirestore(enrichedQuiz, user.uid, asCopy);
           if (!quiz.id || asCopy) {
@@ -282,7 +272,7 @@ const NeuralApp: React.FC = () => {
   const handleImportCommunityQuiz = (loadedQuiz: Quiz) => {
       setQuiz({
           ...loadedQuiz,
-          id: undefined, // Reset ID so it's a new copy
+          id: undefined, 
           title: `Copy of ${loadedQuiz.title}`,
           isPublic: false,
           allowCloning: false
@@ -303,13 +293,11 @@ const NeuralApp: React.FC = () => {
   const handleLoginRequest = async () => {
       try {
           await signInWithGoogle();
-          // Stay on view, Header will update
       } catch (e) {
           toast.error("Login failed");
       }
   };
 
-  // --- GAME LAUNCHERS ---
   const launchPublicGame = (q: Quiz, mode: GameMode) => {
       const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500'];
       const defaultTeams: GameTeam[] = [
@@ -330,11 +318,10 @@ const NeuralApp: React.FC = () => {
           toast.warning("Necesitas al menos 4 preguntas para jugar.");
           return;
       }
-      setGameQuiz(q); // Prepare it for Lobby
+      setGameQuiz(q); 
       setView('game_lobby');
   };
 
-  // ... (processContextFiles, handleDrag, handleDrop, handleContextFileInput remain unchanged) ...
   const processContextFiles = async (files: FileList | null) => {
       if (!files || files.length === 0) return;
       let combinedText = "";
@@ -367,7 +354,6 @@ const NeuralApp: React.FC = () => {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) processContextFiles(e.dataTransfer.files); };
   const handleContextFileInput = (e: React.ChangeEvent<HTMLInputElement>) => { processContextFiles(e.target.files); };
 
-  // ... (handleCreateAI, performAnalysis, etc. remain unchanged) ...
   const handleCreateAI = async () => {
     if (!genParams.topic.trim() && !genParams.context.trim() && !genParams.urls.trim()) { toast.warning(t.alert_topic); return; }
     setIsGenerating(true); setGenProgress(0); setIsGenSuccess(false);
@@ -379,7 +365,18 @@ const NeuralApp: React.FC = () => {
       const selectedLang = genParams.language || 'Spanish'; 
       const urlList = genParams.urls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
       const includeFeedback = PLATFORMS_WITH_FEEDBACK.includes(targetPlatform as ExportFormat);
-      const aiResult = await generateQuizQuestions({ topic: genParams.topic, count: Number(genParams.count) || 5, types: genParams.types, age: genParams.age, context: genParams.context, urls: urlList, language: selectedLang, includeFeedback, tone: genParams.tone });
+      const aiResult = await generateQuizQuestions({ 
+          topic: genParams.topic, 
+          count: Number(genParams.count) || 5, 
+          types: genParams.types, 
+          age: genParams.age, 
+          context: genParams.context, 
+          urls: urlList, 
+          language: selectedLang, 
+          includeFeedback, 
+          tone: genParams.tone,
+          customTone: genParams.customTone // Pass Custom Tone
+      });
       const generatedQs = aiResult.questions;
       clearInterval(progressTimer); setGenProgress(100); clearInterval(funnyMessageInterval); setGenerationStatus("Buscando imágenes (Anti-Spoiler)...");
       const enhancedQuestions = await Promise.all(generatedQs.map(async (gq: any) => {
@@ -405,7 +402,6 @@ const NeuralApp: React.FC = () => {
   const handleGenerateMissingAnswers = async () => { setIsGeneratingAnswers(true); try { const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' }; const enhancedQuestions = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish'); setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: enhancedQuestions, tags: ['AI Repair'] }); setShowMissingAnswersModal(false); setView('create_manual'); toast.success("Answers generated successfully!"); } catch (e) { toast.error("Error generating answers. Please check quota."); } finally { setIsGeneratingAnswers(false); } };
   const handleSkipMissingAnswers = () => { setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: tempQuestions }); setShowMissingAnswersModal(false); setView('create_manual'); };
   
-  // ... (handleFileProcessing, handleConvertDrag, etc. remain unchanged) ...
   const handleFileProcessing = async (file: File) => { if (!file) return; const fileName = file.name; const fileType = file.type; try { if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) { const reader = new FileReader(); reader.onload = (e) => { const data = e.target?.result; if (fileName.endsWith('.csv')) { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { performAnalysis(data as string, fileName); } } else { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { toast.error(t.alert_no_valid_csv); } } }; if (fileName.endsWith('.csv')) reader.readAsText(file); else reader.readAsBinaryString(file); return; } if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) { const text = await extractTextFromPDF(file); performAnalysis(text, fileName); return; } if (fileType.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => { const base64 = e.target?.result as string; const base64Data = base64.split(',')[1]; performAnalysis("Extract questions from this image", fileName, false, [], { data: base64Data, mimeType: fileType }); }; reader.readAsDataURL(file); return; } if (fileType.startsWith('text/') || fileName.endsWith('.json') || fileName.endsWith('.md') || fileName.endsWith('.txt')) { const text = await file.text(); performAnalysis(text, fileName); return; } toast.error(t.alert_read_error || "Unsupported file type"); } catch (e: any) { console.error(e); toast.error(`${t.alert_read_error}: ${e.message}`); } };
   const handleConvertDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') { setDragActive(true); } else if (e.type === 'dragleave') { setDragActive(false); } };
   const handleConvertDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { handleFileProcessing(e.dataTransfer.files[0]); } };
@@ -436,14 +432,12 @@ const NeuralApp: React.FC = () => {
       );
   }
 
-  // --- RAID DASHBOARD RENDER ---
   if (view === 'raid_dashboard' && raidDashboardId) {
       return (
           <RaidDashboard evaluationId={raidDashboardId} />
       );
   }
 
-  // --- NEW: LANDING V2 RENDER ---
   if (view === 'landing_v2') {
       return (
           <div className="flex flex-col bg-[#020617] text-white overflow-x-hidden min-h-screen">
@@ -481,11 +475,8 @@ const NeuralApp: React.FC = () => {
       <main className="min-h-screen flex flex-col p-4 md:p-8 relative z-10 w-full max-w-[1920px] mx-auto">
         <Stepper />
 
-        {/* HOME VIEW (CLASSIC) */}
         {view === 'home' && (
           <div className="flex flex-col items-center justify-center space-y-12 animate-in fade-in duration-700 py-12 relative">
-            
-            {/* TEMPORARY BUTTON TO SWITCH TO V2 */}
             <div className="absolute top-0 right-0 md:top-4 md:right-4 z-50">
                 <button 
                     onClick={() => setView('landing_v2')}
@@ -557,7 +548,6 @@ const NeuralApp: React.FC = () => {
           </div>
         )}
 
-        {/* --- TEACHER HUB --- */}
         {view === 'teacher_hub' && (
             <TeacherHub 
                 user={user} 
@@ -565,13 +555,10 @@ const NeuralApp: React.FC = () => {
             />
         )}
 
-        {/* --- CLASSES MANAGER (NEW) --- */}
         {view === 'classes_manager' && (
             <ClassesManager onBack={() => setView('teacher_hub')} />
         )}
 
-        {/* ... rest of the app ... */}
-        {/* --- AUXILIARY VIEWS --- */}
         {view === 'community' && <CommunityPage onBack={() => setView('home')} onPlay={(q) => handlePlayFromEditor(q)} onImport={handleImportCommunityQuiz} />}
         {view === 'help' && <HelpView onBack={() => setView('home')} t={t} />}
         {view === 'privacy' && <PrivacyView onBack={() => setView('home')} />}
@@ -579,7 +566,6 @@ const NeuralApp: React.FC = () => {
         {view === 'my_quizzes' && <MyQuizzes user={user} onBack={() => setView('home')} onEdit={handleLoadQuiz} />}
         {view === 'public_view' && sharedQuizId && <PublicQuizLanding quizId={sharedQuizId} currentUser={user} onPlay={launchPublicGame} onBack={() => setView('home')} onLoginReq={signInWithGoogle} />}
 
-        {/* --- CREATION FLOW --- */}
         {view === 'create_menu' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
                 <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
@@ -599,10 +585,8 @@ const NeuralApp: React.FC = () => {
             </div>
         )}
 
-        {/* ... (Existing views logic: create_ai, create_manual, convert_upload, etc.) ... */}
         {view === 'create_ai' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
-                {/* ... existing create_ai content ... */}
                 <div className="flex items-center gap-4">
                      <button onClick={() => setView('create_menu')} className="group flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors uppercase font-mono font-bold tracking-widest text-sm">
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
@@ -615,7 +599,6 @@ const NeuralApp: React.FC = () => {
                 </div>
 
                 <CyberCard className="border-cyan-500/20 p-8 space-y-8">
-                    {/* ... (Create AI Card Content) ... */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-cyan-400">
                             <ArrowLeft className="w-4 h-4 rotate-180" />
@@ -633,7 +616,6 @@ const NeuralApp: React.FC = () => {
 
                     <div className="h-px bg-gray-800 w-full" />
 
-                    {/* TOPIC, COUNT & TONE */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                             <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">TEMA / ASUNTO</label>
@@ -656,7 +638,6 @@ const NeuralApp: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* AGE & TONE & LANGUAGE */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="space-y-2">
                             <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">EDAD / NIVEL</label>
@@ -694,7 +675,8 @@ const NeuralApp: React.FC = () => {
                                     { value: 'Divertido', label: '🎉 Divertido / Casual' },
                                     { value: 'Infantil', label: '🧸 Infantil / Amable' },
                                     { value: 'Académico', label: '🎓 Académico / Serio' },
-                                    { value: 'Sarcástico', label: '😏 Sarcástico / Ingenioso' }
+                                    { value: 'Sarcástico', label: '😏 Sarcástico / Ingenioso' },
+                                    { value: 'custom', label: '✨ Personalizado / Gamificación' }
                                 ]}
                                 value={genParams.tone} 
                                 onChange={(e) => setGenParams({...genParams, tone: e.target.value})}
@@ -703,16 +685,27 @@ const NeuralApp: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* CUSTOM TONE INPUT */}
+                    {genParams.tone === 'custom' && (
+                        <div className="animate-in slide-in-from-top-2">
+                            <label className="text-xs font-mono text-purple-400 uppercase tracking-widest block mb-2">CONTEXTO NARRATIVO</label>
+                            <CyberTextArea 
+                                placeholder="Ej: Una aventura de piratas, Misión espacial, Detectives victorianos..."
+                                value={genParams.customTone}
+                                onChange={(e) => setGenParams({...genParams, customTone: e.target.value})}
+                                className="bg-purple-950/20 border-purple-500/50 focus:border-purple-400 text-purple-100 h-24"
+                            />
+                        </div>
+                    )}
+
                     <div className="h-px bg-gray-800 w-full" />
 
-                    {/* 2. TYPES - SPLIT INTO GROUPS */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-cyan-400">
                             <h3 className="font-mono font-bold text-lg">2. SELECCIONA TIPOS DE PREGUNTA</h3>
                         </div>
                         
                         <div className="space-y-6">
-                            {/* GROUP 1: VALIDATED */}
                             <div className="bg-cyan-950/10 border border-cyan-900/30 p-4 rounded-lg">
                                 <h4 className="text-xs font-mono text-cyan-500 uppercase tracking-widest mb-3 border-b border-cyan-900/30 pb-1">CON VALIDACIÓN</h4>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -727,7 +720,6 @@ const NeuralApp: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* GROUP 2: NON-VALIDATED */}
                             <div className="bg-purple-950/10 border border-purple-900/30 p-4 rounded-lg">
                                 <h4 className="text-xs font-mono text-purple-500 uppercase tracking-widest mb-3 border-b border-purple-900/30 pb-1">SIN VALIDACIÓN</h4>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -746,36 +738,48 @@ const NeuralApp: React.FC = () => {
 
                     <div className="h-px bg-gray-800 w-full" />
 
-                    {/* CONTEXT */}
+                    {/* COLLAPSIBLE CONTEXT SECTION */}
                     <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-pink-400">
-                            <ArrowLeft className="w-4 h-4 rotate-180" />
-                            <h3 className="font-mono font-bold text-lg">MATERIAL DE CONTEXTO (OPCIONAL)</h3>
-                        </div>
-                        
-                        <div 
-                            className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer hover:bg-white/5 ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700'}`}
-                            onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-                            onClick={() => contextFileInputRef.current?.click()}
+                        <CyberButton 
+                            variant="secondary" 
+                            className="w-full text-xs py-2 flex items-center justify-center gap-2 border-dashed border-gray-600 hover:border-pink-500 text-gray-400 hover:text-pink-300"
+                            onClick={() => setShowContext(!showContext)}
                         >
-                            <UploadCloud className="w-12 h-12 mx-auto text-gray-600 mb-2" />
-                            <p className="text-gray-300 font-bold">ARRASTRA O HAZ CLIC</p>
-                            <p className="text-xs text-gray-500">(.txt, .md, .csv, .json, .pdf)</p>
-                            <input type="file" ref={contextFileInputRef} className="hidden" accept=".pdf,.txt,.md,.json,.csv" onChange={handleContextFileInput} multiple />
-                        </div>
+                            {showContext ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+                            {showContext ? "OCULTAR MATERIAL DE CONTEXTO" : "MOSTRAR MATERIAL DE CONTEXTO (OPCIONAL)"}
+                        </CyberButton>
 
-                        <CyberTextArea 
-                            value={genParams.context} 
-                            onChange={(e) => setGenParams({...genParams, context: e.target.value})} 
-                            placeholder="Pega tu texto sin formato, contenido de PDF o contenido web aquí..."
-                            className="h-32 font-mono text-sm"
-                        />
-                        
-                         <CyberInput 
-                            placeholder="O pega URLs de referencia..." 
-                            value={genParams.urls} 
-                            onChange={(e) => setGenParams({...genParams, urls: e.target.value})} 
-                        />
+                        {showContext && (
+                            <div className="space-y-4 animate-in slide-in-from-top-4 border-l-2 border-pink-500/30 pl-4">
+                                <div className="flex items-center gap-2 text-pink-400">
+                                    <h3 className="font-mono font-bold text-lg">MATERIAL DE CONTEXTO</h3>
+                                </div>
+                                
+                                <div 
+                                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer hover:bg-white/5 ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700'}`}
+                                    onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                                    onClick={() => contextFileInputRef.current?.click()}
+                                >
+                                    <UploadCloud className="w-12 h-12 mx-auto text-gray-600 mb-2" />
+                                    <p className="text-gray-300 font-bold">ARRASTRA O HAZ CLIC</p>
+                                    <p className="text-xs text-gray-500">(.txt, .md, .csv, .json, .pdf)</p>
+                                    <input type="file" ref={contextFileInputRef} className="hidden" accept=".pdf,.txt,.md,.json,.csv" onChange={handleContextFileInput} multiple />
+                                </div>
+
+                                <CyberTextArea 
+                                    value={genParams.context} 
+                                    onChange={(e) => setGenParams({...genParams, context: e.target.value})} 
+                                    placeholder="Pega tu texto sin formato, contenido de PDF o contenido web aquí..."
+                                    className="h-32 font-mono text-sm"
+                                />
+                                
+                                <CyberInput 
+                                    placeholder="O pega URLs de referencia..." 
+                                    value={genParams.urls} 
+                                    onChange={(e) => setGenParams({...genParams, urls: e.target.value})} 
+                                />
+                            </div>
+                        )}
                     </div>
 
                     <CyberButton 
@@ -824,15 +828,19 @@ const NeuralApp: React.FC = () => {
                         t={t}
                         onPlay={handlePlayFromEditor} 
                         currentLanguage={language} 
+                        onNavigate={(v) => setView(v as ViewState)}
                     />
-                    <div ref={exportSectionRef} className="mt-12 pt-12 border-t border-gray-800">
-                        <ExportPanel quiz={quiz} setQuiz={setQuiz} t={t} initialTargetPlatform={targetPlatform} />
-                    </div>
                 </div>
             </>
         )}
 
-        {/* ... (Existing views for convert_upload, convert_analysis, game_lobby, etc. are identical) ... */}
+        {view === 'export_hub' && (
+            <ExportHub 
+                quiz={quiz} 
+                onBack={() => setView('create_manual')} 
+            />
+        )}
+
         {view === 'convert_upload' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
                 <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>

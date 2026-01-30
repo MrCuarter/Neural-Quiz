@@ -1,24 +1,21 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
+import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, Rocket } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
-import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
-import { toggleQuizVisibility, updateCloningPermission } from '../services/shareService'; 
 import { publishQuiz } from '../services/communityService'; 
-import { uploadImageToCloudinary } from '../services/cloudinaryService'; 
 import { useToast } from './ui/Toast';
 import { PublishModal } from './PublishModal'; 
 import { ImagePickerModal } from './ui/ImagePickerModal';
 import { ImageResult } from '../services/imageService';
 import { getUserQuizzes, saveQuizToFirestore } from '../services/firebaseService';
-import * as XLSX from 'xlsx';
 
 interface QuizEditorProps {
   quiz: Quiz;
   setQuiz: React.Dispatch<React.SetStateAction<Quiz>>;
-  onExport: () => void;
+  onExport: () => void; // Keeping prop type for compatibility, but behavior changes
   onSave: (asCopy?: boolean) => void;
   isSaving?: boolean;
   user?: any;
@@ -26,19 +23,19 @@ interface QuizEditorProps {
   t: any;
   onPlay: (quiz: Quiz) => void;
   currentLanguage?: string;
+  onNavigate?: (view: string) => void; // Add this prop for navigation
 }
 
-export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t, onPlay, currentLanguage = 'es' }) => {
+export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t, onPlay, currentLanguage = 'es', onNavigate }) => {
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   const [targetPlatform, setTargetPlatform] = useState<string>('UNIVERSAL');
-  const [hasSelectedPlatform, setHasSelectedPlatform] = useState(false);
   const toast = useToast();
   
   // AI & Modal State
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiTopic, setAiTopic] = useState('');
   const [aiCount, setAiCount] = useState(3);
-  const [aiLanguage, setAiLanguage] = useState('Spanish'); // Added Language State
+  const [aiLanguage, setAiLanguage] = useState('Spanish'); 
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   
@@ -47,18 +44,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [pickingImageForId, setPickingImageForId] = useState<string | null>(null);
   const [pickingImageForOptionId, setPickingImageForOptionId] = useState<string | null>(null); 
   const [pickingImageCurrentUrl, setPickingImageCurrentUrl] = useState<string | null>(null);
-  const [pickingImageCurrentCredit, setPickingImageCurrentCredit] = useState<ImageCredit | undefined>(undefined); // NEW
+  const [pickingImageCurrentCredit, setPickingImageCurrentCredit] = useState<ImageCredit | undefined>(undefined); 
   
   // Share/Publish State
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   
-  // Add to Existing State
-  const [showAddToExisting, setShowAddToExisting] = useState(false);
-  const [userQuizzes, setUserQuizzes] = useState<Quiz[]>([]);
-  const [selectedTargetQuizId, setSelectedTargetQuizId] = useState<string>('');
-  const [isAddingToExisting, setIsAddingToExisting] = useState(false);
-
   // Tags State
   const [newTag, setNewTag] = useState('');
 
@@ -68,10 +59,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
   const [draggedOption, setDraggedOption] = useState<{qId: string, idx: number} | null>(null);
   const cardRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
-
-  useEffect(() => {
-      if (quiz.questions.length > 0) setHasSelectedPlatform(true);
-  }, []);
 
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
@@ -103,11 +90,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       if (newPage < 1 || newPage > totalPages) return;
       setCurrentPage(newPage);
       
-      // Auto-scroll to first item of the new page
       const firstIndexOnPage = (newPage - 1) * ITEMS_PER_PAGE;
       const q = quiz.questions[firstIndexOnPage];
       if (q) {
-          // Optional: Auto-expand the first question of the new page for better UX
           setExpandedQuestionId(q.id);
           setTimeout(() => {
               const el = cardRefs.current[q.id];
@@ -115,51 +100,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }
           }, 100);
-      }
-  };
-
-  // --- ADD TO EXISTING LOGIC ---
-  const handleOpenAddToExisting = async () => {
-      if (!user) {
-          toast.warning("Inicia sesión para usar esta función.");
-          return;
-      }
-      setShowAddToExisting(true);
-      try {
-          const q = await getUserQuizzes(user.uid);
-          setUserQuizzes(q);
-      } catch (e) {
-          toast.error("Error cargando quizzes");
-      }
-  };
-
-  const confirmAddToExisting = async () => {
-      if (!selectedTargetQuizId) return;
-      setIsAddingToExisting(true);
-      try {
-          const targetQuiz = userQuizzes.find(q => q.id === selectedTargetQuizId);
-          if (!targetQuiz) throw new Error("Quiz not found");
-
-          const newQuestions = quiz.questions.map(q => ({
-              ...q,
-              id: uuid(),
-              options: q.options.map(o => ({...o, id: uuid()})),
-              correctOptionId: "", 
-          }));
-          
-          const updatedQuiz: Quiz = {
-              ...targetQuiz,
-              questions: [...targetQuiz.questions, ...quiz.questions],
-              updatedAt: new Date()
-          };
-
-          await saveQuizToFirestore(updatedQuiz, user.uid);
-          toast.success("Preguntas añadidas correctamente.");
-          setShowAddToExisting(false);
-      } catch (e) {
-          toast.error("Error al guardar.");
-      } finally {
-          setIsAddingToExisting(false);
       }
   };
 
@@ -187,7 +127,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   // --- IMAGE PICKER ---
-  // Updated to receive credit object
   const openImagePicker = (qId: string, currentUrl?: string, optionId?: string, credit?: ImageCredit) => {
       setPickingImageForId(qId);
       setPickingImageForOptionId(optionId || null);
@@ -199,7 +138,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const handleImageSelected = (result: ImageResult) => {
       if (pickingImageForId) {
           if (pickingImageForOptionId) {
-              // OPTION IMAGE UPDATE
               const q = quiz.questions.find(q => q.id === pickingImageForId);
               if (q) {
                   const updatedOptions = q.options.map(o => 
@@ -211,7 +149,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                   toast.success("Imagen de opción actualizada");
               }
           } else {
-              // QUESTION IMAGE UPDATE
               const credit = result.attribution ? {
                   name: result.attribution.authorName,
                   link: result.attribution.authorUrl,
@@ -239,7 +176,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       updateQuestion(qId, { options: updatedOptions });
   };
 
-  // --- CRUD OPERATIONS ---
+  // --- CRUD OPERATIONS (Simplified for brevity) ---
   const addQuestion = () => {
     const newQ: Question = {
       id: uuid(),
@@ -346,7 +283,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   const handleCorrectSelection = (q: Question, optionId: string) => {
-      if (q.questionType === QUESTION_TYPES.POLL) return; // No correct answer for poll
+      if (q.questionType === QUESTION_TYPES.POLL) return; 
 
       if (q.questionType === QUESTION_TYPES.MULTI_SELECT) {
           let currentIds = q.correctOptionIds || [];
@@ -378,7 +315,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
          updates.correctOptionId = trueId;
          updates.correctOptionIds = [trueId];
      } else if (newType === QUESTION_TYPES.ORDER) {
-          // Initialize with 4 empty options for Order
           updates.correctOptionId = ""; 
           updates.correctOptionIds = [];
           const newOpts = [];
@@ -395,7 +331,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
          updates.options = [{ id: uuid(), text: '' }];
          updates.correctOptionId = "";
          updates.correctOptionIds = [];
-         updates.feedback = ""; // Clear feedback
+         updates.feedback = ""; 
      }
      
      updateQuestion(qId, updates);
@@ -506,17 +442,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       setQuiz(prev => ({ ...prev, tags: (prev.tags || []).filter(t => t !== tag) }));
   };
 
-  const getTranslatedType = (type: string) => {
-      if (type === QUESTION_TYPES.MULTIPLE_CHOICE) return t.type_mc;
-      if (type === QUESTION_TYPES.MULTI_SELECT) return t.type_ms;
-      if (type === QUESTION_TYPES.TRUE_FALSE) return t.type_tf;
-      if (type === QUESTION_TYPES.FILL_GAP) return t.type_short;
-      if (type === QUESTION_TYPES.ORDER) return t.type_order;
-      if (type === QUESTION_TYPES.POLL) return t.type_poll;
-      if (type === QUESTION_TYPES.OPEN_ENDED) return t.type_open;
-      return type;
-  };
-
   const getTypeIcon = (type?: string) => {
       if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />;
       if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />;
@@ -535,7 +460,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; 
   };
 
-  // Helper to generate grouped options for the Select component
   const getGroupedTypeOptions = () => {
       const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
       
@@ -546,13 +470,13 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           QUESTION_TYPES.FILL_GAP,
           QUESTION_TYPES.ORDER
       ].filter(t => allowedTypes.includes(t))
-       .map(t => ({ value: t, label: getTranslatedType(t) }));
+       .map(t => ({ value: t, label: t }));
 
       const noValidationGroup = [
           QUESTION_TYPES.OPEN_ENDED,
           QUESTION_TYPES.POLL
       ].filter(t => allowedTypes.includes(t))
-       .map(t => ({ value: t, label: getTranslatedType(t) }));
+       .map(t => ({ value: t, label: t }));
 
       return [
           { label: "CON VALIDACIÓN DE RESPUESTA", options: validationGroup },
@@ -560,8 +484,17 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       ];
   };
 
+  // --- EXPORT REDIRECT ---
+  const handleExportRedirect = () => {
+      if (onNavigate) {
+          onNavigate('export_hub');
+      } else {
+          onExport(); // Fallback to old behavior if prop missing
+      }
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-32">
       
       {/* GLOBAL MODALS */}
       <PublishModal 
@@ -576,56 +509,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           onClose={() => setShowImagePicker(false)}
           onSelect={handleImageSelected}
           initialUrl={pickingImageCurrentUrl || undefined} 
-          initialCredit={pickingImageCurrentCredit} // PASS CREDIT
+          initialCredit={pickingImageCurrentCredit} 
       />
-
-      {/* --- ADD TO EXISTING MODAL --- */}
-      {showAddToExisting && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-              <CyberCard className="w-full max-w-lg border-purple-500/50">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-cyber font-bold text-white text-lg">AÑADIR A QUIZ EXISTENTE</h3>
-                      <button onClick={() => setShowAddToExisting(false)}><XCircle className="w-5 h-5 text-gray-500"/></button>
-                  </div>
-                  <div className="space-y-4">
-                      <p className="text-sm text-gray-400">Selecciona el quiz al que quieres añadir las preguntas actuales ({quiz.questions.length}):</p>
-                      <div className="max-h-60 overflow-y-auto custom-scrollbar border border-gray-800 rounded bg-black/40 p-2 space-y-2">
-                          {userQuizzes.map(q => (
-                              <button 
-                                  key={q.id}
-                                  onClick={() => setSelectedTargetQuizId(q.id!)}
-                                  className={`w-full text-left p-3 rounded border transition-all ${selectedTargetQuizId === q.id ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'}`}
-                              >
-                                  <div className="font-bold text-sm">{q.title}</div>
-                                  <div className="text-xs opacity-70">{q.questions.length} preguntas existinges</div>
-                              </button>
-                          ))}
-                      </div>
-                      <CyberButton onClick={confirmAddToExisting} isLoading={isAddingToExisting} disabled={!selectedTargetQuizId} className="w-full">
-                          CONFIRMAR Y FUSIONAR
-                      </CyberButton>
-                  </div>
-              </CyberCard>
-          </div>
-      )}
-
-      {/* --- POST-GENERATION ACTION BAR --- */}
-      {quiz.questions.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-black/40 border border-gray-800 rounded-xl">
-              <CyberButton onClick={() => onPlay(quiz)} variant="neural" className="h-12 text-sm font-bold bg-yellow-600 hover:bg-yellow-500 border-yellow-400 text-black">
-                  <Gamepad2 className="w-5 h-5 mr-2" /> ¡JUGAR!
-              </CyberButton>
-              <CyberButton onClick={() => onSave(false)} isLoading={isSaving} className="h-12 text-sm">
-                  <Save className="w-5 h-5 mr-2" /> GUARDAR
-              </CyberButton>
-              <CyberButton onClick={handleOpenAddToExisting} variant="secondary" className="h-12 text-sm">
-                  <FilePlus className="w-5 h-5 mr-2" /> AÑADIR A QUIZ
-              </CyberButton>
-              <CyberButton onClick={onExport} variant="secondary" className="h-12 text-sm">
-                  <Download className="w-5 h-5 mr-2" /> EXPORTAR
-              </CyberButton>
-          </div>
-      )}
 
       {/* --- HEADER ACTIONS --- */}
       <div className="flex flex-col gap-4 border-b border-gray-800 pb-6">
@@ -659,22 +544,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                       </div>
                   </div>
               </div>
-
-              <div className="flex items-center gap-2 w-full md:w-auto shrink-0 flex-wrap">
-                  <CyberButton onClick={handleOpenPublish} variant="secondary" className="flex-1 md:flex-none text-xs h-10 px-4 bg-purple-900/20 border-purple-500/50 text-purple-200 hover:text-white hover:bg-purple-900/40">
-                      <Globe className="w-4 h-4 mr-2" /> PUBLICAR
-                  </CyberButton>
-              </div>
           </div>
       </div>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-xl font-cyber text-gray-300">{t.questions_db} [{quiz.questions.length}]</h2>
-            <div className="flex items-center gap-2 text-xs font-mono text-gray-500 mt-1">
-                <span className="text-cyan-600 font-bold">{t.editor_targeting}</span>
-                <span className="bg-gray-900 px-2 py-0.5 rounded border border-gray-800">{PLATFORM_SPECS[targetPlatform].name}</span>
-            </div>
           </div>
           <div className="flex items-center gap-4 w-full md:w-auto">
              <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
@@ -709,7 +584,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                   <CyberButton onClick={handleAiGenerate} isLoading={isGenerating} disabled={!aiTopic}>{t.ai_modal_add}</CyberButton>
                   <CyberButton variant="ghost" onClick={() => setShowAiModal(false)}>{t.ai_modal_close}</CyberButton>
               </div>
-              <p className="text-xs text-purple-300/60 mt-2 font-mono">* {t.editor_types_desc}</p>
           </div>
       )}
 
@@ -719,8 +593,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           {/* SIDEBAR (TOC + SHARING) */}
           {quiz.questions.length > 0 && (
               <div className="w-full lg:w-64 flex-shrink-0 lg:sticky lg:top-24 max-h-[calc(100vh-100px)] flex flex-col gap-4">
-                  
-                  {/* TOC */}
                   <div className="bg-black/40 border border-gray-800 rounded-lg overflow-hidden flex flex-col flex-1 max-h-[400px]">
                       <div className="p-3 border-b border-gray-800 bg-gray-900/50 font-mono text-xs font-bold text-gray-400 flex items-center justify-between">
                           <span className="flex items-center gap-2"><LayoutList className="w-3 h-3" /> INDEX</span>
@@ -782,10 +654,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                         const index = quiz.questions.findIndex(ql => ql.id === q.id); // Real index
                         const isValid = validateQuestion(q);
                         const isExpanded = expandedQuestionId === q.id;
-                        const allowedTypes = PLATFORM_SPECS[targetPlatform].types;
                         const isEnhancing = enhancingId === q.id;
 
-                        // --- CORRECT ANSWER LOGIC ---
                         const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
                                            ? q.correctOptionIds 
                                            : (q.correctOptionId ? [q.correctOptionId] : []);
@@ -805,7 +675,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                   <div className="flex items-center gap-4 flex-1 overflow-hidden">
                                       {!isExpanded && (
                                           <div className="flex-1 flex flex-col gap-1 w-full">
-                                              {/* Top Line: Icon | Text | Image Thumb */}
                                               <div className="flex items-center gap-3 w-full">
                                                   <div className={`p-1.5 rounded border ${getTypeColor(q.questionType)}`}>
                                                       {getTypeIcon(q.questionType)}
@@ -821,7 +690,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   {!isValid && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
                                               </div>
                                               
-                                              {/* Bottom Line: Correct Answer */}
                                               {correctTexts && (
                                                   <div className="flex items-center gap-1 text-[10px] text-green-500/80 font-mono pl-10">
                                                       <Check className="w-3 h-3" /> {correctTexts}
@@ -830,11 +698,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           </div>
                                       )}
                                       
-                                      {/* Header Title when Expanded */}
                                       {isExpanded && <div className="flex items-center gap-2 text-cyan-400"><span className="font-cyber text-lg">{t.editing} Q-{index+1}</span></div>}
                                   </div>
                                   
-                                  {/* Right Actions */}
                                   <div className="flex items-center gap-2">
                                       {!isExpanded && (
                                           <>
@@ -850,7 +716,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               {isExpanded && (
                                   <div className="space-y-6 mt-6 border-t border-gray-800 pt-6 animate-in slide-in-from-top-2 cursor-default" onClick={e => e.stopPropagation()}>
                                       
-                                      {/* QUALITY FLAGS BANNER */}
                                       {(q.reconstructed || q.qualityFlags?.needsHumanReview) && (
                                           <div className="flex items-center gap-4 p-2 bg-purple-950/20 border-l-4 border-purple-500 rounded text-xs font-mono text-purple-200">
                                               {q.reconstructed && <span className="flex items-center gap-1"><FileSearch className="w-3 h-3"/> Reconstructed by AI</span>}
@@ -858,12 +723,11 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           </div>
                                       )}
 
-                                      {/* TYPE & TIMER ROW */}
                                       <div className="flex flex-col md:flex-row gap-4">
                                           <div className="flex-1">
                                               <CyberSelect 
                                                   label={t.q_type_label} 
-                                                  options={getGroupedTypeOptions() as any} // Pass grouped options
+                                                  options={getGroupedTypeOptions() as any} 
                                                   value={q.questionType || QUESTION_TYPES.MULTIPLE_CHOICE} 
                                                   onChange={(e) => handleTypeChange(q.id, e.target.value)} 
                                               />
@@ -874,23 +738,20 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           </div>
                                       </div>
 
-                                      {/* QUESTION TEXT + IMAGE BUTTON ROW */}
                                       <div className="flex gap-4">
                                           <div className="flex-1 space-y-2">
                                               <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
                                           </div>
                                           
-                                          {/* IMAGE TRIGGER BOX */}
                                           <div className="w-32 shrink-0 flex flex-col gap-1">
                                               <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block opacity-0">IMG</label> 
                                               {q.imageUrl ? (
                                                   <div 
-                                                      onClick={() => openImagePicker(q.id, q.imageUrl, undefined, q.imageCredit)} // PASS CURRENT URL & CREDIT
+                                                      onClick={() => openImagePicker(q.id, q.imageUrl, undefined, q.imageCredit)} 
                                                       className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all flex items-center justify-center"
                                                   >
                                                       <img src={q.imageUrl} className="w-full h-full object-contain max-h-[120px]" alt="Q" />
                                                       
-                                                      {/* UNSPLASH ATTRIBUTION PREVIEW */}
                                                       {q.imageCredit && q.imageCredit.source === 'Unsplash' && (
                                                           <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-[8px] text-white p-1 truncate">
                                                               Photo by {q.imageCredit.name} on Unsplash
@@ -919,9 +780,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           </div>
                                       </div>
 
-                                      {/* OPTIONS AREA */}
                                       <div className="bg-black/20 p-4 rounded border border-gray-800/50">
-                                          {/* --- STANDARD OPTIONS (MC, MS, TF, POLL, ORDER) --- */}
                                           {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE || q.questionType === QUESTION_TYPES.POLL || q.questionType === QUESTION_TYPES.ORDER || !q.questionType) && (
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                   {q.options.length === 0 && (
@@ -974,7 +833,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                           )}
                                                           
                                                           <div className="flex-1 flex gap-2 items-center">
-                                                              {/* OPTION IMAGE PREVIEW OR ADD BUTTON */}
                                                               {opt.imageUrl ? (
                                                                   <div className="relative group/img w-8 h-8 shrink-0">
                                                                       <img src={opt.imageUrl} className="w-8 h-8 object-cover rounded border border-gray-600" />
@@ -1012,10 +870,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                               </div>
                                           )}
 
-                                          {/* --- SHORT ANSWER CONFIG (FILL_GAP) --- */}
                                           {q.questionType === QUESTION_TYPES.FILL_GAP && (
                                               <div className="space-y-4">
-                                                  {/* 1. Primary Answer */}
                                                   <div className="space-y-2">
                                                       <label className="text-xs font-mono text-green-400 uppercase tracking-widest font-bold">RESPUESTA CORRECTA PRINCIPAL</label>
                                                       {q.options.length > 0 && (
@@ -1031,7 +887,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                       )}
                                                   </div>
 
-                                                  {/* 2. Match Config */}
                                                   <div className="bg-black/30 p-3 rounded border border-gray-700">
                                                       <label className="text-xs font-mono text-gray-500 uppercase tracking-widest block mb-2">VALIDACIÓN DE RESPUESTA</label>
                                                       <CyberCheckbox 
@@ -1047,7 +902,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                       />
                                                   </div>
 
-                                                  {/* 3. Alternative Answers */}
                                                   <div className="space-y-2 pt-2 border-t border-gray-800">
                                                       <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest block">RESPUESTAS ALTERNATIVAS (SINÓNIMOS)</label>
                                                       <p className="text-[10px] text-gray-500 mb-2">Añade variaciones válidas (ej: "2ª GM", "II Guerra Mundial") para que el sistema las acepte automáticamente.</p>
@@ -1074,7 +928,6 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                           )}
                                       </div>
 
-                                      {/* FEEDBACK & FOOTER ACTIONS */}
                                       {q.questionType !== QUESTION_TYPES.OPEN_ENDED && (
                                           <div className="space-y-2">
                                               <div className="flex items-center gap-4">
@@ -1114,7 +967,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
                     {/* PAGINATION CONTROLS */}
                     {totalPages > 1 && (
-                        <div className="flex items-center justify-between border-t border-gray-800 pt-6">
+                        <div className="flex items-center justify-between border-t border-gray-800 pt-6 mb-24">
                             <CyberButton 
                                 variant="ghost" 
                                 onClick={() => changePage(Math.max(1, currentPage - 1))}
@@ -1144,6 +997,39 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
               )}
           </div>
       </div>
+
+      {/* --- BOTTOM ACTION BAR --- */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#020617]/90 backdrop-blur-md border-t border-gray-800 p-4 z-40 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+          <div className="max-w-4xl mx-auto flex gap-4">
+              <CyberButton 
+                  onClick={() => onSave(false)} 
+                  isLoading={isSaving} 
+                  variant="secondary"
+                  className="flex-1 h-14 text-sm font-bold border-cyan-500/50 hover:bg-cyan-900/20"
+              >
+                  {user ? <Save className="w-5 h-5 mr-2" /> : <Lock className="w-5 h-5 mr-2 text-yellow-500" />}
+                  GUARDAR EN BIBLIOTECA
+              </CyberButton>
+
+              <CyberButton 
+                  onClick={handleOpenPublish} 
+                  variant="secondary"
+                  className="flex-1 h-14 text-sm font-bold border-purple-500/50 hover:bg-purple-900/20 text-purple-200"
+              >
+                  <Globe className="w-5 h-5 mr-2" />
+                  PUBLICAR COMUNIDAD
+              </CyberButton>
+
+              <CyberButton 
+                  onClick={handleExportRedirect}
+                  className="flex-1 h-14 text-sm font-bold bg-gradient-to-r from-pink-600 to-red-500 border-none shadow-[0_0_20px_rgba(236,72,153,0.3)] hover:scale-[1.02]"
+              >
+                  <Rocket className="w-5 h-5 mr-2" />
+                  EXPORTAR A PLATAFORMA
+              </CyberButton>
+          </div>
+      </div>
+
     </div>
   );
 };

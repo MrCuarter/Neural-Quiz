@@ -328,7 +328,7 @@ export const QUESTION_TYPES = {
 
 export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
     'UNIVERSAL': { 
-        name: 'Universal / Generic', 
+        name: 'Neural Quiz (Nativo)', 
         types: Object.values(QUESTION_TYPES) 
     },
     [ExportFormat.PDF_PRINT]: {
