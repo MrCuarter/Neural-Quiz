@@ -122,11 +122,17 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
 
         const generateGrid = () => {
             const newGrid: BoardCell[] = [];
-            let availableQuestions = activeQuiz.questions;
+            let availableQuestions = [...activeQuiz.questions];
+            
+            // Filter manually selected questions if any
             if (gameConfig.selectedQuestionIds && gameConfig.selectedQuestionIds.length > 0) {
                 availableQuestions = activeQuiz.questions.filter(q => gameConfig.selectedQuestionIds.includes(q.id));
-                if (availableQuestions.length === 0) availableQuestions = activeQuiz.questions;
+                if (availableQuestions.length === 0) availableQuestions = [...activeQuiz.questions];
             }
+
+            // SORT BY DIFFICULTY (Ascending: 1 -> 5)
+            // This ensures top rows (low points) get easiest questions
+            availableQuestions.sort((a, b) => (a.difficulty || 3) - (b.difficulty || 3));
 
             for (let c = 0; c < gameConfig.cols; c++) {
                 for (let r = 0; r < gameConfig.rows; r++) {
@@ -134,15 +140,45 @@ export const JeopardyBoard: React.FC<JeopardyBoardProps> = ({ quiz: propQuiz, qu
                     let isWildcard = false;
 
                     if (gameConfig.distributionMode === 'RIGGED') {
-                        if (c < availableQuestions.length) questionForCell = availableQuestions[c]; else isWildcard = true;
-                    } else if (gameConfig.distributionMode === 'SPLIT') {
-                        const qIdxBase = c * 2;
-                        const isTop = r < Math.ceil(gameConfig.rows / 2);
-                        const targetQIndex = isTop ? qIdxBase : qIdxBase + 1;
-                        if (targetQIndex < availableQuestions.length) questionForCell = availableQuestions[targetQIndex]; else isWildcard = true;
+                        // Standard sequential filling after sort
+                        // Questions are distributed column by column usually in raw arrays, 
+                        // but for difficulty sort we want row by row filling ideally? 
+                        // Or we can just use the sorted array sequentially:
+                        // First items (Easiest) -> assigned to first available slots.
+                        // Since mapping below is by C then R, it fills Col 1 Top->Bottom, then Col 2 Top->Bottom.
+                        // To make row 1 easier across all columns, we need to pick intelligently.
+                        
+                        // Intelligent Pick:
+                        // Row 0 (100pts) -> needs lowest difficulty
+                        // Row 4 (500pts) -> needs highest difficulty
+                        // Since 'availableQuestions' is sorted [Easy...Hard]
+                        // We calculate an index.
+                        
+                        const totalCells = gameConfig.rows * gameConfig.cols;
+                        // Map 2D coordinate to linear index based on "Row First" traversal virtually to align difficulty
+                        // But physically the grid is rendered however we want.
+                        
+                        // Simple approach: 
+                        // We want Q with Index 0 (Easiest) to be at [0,0] (100pts).
+                        // Q with Index 1 to be at [1,0] (100pts).
+                        // ...
+                        // Q with Last Index (Hardest) to be at [LastCol, LastRow] (500pts).
+                        
+                        // Let's create a linear mapping based on difficulty tiers
+                        // We pop from the sorted array.
+                    }
+                    
+                    // NEW STRATEGY: 
+                    // 1. Calculate ideal difficulty for this row (r=0 -> diff 1, r=4 -> diff 5)
+                    // 2. Find best matching question from available pool
+                    
+                    // Fallback to simple sequential from sorted array for now, but distributing across rows first
+                    const globalIndex = r * gameConfig.cols + c; // Row-major index
+                    
+                    if (globalIndex < availableQuestions.length) {
+                        questionForCell = availableQuestions[globalIndex];
                     } else {
-                        const qIndex = c * gameConfig.rows + r;
-                        if (qIndex < availableQuestions.length) questionForCell = availableQuestions[qIndex]; else isWildcard = true;
+                        isWildcard = true;
                     }
 
                     newGrid.push({ id: `${c}-${r}`, q: questionForCell, points: (r + 1) * 100, answered: false, isWildcard, row: r, col: c, locked: false });

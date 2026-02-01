@@ -84,7 +84,8 @@ const questionSchema: Schema = {
     imageSearchQuery: { type: Type.STRING, description: "2-3 words ENGLISH keyword for image search." },
     fallback_category: { type: Type.STRING },
     reconstructed: { type: Type.BOOLEAN },
-    sourceEvidence: { type: Type.STRING }
+    sourceEvidence: { type: Type.STRING },
+    difficulty: { type: Type.INTEGER, description: "1 to 5 based on complexity." }
   },
   required: ["text", "options", "type", "imageSearchQuery", "fallback_category"]
 };
@@ -104,8 +105,15 @@ Tu misión es generar cuestionarios JSON precisos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
 Genera "tags" útiles.
 
+NIVELES DE DIFICULTAD (Asigna el campo "difficulty" del 1 al 5):
+1. BÁSICO: Preguntas muy simples, directas. V/F, 2-3 opciones. Reconocimiento inmediato.
+2. INICIAL: Fáciles con pequeño reto. 3-4 opciones. Checkbox simples. Requieren atención básica.
+3. INTERMEDIO: Dificultad media. 4-5 opciones. Distractores plausibles. Obligan a pensar.
+4. AVANZADO: Exigentes. 5-6 opciones. Checkbox complejas. Precisión y análisis.
+5. EXPERTO: Máxima dificultad. Distractores muy elaborados. Reflexión crítica y transferencia.
+
 REGLAS DE TIPOS DE PREGUNTA:
-1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones. Solo una correcta.
+1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones (salvo nivel 1). Solo una correcta.
 2. "Fill in the Blank" (Respuesta Corta):
    - La opción con índice 0 es la respuesta principal perfecta.
    - Las opciones con índices 1, 2, 3 deben ser VARIACIONES ACEPTADAS o SINÓNIMOS (ej: "II Guerra Mundial", "2ª GM", "Segunda Guerra Mundial").
@@ -125,12 +133,13 @@ interface GenParams {
   count: number;
   types: string[]; 
   age: string;
+  difficulty?: string; // New: '1', '2', '3', '4', '5' or 'Multinivel'
   context?: string;
   urls?: string[]; 
   language?: string;
   includeFeedback?: boolean;
   tone?: string;
-  customToneContext?: string; // NEW
+  customToneContext?: string; 
 }
 
 // *** CRITICAL: HARDCODED PRODUCTION MODEL FOR CHEAP/HIGH QUOTA ***
@@ -175,7 +184,7 @@ function cleanAIResponse(text: string): string {
 export const generateQuizQuestions = async (params: GenParams): Promise<{questions: any[], tags: string[]}> => {
   return withRetry(async () => {
     const ai = getAI();
-    const { topic, count, types, age, context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral', customToneContext } = params;
+    const { topic, count, types, age, difficulty = '3', context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral', customToneContext } = params;
     // UPDATED LIMIT TO 50
     const safeCount = Math.min(Math.max(count, 1), 50);
 
@@ -187,13 +196,23 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
     }
 
     prompt += `Generate a Quiz about "${topic}".`;
-    prompt += `\nTarget Audience: ${age}. Output Language: ${language}.`;
+    prompt += `\nTarget Audience (Age/Level): ${age}. Output Language: ${language}.`;
+    
+    // DIFFICULTY LOGIC (MAP TO 1-5 SCALES)
+    if (difficulty === 'Multinivel') {
+        prompt += `\nDIFFICULTY: Mixed/Multilevel. Generate a balanced mix of Level 1 (Basic) to Level 5 (Expert) questions.`;
+    } else {
+        const diffNum = parseInt(difficulty);
+        const descMap = ["Basic", "Initial", "Intermediate", "Advanced", "Expert"];
+        const diffDesc = descMap[Math.min(Math.max(diffNum - 1, 0), 4)];
+        prompt += `\nDIFFICULTY: Level ${diffNum} - ${diffDesc}. Strictly follow the Level ${diffNum} guidelines provided in system instructions.`;
+    }
     
     if (tone !== 'Custom') {
         prompt += `\nTONE: ${tone.toUpperCase()}. Adapt the wording of questions and feedback to be ${tone}.`;
     }
     
-    if (types.length > 0) prompt += `\nInclude these types if possible: ${types.join(', ')}.`;
+    if (types.length > 0) prompt += `\nInclude these question types if suitable: ${types.join(', ')}.`;
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
     if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
 

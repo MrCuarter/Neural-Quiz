@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, ArrowRightCircle, Rocket } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, ArrowRightCircle, Rocket, Star, Wrench } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
@@ -11,8 +11,9 @@ import { publishQuiz } from '../services/communityService';
 import { uploadImageToCloudinary } from '../services/cloudinaryService'; 
 import { useToast } from './ui/Toast';
 import { PublishModal } from './PublishModal'; 
-import { SaveSuccessModal } from './modals/SaveSuccessModal'; // NEW IMPORT
+import { SaveSuccessModal } from './modals/SaveSuccessModal'; 
 import { ImagePickerModal } from './ui/ImagePickerModal';
+import { AuthModal } from './auth/AuthModal'; // ADDED AUTH MODAL IMPORT
 import { ImageResult } from '../services/imageService';
 import { getUserQuizzes, saveQuizToFirestore } from '../services/firebaseService';
 import * as XLSX from 'xlsx';
@@ -30,6 +31,26 @@ interface QuizEditorProps {
   currentLanguage?: string;
   onNavigate?: (view: string) => void;
 }
+
+// Helper Component for Stars
+const DifficultyRating = ({ level, onChange }: { level: number | undefined, onChange: (n: number) => void }) => {
+    const current = level || 0;
+    return (
+        <div className="flex gap-0.5 items-center bg-black/20 px-2 py-1 rounded border border-gray-800" title={`Dificultad: Nivel ${current}`}>
+            {[1, 2, 3, 4, 5].map(star => (
+                <button 
+                    key={star} 
+                    onClick={(e) => { e.stopPropagation(); onChange(star); }}
+                    className={`focus:outline-none transition-transform hover:scale-110`}
+                >
+                    <Star 
+                        className={`w-3 h-3 ${star <= current ? 'fill-yellow-400 text-yellow-400' : 'text-gray-700 hover:text-gray-500'}`} 
+                    />
+                </button>
+            ))}
+        </div>
+    );
+};
 
 export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t, onPlay, currentLanguage = 'es', onNavigate }) => {
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
@@ -52,9 +73,10 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [pickingImageCurrentUrl, setPickingImageCurrentUrl] = useState<string | null>(null);
   const [pickingImageCurrentCredit, setPickingImageCurrentCredit] = useState<ImageCredit | undefined>(undefined); 
   
-  // Share/Publish State
+  // Share/Publish/Auth State
   const [showPublishModal, setShowPublishModal] = useState(false);
-  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false); // NEW STATE
+  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false); 
+  const [showAuthModal, setShowAuthModal] = useState(false); // NEW AUTH STATE
   const [isPublishing, setIsPublishing] = useState(false);
   
   // Add to Existing State
@@ -121,16 +143,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
 
   // --- SAVE & PUBLISH FLOW MODIFIED ---
   const handleSaveAndPrompt = async () => {
+      // 1. Check Auth FIRST
+      if (!user) {
+          setShowAuthModal(true);
+          return;
+      }
+
       try {
           await onSave(false); // Save first
-          if (user) {
-              if (!quiz.isPublic) {
-                  // Show the new beautiful Success Modal instead of native confirm
-                  setShowSaveSuccessModal(true);
-              } else {
-                  // Already public, just notify save
-                  // Toast handled in onSave
-              }
+          if (!quiz.isPublic) {
+              // Show the new beautiful Success Modal instead of native confirm
+              setShowSaveSuccessModal(true);
+          } else {
+              // Already public, just notify save (Toast handled in onSave)
           }
       } catch(e) {
           // Toast handled in onSave
@@ -166,6 +191,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   };
 
   const handleOpenPublish = () => {
+      if (!user) { setShowAuthModal(true); return; }
       if (quiz.questions.length < 1) { toast.warning("Añade preguntas antes de publicar."); return; }
       setShowPublishModal(true);
   };
@@ -280,10 +306,22 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const getTypeIcon = (type?: string) => { if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />; if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />; if (type === QUESTION_TYPES.OPEN_ENDED) return <MessageSquare className="w-4 h-4" />; if (type === QUESTION_TYPES.ORDER) return <ListOrdered className="w-4 h-4" />; if (type === QUESTION_TYPES.MULTI_SELECT) return <CheckSquare className="w-4 h-4" />; return <Zap className="w-4 h-4" />; };
   const getTypeColor = (type?: string) => { if (type === QUESTION_TYPES.TRUE_FALSE) return "text-blue-400 bg-blue-900/30 border-blue-500/50"; if (type === QUESTION_TYPES.FILL_GAP) return "text-yellow-400 bg-yellow-900/30 border-yellow-500/50"; if (type === QUESTION_TYPES.OPEN_ENDED) return "text-pink-400 bg-pink-900/30 border-pink-500/50"; if (type === QUESTION_TYPES.ORDER) return "text-purple-400 bg-purple-900/30 border-purple-500/50"; if (type === QUESTION_TYPES.MULTI_SELECT) return "text-green-400 bg-green-900/30 border-green-500/50"; return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; };
 
+  // --- QUALITY CHECK LOGIC ---
+  const incompleteQuestions = quiz.questions.filter(q => !validateQuestion(q) || q.needsEnhanceAI);
+  const handleBulkEnhance = () => {
+      // For now, prompt user to enhance individually or manual fix
+      // Ideally this would iterate over incompleteQuestions and call enhanceQuestion
+      alert("Por favor, revisa las preguntas marcadas en rojo y utiliza el botón 'Generar con IA' si está disponible, o complétalas manualmente.");
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
       {/* GLOBAL MODALS */}
+      <AuthModal 
+          isOpen={showAuthModal} 
+          onClose={() => setShowAuthModal(false)} 
+      />
       <PublishModal 
           isOpen={showPublishModal} 
           onClose={() => setShowPublishModal(false)}
@@ -306,7 +344,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           initialCredit={pickingImageCurrentCredit} 
       />
 
-      {/* --- ADD TO EXISTING MODAL --- */}
+      {/* ... (Existing AddToExisting Modal) ... */}
       {showAddToExisting && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
               <CyberCard className="w-full max-w-lg border-purple-500/50">
@@ -377,7 +415,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           </div>
           <div className="flex items-center gap-4 w-full md:w-auto">
              <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
-             <CyberButton onClick={() => setShowAiModal(!showAiModal)} variant="secondary" className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Bot className="w-4 h-4" /> {t.add_gen_ai}</CyberButton>
+             {/* Removed AI Button as requested */}
           </div>
       </div>
 
@@ -509,11 +547,18 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                   <div className="flex items-center gap-4 flex-1 overflow-hidden">
                                       {!isExpanded && (
                                           <div className="flex-1 flex flex-col gap-1 w-full">
-                                              {/* Top Line: Icon | Text | Image Thumb */}
+                                              {/* Top Line: Icon | Stars | Text | Image Thumb */}
                                               <div className="flex items-center gap-3 w-full">
                                                   <div className={`p-1.5 rounded border ${getTypeColor(q.questionType)}`}>
                                                       {getTypeIcon(q.questionType)}
                                                   </div>
+                                                  
+                                                  {/* Difficulty Rating (Collapsed) */}
+                                                  <DifficultyRating 
+                                                      level={q.difficulty} 
+                                                      onChange={(l) => updateQuestion(q.id, { difficulty: l })} 
+                                                  />
+
                                                   <span className={`font-bold font-mono text-sm md:text-base break-words flex-1 pr-4 ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>
                                                       {q.text || t.enter_question}
                                                   </span>
@@ -538,12 +583,12 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       {isExpanded && <div className="flex items-center gap-2 text-cyan-400"><span className="font-cyber text-lg">{t.editing} Q-{index+1}</span></div>}
                                   </div>
                                   
-                                  {/* Right Actions */}
-                                  <div className="flex items-center gap-2">
+                                  {/* Right Actions - Z-Index Boosted to fix click issue */}
+                                  <div className="flex items-center gap-2 relative z-20">
                                       {!isExpanded && (
                                           <>
-                                              <button onClick={(e) => { e.stopPropagation(); duplicateQuestion(q.id); }} className="p-2 text-gray-600 hover:text-cyan-400 transition-colors rounded hover:bg-cyan-950/20" title="Duplicar"><Copy className="w-4 h-4" /></button>
-                                              <button onClick={(e) => removeQuestion(q.id, e)} className="p-2 text-gray-600 hover:text-red-500 transition-colors rounded hover:bg-red-950/20" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
+                                              <button onClick={(e) => { e.stopPropagation(); duplicateQuestion(q.id); }} className="p-2 text-gray-600 hover:text-cyan-400 transition-colors rounded hover:bg-cyan-900/20" title="Duplicar"><Copy className="w-4 h-4" /></button>
+                                              <button onClick={(e) => removeQuestion(q.id, e)} className="p-2 text-gray-600 hover:text-red-500 transition-colors rounded hover:bg-red-900/20" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
                                           </>
                                       )}
                                       <div className="p-2 text-cyan-500">{isExpanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}</div>
@@ -554,7 +599,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                               {isExpanded && (
                                   <div className="space-y-6 mt-6 border-t border-gray-800 pt-6 animate-in slide-in-from-top-2 cursor-default" onClick={e => e.stopPropagation()}>
                                       {/* ... (Existing expanded question content preserved) ... */}
-                                      <div className="flex flex-col md:flex-row gap-4">
+                                      <div className="flex flex-col md:flex-row gap-4 items-end">
                                           <div className="flex-1">
                                               <CyberSelect 
                                                   label={t.q_type_label} 
@@ -563,6 +608,16 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   onChange={(e) => handleTypeChange(q.id, e.target.value)} 
                                               />
                                           </div>
+                                          
+                                          {/* Difficulty Rating (Expanded) */}
+                                          <div className="mb-2">
+                                              <label className="text-xs font-mono text-gray-500 block mb-1">DIFICULTAD</label>
+                                              <DifficultyRating 
+                                                  level={q.difficulty} 
+                                                  onChange={(l) => updateQuestion(q.id, { difficulty: l })} 
+                                              />
+                                          </div>
+
                                           <div className="w-full md:w-32">
                                               <label className="text-xs font-mono text-gray-500 block mb-1">{t.timer_sec}</label>
                                               <input type="number" value={q.timeLimit} onChange={(e) => updateQuestion(q.id, { timeLimit: parseInt(e.target.value) || 0 })} className="bg-black/50 border border-gray-700 w-full p-3 text-center font-mono text-cyan-400 focus:border-cyan-500 outline-none rounded-sm" />
@@ -658,6 +713,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                       </div>
 
                                       <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
+                                          <CyberButton variant="danger" onClick={() => removeQuestion(q.id)} className="text-xs h-9">
+                                              <Trash2 className="w-4 h-4 mr-2" /> ELIMINAR
+                                          </CyberButton>
                                           <CyberButton variant="secondary" onClick={() => duplicateQuestion(q.id)} className="text-xs h-9"><CopyPlus className="w-4 h-4 mr-2" /> DUPLICAR</CyberButton>
                                           <CyberButton onClick={addQuestion} className="text-xs h-9 bg-green-700 hover:bg-green-600 border-none"><Plus className="w-4 h-4 mr-2" /> AÑADIR NUEVA</CyberButton>
                                       </div>
@@ -668,6 +726,27 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                         );
                       })}
                     </div>
+
+                    {/* QUALITY CHECK BANNER */}
+                    {incompleteQuestions.length > 0 && (
+                        <div className="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4 mb-6 animate-pulse flex flex-col md:flex-row items-center gap-4">
+                            <div className="flex items-center gap-3">
+                                <AlertTriangle className="w-8 h-8 text-yellow-500" />
+                                <div>
+                                    <h4 className="text-yellow-200 font-bold font-cyber">DATOS INCOMPLETOS DETECTADOS</h4>
+                                    <p className="text-xs text-yellow-100/70 font-mono">
+                                        Hay {incompleteQuestions.length} preguntas sin opciones válidas o respuesta correcta.
+                                    </p>
+                                </div>
+                            </div>
+                            <CyberButton 
+                                onClick={handleBulkEnhance} 
+                                className="ml-auto bg-yellow-600 hover:bg-yellow-500 border-none text-black"
+                            >
+                                <Wrench className="w-4 h-4 mr-2" /> REPARAR CON IA
+                            </CyberButton>
+                        </div>
+                    )}
 
                     {/* PAGINATION CONTROLS */}
                     {totalPages > 1 && (

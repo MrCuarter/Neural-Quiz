@@ -20,7 +20,8 @@ import {
     Users,
     Play,
     Copy,
-    Car
+    Car,
+    FlaskConical
 } from 'lucide-react';
 import { AuthModal } from '../auth/AuthModal';
 
@@ -83,12 +84,15 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
+                            
+                            {/* --- BOTÓN EXPERIMENTAL NUEVO --- */}
                             <CyberButton 
-                                onClick={() => onNavigate('create_ai')} 
-                                className="h-14 text-lg px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-none shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                                onClick={() => onNavigate('new_creator')} 
+                                className="h-14 text-lg px-8 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 border-none shadow-[0_0_20px_rgba(234,179,8,0.4)] animate-pulse"
                             >
-                                <BrainCircuit className="w-5 h-5 mr-2" /> CREAR AHORA
+                                <FlaskConical className="w-5 h-5 mr-2" /> NUEVO CREADOR (BETA)
                             </CyberButton>
+
                             {/* BOTÓN EXPLORAR COMUNIDAD (PÚBLICO) */}
                             <CyberButton 
                                 variant="secondary" 

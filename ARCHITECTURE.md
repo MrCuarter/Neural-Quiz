@@ -53,6 +53,24 @@ Toda la lógica de comprensión y estructuración recae en la API de Google Gemi
     *   `responseMimeType: "application/json"`: Forzamos a la IA a responder SIEMPRE en formato JSON estricto.
     *   `responseSchema`: Definimos un esquema TypeScript estricto (`Question`, `Option`, `Type`) para asegurar que la salida nunca rompa la aplicación.
 
+### 5. Niveles de Dificultad (Protocolo v2)
+La IA sigue estrictamente estos niveles al generar contenido:
+
+*   **Nivel 1 · Básico:**
+    Preguntas muy simples y directas. Predominan el verdadero/falso, la opción única con 2–3 respuestas o la respuesta corta muy evidente (una palabra clara). No hay distractores complejos ni ambigüedad. Evalúan reconocimiento inmediato y recuerdo literal.
+
+*   **Nivel 2 · Inicial:**
+    Preguntas fáciles pero con un pequeño reto. Se usan opciones únicas con 3–4 respuestas, checkbox con una combinación clara, o ordenar procesos cortos (3 pasos). Las respuestas falsas son evidentes si se comprende mínimamente el contenido. Requieren atención y comprensión básica.
+
+*   **Nivel 3 · Intermedio:**
+    Preguntas de dificultad media. Incluyen opción única con 4–5 respuestas, checkbox con varias respuestas correctas, respuesta corta menos obvia o ordenar procesos de 4 pasos. Los distractores son plausibles y obligan a pensar antes de responder.
+
+*   **Nivel 4 · Avanzado:**
+    Preguntas exigentes que combinan complejidad conceptual y formato. Aparecen opciones únicas con 5–6 respuestas, checkbox con varias respuestas correctas no evidentes, respuestas cortas que exigen precisión, u ordenar procesos largos (5–6 pasos). Se evalúa análisis y dominio del contenido.
+
+*   **Nivel 5 · Experto:**
+    Preguntas de máxima dificultad. Distractores muy bien construidos, checkbox con combinaciones complejas, respuestas cortas abiertas donde no hay pistas, u ordenaciones completas con muchos pasos. También pueden incluir preguntas sin validación (encuestas o abiertas) pensadas para reflexión, transferencia y pensamiento crítico, más que para corrección automática.
+
 ---
 
 ## 4. Flujo de Datos Detallado

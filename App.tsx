@@ -17,7 +17,8 @@ import { PublicQuizLanding } from './components/PublicQuizLanding';
 import { CommunityPage } from './components/CommunityPage'; 
 import { ArcadePlay } from './components/pages/ArcadePlay'; 
 import { LandingV2 } from './components/pages/LandingV2'; 
-import { OldLanding } from './components/pages/OldLanding'; // NEW: Archive component
+import { NewCreator } from './components/pages/NewCreator'; // NEW IMPORT
+import { OldLanding } from './components/pages/OldLanding'; 
 import { TeacherHub } from './components/pages/TeacherHub'; 
 import { ClassesManager } from './components/pages/ClassesManager'; 
 import { RaidDashboard } from './components/pages/live/RaidDashboard'; 
@@ -35,7 +36,7 @@ import * as XLSX from 'xlsx';
 import { ToastProvider, useToast } from './components/ui/Toast';
 
 // Types
-type ViewState = 'home' | 'old_home' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'export_hub' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play' | 'raid_dashboard';
+type ViewState = 'home' | 'old_home' | 'teacher_hub' | 'classes_manager' | 'create_menu' | 'create_ai' | 'create_manual' | 'new_creator' | 'export_hub' | 'convert_upload' | 'convert_analysis' | 'convert_result' | 'help' | 'privacy' | 'terms' | 'my_quizzes' | 'game_lobby' | 'game_board' | 'game_hex' | 'public_view' | 'community' | 'arcade_play' | 'raid_dashboard';
 
 const initialQuiz: Quiz = {
   title: '',
@@ -97,7 +98,7 @@ const NeuralApp: React.FC = () => {
     urls: string; 
     tone: string;
     language: string;
-    customToneContext: string; // NEW STATE
+    customToneContext: string; 
   }>({
     topic: '',
     count: 5,
@@ -460,6 +461,21 @@ const NeuralApp: React.FC = () => {
         {view === 'terms' && <TermsView onBack={() => setView('home')} />}
         {view === 'my_quizzes' && <MyQuizzes user={user} onBack={() => setView('home')} onEdit={handleLoadQuiz} />}
         {view === 'public_view' && sharedQuizId && <PublicQuizLanding quizId={sharedQuizId} currentUser={user} onPlay={launchPublicGame} onBack={() => setView('home')} onLoginReq={signInWithGoogle} />}
+
+        {/* --- NEW INTEGRATED CREATOR --- */}
+        {view === 'new_creator' && (
+            <NewCreator 
+                onNavigate={(v) => setView(v as ViewState)}
+                user={user}
+                t={t}
+                initialQuiz={quiz}
+                setQuiz={setQuiz}
+                onSaveQuiz={handleSaveQuiz}
+                onExport={handleGoToExport}
+                onPlay={handlePlayFromEditor}
+                isSaving={isSaving}
+            />
+        )}
 
         {view === 'create_menu' && (
             <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">

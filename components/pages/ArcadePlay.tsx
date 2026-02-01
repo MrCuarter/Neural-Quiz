@@ -408,13 +408,20 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
 
         if (correct) {
             const bossDodgeRoll = Math.random();
-            if (bossDodgeRoll < difficultyStats.dodgeChance && evaluation?.config.gameMode !== 'raid') {
+            
+            // DIFFICULTY SCALING: Higher difficulty questions are HARDER to dodge for the boss.
+            // Level 1: Standard dodge. Level 5: Boss almost never dodges (reward for hard Q).
+            const qLevel = q.difficulty || 3;
+            const difficultyHitBonus = (qLevel - 1) * 0.05; // Up to 20% reduced dodge chance
+            const adjustedDodgeChance = Math.max(0, difficultyStats.dodgeChance - difficultyHitBonus);
+
+            if (bossDodgeRoll < adjustedDodgeChance && evaluation?.config.gameMode !== 'raid') {
                 setCombatLog("¡EL JEFE ESQUIVÓ TU ATAQUE!");
                 playSFX('miss');
                 setStreak(0); 
                 setTimeout(() => processPlayerMiss(q), 1000);
             } else {
-                processPlayerAttack();
+                processPlayerAttack(q);
             }
         } else {
             processPlayerMiss(q);
@@ -423,17 +430,28 @@ export const ArcadePlay: React.FC<ArcadePlayProps> = ({ evaluationId, previewCon
         setTimeout(() => checkWinConditionOrNext(correct), 2500);
     };
 
-    const processPlayerAttack = () => {
+    const processPlayerAttack = (q?: Question) => {
         playSFX('correct');
         setStreak(s => s + 1);
-        setScore(s => s + (100 + (streak * 10)));
+        
+        // SCORE SCALING BY DIFFICULTY
+        const qLevel = q?.difficulty || 3; // 1-5
+        const basePoints = 100 * (1 + (qLevel - 1) * 0.2); // Level 1=100, Level 5=180
+        setScore(s => s + Math.round(basePoints + (streak * 10)));
 
-        let damage = 100;
+        // DAMAGE SCALING BY DIFFICULTY
+        let damage = 100 * (1 + (qLevel - 3) * 0.15); // Level 1=70, 3=100, 5=130
+        
         if (passiveEffect === 'fuerza') damage *= 1.2;
         if (playerStatus.some(s => s.type === 'fuerzatemp')) damage *= 1.5;
         if (bossStatus.some(s => s.type === 'vulnerable')) damage *= 2;
 
-        const isCrit = Math.random() < (passiveEffect === 'certero' ? 0.3 : 0.1);
+        // CRIT CHANCE SCALING BY DIFFICULTY
+        // Harder questions have higher crit chance
+        const baseCritChance = passiveEffect === 'certero' ? 0.3 : 0.1;
+        const difficultyCritBonus = (qLevel - 1) * 0.05; // Up to +20% crit chance
+        
+        const isCrit = Math.random() < (baseCritChance + difficultyCritBonus);
         if (isCrit) damage *= 1.5;
         damage = Math.ceil(damage);
 

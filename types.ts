@@ -25,6 +25,9 @@ export interface Question {
   feedback?: string;
   questionType?: string; // e.g. "Multiple Choice"
   
+  // DIFFICULTY LEVEL (1-5)
+  difficulty?: number; 
+
   // ANTI-SPOILER IMAGE SEARCH
   imageSearchQuery?: string; // RENAMED: AI Generated English Keywords
   fallback_category?: string; // AI suggested category for local images
