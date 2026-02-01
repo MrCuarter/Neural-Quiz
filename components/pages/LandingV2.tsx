@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CyberButton, CyberCard } from '../ui/CyberUI';
 import { 
     BrainCircuit, 
@@ -21,7 +21,8 @@ import {
     Play,
     Copy,
     Car,
-    FlaskConical
+    FlaskConical,
+    SortDesc
 } from 'lucide-react';
 import { AuthModal } from '../auth/AuthModal';
 
@@ -33,6 +34,7 @@ interface LandingV2Props {
 
 export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [sortOrder, setSortOrder] = useState<'NEWEST' | 'REUSED' | 'PLAYED'>('NEWEST');
     
     // Función wrapper para proteger navegación (SOLO para áreas privadas)
     const handleProtectedNav = (view: string) => {
@@ -47,12 +49,22 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
         setIsAuthModalOpen(true);
     };
 
+    // MOCK DATA WITH METRICS FOR SORTING
     const COMMUNITY_MOCKS = [
-        { title: "Imperio Romano", author: "ProfeHistoria", q: 15, tags: ["Historia", "Secundaria"] },
-        { title: "Tabla Periódica", author: "Dr. Science", q: 20, tags: ["Química", "Bachillerato"] },
-        { title: "Literatura Siglo de Oro", author: "Ms. Letters", q: 12, tags: ["Lengua", "Literatura"] },
-        { title: "Capitales de Europa", author: "GeoMaster", q: 25, tags: ["Geografía", "Primaria"] }
+        { title: "Imperio Romano", author: "ProfeHistoria", q: 15, tags: ["Historia", "Secundaria"], clones: 120, visits: 850, date: new Date('2023-11-01') },
+        { title: "Tabla Periódica", author: "Dr. Science", q: 20, tags: ["Química", "Bachillerato"], clones: 45, visits: 2300, date: new Date('2023-10-15') },
+        { title: "Literatura Siglo de Oro", author: "Ms. Letters", q: 12, tags: ["Lengua", "Literatura"], clones: 80, visits: 400, date: new Date('2023-12-05') },
+        { title: "Capitales de Europa", author: "GeoMaster", q: 25, tags: ["Geografía", "Primaria"], clones: 300, visits: 5000, date: new Date('2023-09-20') }
     ];
+
+    const sortedMocks = useMemo(() => {
+        return [...COMMUNITY_MOCKS].sort((a, b) => {
+            if (sortOrder === 'NEWEST') return b.date.getTime() - a.date.getTime();
+            if (sortOrder === 'REUSED') return b.clones - a.clones;
+            if (sortOrder === 'PLAYED') return b.visits - a.visits;
+            return 0;
+        });
+    }, [sortOrder]);
 
     return (
         <div className="min-h-screen bg-[#020617] text-white flex flex-col font-sans selection:bg-cyan-500/30">
@@ -137,7 +149,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                 </div>
             </section>
 
-            {/* --- SECCIÓN 2: OPERATIONS HUB (SIMPLIFICADO) --- */}
+            {/* --- SECCIÓN 2: OPERATIONS HUB (REORDERED) --- */}
             <section className="py-12 px-4 md:px-8 bg-black/40 border-t border-gray-900">
                 <div className="max-w-7xl mx-auto space-y-8">
                     <div className="flex items-center gap-4 mb-4">
@@ -147,7 +159,26 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         
-                        {/* 1. GENERADOR IA (DESTACADO) */}
+                        {/* 1. EDITOR MANUAL (AHORA PRIMERO) */}
+                        <div 
+                            onClick={() => onNavigate('create_manual')}
+                            className="group bg-gray-900/30 border border-gray-700 hover:border-white/30 rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-800 flex flex-col justify-between h-64"
+                        >
+                            <div>
+                                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white group-hover:text-black transition-colors">
+                                    <PenTool className="w-6 h-6 text-gray-400 group-hover:text-black" />
+                                </div>
+                                <h3 className="text-xl font-bold font-cyber text-white mb-2">EDITOR MANUAL</h3>
+                                <p className="text-gray-400 text-sm">
+                                    Control total. Crea preguntas desde cero o edita las existentes.
+                                </p>
+                            </div>
+                            <div className="mt-4 flex items-center gap-2 text-gray-500 text-xs font-bold tracking-widest uppercase group-hover:text-white transition-colors">
+                                Abrir Editor <ArrowRight className="w-4 h-4" />
+                            </div>
+                        </div>
+
+                        {/* 2. GENERADOR IA (AHORA SEGUNDO - DESTACADO) */}
                         <div 
                             onClick={() => onNavigate('create_ai')}
                             className="group relative bg-gradient-to-br from-cyan-900/40 to-blue-900/40 border border-cyan-500/80 hover:border-cyan-400 rounded-2xl p-8 cursor-pointer overflow-hidden transition-all hover:shadow-[0_0_40px_rgba(6,182,212,0.2)] flex flex-col justify-between h-64"
@@ -169,23 +200,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                             </div>
                         </div>
 
-                        {/* 2. EDITOR MANUAL */}
-                        <div 
-                            onClick={() => onNavigate('create_manual')}
-                            className="group bg-gray-900/30 border border-gray-700 hover:border-white/30 rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-800 flex flex-col justify-between h-64"
-                        >
-                            <div>
-                                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white group-hover:text-black transition-colors">
-                                    <PenTool className="w-6 h-6 text-gray-400 group-hover:text-black" />
-                                </div>
-                                <h3 className="text-xl font-bold font-cyber text-white mb-2">EDITOR MANUAL</h3>
-                                <p className="text-gray-400 text-sm">
-                                    Control total. Crea preguntas desde cero o edita las existentes.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* 3. CONVERSOR */}
+                        {/* 3. CONVERSOR (AHORA TERCERO) */}
                         <div 
                             onClick={() => onNavigate('convert_upload')}
                             className="group bg-gray-900/30 border border-gray-700 hover:border-pink-500/50 rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-800 flex flex-col justify-between h-64"
@@ -199,35 +214,59 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                                     Transforma documentos y exámenes antiguos automáticamente.
                                 </p>
                             </div>
+                            <div className="mt-4 flex items-center gap-2 text-pink-500 text-xs font-bold tracking-widest uppercase group-hover:text-pink-300 transition-colors">
+                                Cargar Archivo <ArrowRight className="w-4 h-4" />
+                            </div>
                         </div>
 
                     </div>
                 </div>
             </section>
 
-            {/* --- SECCIÓN 3: COMUNIDAD (PÚBLICA) --- */}
+            {/* --- SECCIÓN 3: NEURAL COMMUNITY (RENAMED & SORTING) --- */}
             <section className="py-12 px-4 md:px-8 border-t border-gray-900 bg-gradient-to-b from-[#020617] to-[#0a0a0a]">
                 <div className="max-w-7xl mx-auto space-y-8">
-                    <div className="flex items-center justify-between">
+                    
+                    {/* Header with Sorting */}
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
                             <Globe className="w-6 h-6 text-green-400" />
-                            <h2 className="text-2xl font-cyber text-white tracking-wide">ÚLTIMAS CREACIONES DE LA COMUNIDAD</h2>
+                            <h2 className="text-2xl font-cyber text-white tracking-wide uppercase">NEURAL COMMUNITY</h2>
                         </div>
-                        {/* VER TODO AHORA ES PÚBLICO */}
-                        <CyberButton variant="ghost" onClick={() => onNavigate('community')} className="text-xs">
-                            VER TODO <ArrowRight className="w-4 h-4 ml-2" />
-                        </CyberButton>
+                        
+                        <div className="flex items-center gap-4">
+                            {/* SORT SELECTOR */}
+                            <div className="flex items-center bg-gray-900 border border-gray-700 rounded-lg px-3 py-1">
+                                <SortDesc className="w-4 h-4 text-gray-500 mr-2" />
+                                <select 
+                                    className="bg-transparent text-xs text-white outline-none cursor-pointer"
+                                    value={sortOrder}
+                                    onChange={(e) => setSortOrder(e.target.value as any)}
+                                >
+                                    <option value="NEWEST">Últimos Creados</option>
+                                    <option value="REUSED">Más Reutilizados</option>
+                                    <option value="PLAYED">Más Jugados</option>
+                                </select>
+                            </div>
+
+                            <CyberButton variant="ghost" onClick={() => onNavigate('community')} className="text-xs h-9">
+                                VER TODO <ArrowRight className="w-4 h-4 ml-2" />
+                            </CyberButton>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {COMMUNITY_MOCKS.map((item, idx) => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        {sortedMocks.map((item, idx) => (
                             <CyberCard key={idx} className="group border-gray-800 hover:border-green-500/50 transition-all cursor-pointer">
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-start">
-                                        <div className="bg-green-900/20 text-green-400 text-[10px] px-2 py-1 rounded border border-green-500/30">
+                                        <div className="bg-green-900/20 text-green-400 text-[10px] px-2 py-1 rounded border border-green-500/30 font-mono">
                                             {item.q} Preguntas
                                         </div>
-                                        <Globe className="w-4 h-4 text-gray-600 group-hover:text-green-400 transition-colors" />
+                                        <div className="flex flex-col items-end text-[9px] text-gray-500 font-mono">
+                                            <span className="flex items-center gap-1"><Copy className="w-2 h-2"/> {item.clones}</span>
+                                            <span className="flex items-center gap-1"><Play className="w-2 h-2"/> {item.visits}</span>
+                                        </div>
                                     </div>
                                     
                                     <div>

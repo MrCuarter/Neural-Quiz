@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { searchQuizzes } from '../services/communityService';
 import { Quiz } from '../types';
 import { CyberButton, CyberInput, CyberCard } from './ui/CyberUI';
-import { Search, Globe, Gamepad2, User, Calendar, Download, Hash, Loader2, Filter } from 'lucide-react';
+import { Search, Globe, Gamepad2, User, Calendar, Download, Hash, Loader2, Filter, GraduationCap } from 'lucide-react';
 import { getTagLabel, Language } from '../utils/translations';
 
 interface CommunityPageProps {
@@ -18,15 +18,16 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, on
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [langFilter, setLangFilter] = useState("ALL");
+    const [ageFilter, setAgeFilter] = useState("ALL");
 
     useEffect(() => {
         loadQuizzes();
-    }, [langFilter]); // Reload when filter changes
+    }, [langFilter, ageFilter]); // Reload when filters change
 
     const loadQuizzes = async (term: string = searchTerm) => {
         setLoading(true);
         try {
-            const results = await searchQuizzes(term, langFilter);
+            const results = await searchQuizzes(term, langFilter, ageFilter);
             setQuizzes(results);
         } catch (e) {
             console.error(e);
@@ -70,15 +71,16 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, on
                     <CyberButton variant="ghost" onClick={onBack}>VOLVER AL HUB</CyberButton>
                 </div>
 
-                {/* Search Bar & Filter */}
-                <div className="flex flex-col md:flex-row gap-4 max-w-4xl mx-auto w-full">
+                {/* Search Bar & Filters */}
+                <div className="flex flex-col lg:flex-row gap-4 max-w-5xl mx-auto w-full">
+                    {/* Search */}
                     <div className="relative flex-1">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                             <Search className="h-5 w-5 text-cyan-500" />
                         </div>
                         <input
                             type="text"
-                            className="block w-full pl-12 pr-4 py-4 bg-black/50 border-2 border-cyan-900 rounded-lg md:rounded-l-full md:rounded-r-none text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all font-mono text-lg"
+                            className="block w-full pl-12 pr-4 py-4 bg-black/50 border-2 border-cyan-900 rounded-lg lg:rounded-l-full lg:rounded-r-none text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all font-mono text-lg"
                             placeholder="Buscar por tema..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -86,30 +88,50 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({ onBack, onPlay, on
                         />
                     </div>
                     
-                    <div className="flex items-center bg-black/50 border-2 border-cyan-900 rounded-lg md:rounded-l-none md:rounded-r-full px-4 relative min-w-[180px]">
-                        <Filter className="w-5 h-5 text-gray-500 absolute left-4 pointer-events-none" />
-                        <select 
-                            value={langFilter} 
-                            onChange={(e) => setLangFilter(e.target.value)}
-                            className="w-full bg-transparent text-white font-mono text-sm pl-8 py-4 focus:outline-none appearance-none cursor-pointer"
-                        >
-                            <option value="ALL">Todos los Idiomas</option>
-                            <option value="es">🇪🇸 Español</option>
-                            <option value="en">🇬🇧 English</option>
-                            <option value="fr">🇫🇷 Français</option>
-                            <option value="de">🇩🇪 Deutsch</option>
-                            <option value="it">🇮🇹 Italiano</option>
-                            <option value="pt">🇵🇹 Português</option>
-                        </select>
-                        <div className="absolute right-4 pointer-events-none text-gray-500">▼</div>
-                    </div>
+                    {/* Filter Group */}
+                    <div className="flex gap-2 flex-col sm:flex-row">
+                        {/* Lang Filter */}
+                        <div className="flex items-center bg-black/50 border-2 border-cyan-900 rounded-lg px-4 relative min-w-[160px]">
+                            <Filter className="w-4 h-4 text-gray-500 absolute left-3 pointer-events-none" />
+                            <select 
+                                value={langFilter} 
+                                onChange={(e) => setLangFilter(e.target.value)}
+                                className="w-full bg-transparent text-white font-mono text-sm pl-6 py-4 focus:outline-none appearance-none cursor-pointer"
+                            >
+                                <option value="ALL">Idioma: Todos</option>
+                                <option value="es">🇪🇸 Español</option>
+                                <option value="en">🇬🇧 English</option>
+                                <option value="fr">🇫🇷 Français</option>
+                                <option value="de">🇩🇪 Deutsch</option>
+                                <option value="it">🇮🇹 Italiano</option>
+                                <option value="pt">🇵🇹 Português</option>
+                            </select>
+                        </div>
 
-                    <button 
-                        onClick={() => loadQuizzes(searchTerm)}
-                        className="px-8 py-4 bg-cyan-900/80 hover:bg-cyan-800 text-cyan-200 rounded-lg md:rounded-full font-bold text-sm transition-colors"
-                    >
-                        BUSCAR
-                    </button>
+                        {/* Age Filter */}
+                        <div className="flex items-center bg-black/50 border-2 border-cyan-900 rounded-lg px-4 relative min-w-[160px]">
+                            <GraduationCap className="w-4 h-4 text-gray-500 absolute left-3 pointer-events-none" />
+                            <select 
+                                value={ageFilter} 
+                                onChange={(e) => setAgeFilter(e.target.value)}
+                                className="w-full bg-transparent text-white font-mono text-sm pl-6 py-4 focus:outline-none appearance-none cursor-pointer"
+                            >
+                                <option value="ALL">Nivel: Todos</option>
+                                <option value="Primary">Primaria (6-12)</option>
+                                <option value="Secondary">Secundaria (12-16)</option>
+                                <option value="High School">Bachillerato</option>
+                                <option value="University">Universidad</option>
+                                <option value="Professional">Profesional</option>
+                            </select>
+                        </div>
+
+                        <button 
+                            onClick={() => loadQuizzes(searchTerm)}
+                            className="px-8 py-4 bg-cyan-900/80 hover:bg-cyan-800 text-cyan-200 rounded-lg lg:rounded-r-full lg:rounded-l-none font-bold text-sm transition-colors whitespace-nowrap"
+                        >
+                            BUSCAR
+                        </button>
+                    </div>
                 </div>
 
                 {/* Results Grid */}

@@ -234,7 +234,8 @@ export const CreateEvaluationModal: React.FC<CreateEvaluationModalProps> = ({ is
                     hostUserId = cred.user.uid;
                 } catch (e) {
                     console.warn("Anonymous auth failed", e);
-                    hostUserId = "guest_host"; 
+                    // Use standard universal guest ID if auth fails
+                    hostUserId = "neural_guest_universal"; 
                 }
             }
 

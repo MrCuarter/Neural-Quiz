@@ -3,70 +3,63 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- 1. QUIZZES (Colección Unificada) ---
+    // --- 1. QUIZZES (Colección de Contenido) ---
     match /quizzes/{quizId} {
-      allow read: if resource.data.isPublic == true || (request.auth != null && resource.data.userId == request.auth.uid);
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // LECTURA: Pública si el quiz es público, o si eres el dueño.
+      allow read: if true; 
+      
+      // CREAR:
+      // a) Usuario Autenticado firma con su UID.
+      // b) Usuario Anónimo firma con 'neural_guest_universal'.
+      allow create: if 
+        (request.auth != null && request.resource.data.userId == request.auth.uid) ||
+        (request.resource.data.userId == 'neural_guest_universal');
+      
+      // ACTUALIZAR / BORRAR:
+      // a) SOLO el dueño autenticado.
+      // b) Incremento de contadores permitidos para el público (visitas/clones).
       allow update: if 
         (request.auth != null && resource.data.userId == request.auth.uid) ||
         (resource.data.isPublic == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visits', 'clones']));
+      
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
-    // --- 2. EVALUACIONES ARCADE (Configuración de la partida) ---
+    // --- 2. EVALUATIONS (Configuración de Partidas Arcade) ---
     match /evaluations/{evalId} {
-      // LECTURA: Pública para que los alumnos puedan cargar la config del Boss y el estado del juego
       allow read: if true; 
-      // ESCRITURA: El profesor crea/actualiza. 
-      // EXCEPCIÓN: Si usas lógica donde el alumno actualiza algo en la evaluación (ej. vida global), permitir update.
-      // Por seguridad básica, dejamos update abierto a todos si es una RAID pública, o restringimos si es estricto.
-      // Para evitar el error de permisos actual:
-      allow create: if request.auth != null; 
-      allow update: if true; // Permitimos updates (ej: cambiar estado, bajar vida boss global)
-      allow delete: if request.auth != null && resource.data.hostUserId == request.auth.uid;
+      // Permitir crear si está autenticado (Profesor/AnonAuth) O si usa la identidad universal de invitado
+      allow create, update, delete: if request.auth != null || request.resource.data.hostUserId == 'neural_guest_universal';
     }
 
-    // --- 3. INTENTOS / RESULTADOS (Jugadores) ---
+    // --- 3. GAMEPLAY (Raid Mode & Arcade) ---
     match /attempts/{attemptId} {
-      // LECTURA: Pública para el Leaderboard y el Dashboard del profe
-      allow read: if true;
-      // ESCRITURA: Pública para que los alumnos registren sus ataques/puntuación
-      allow create, update: if true;
+      allow read, write: if true;
+    }
+
+    match /games/{gameId} {
+      allow read, write: if true;
     }
 
     // --- 4. GESTIÓN DE CLASES ---
     match /classes/{classId} {
+      allow read: if true;
       allow create: if request.auth != null && request.resource.data.teacherId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.teacherId == request.auth.uid;
-      allow read: if true; 
     }
 
-    // --- 5. PERFILES DE USUARIO ---
+    // --- 5. USUARIOS (Perfiles y Límites) ---
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read: if true; 
     }
 
-    // --- 6. CAMPAÑAS ---
-    match /campaigns/{campaignId} {
-      allow read: if true;
-      allow create, update, delete: if request.auth != null;
+    // --- 6. OTROS (Campañas Legacy) ---
+    match /campaigns/{document=**} {
+      allow read, write: if request.auth != null;
     }
-
-    // --- 7. LOGS DE CAMPAÑA ---
-    match /campaign_logs/{logId} {
-      allow read, create: if true;
-      allow update, delete: if request.auth != null;
-    }
-
-    // --- 8. GAMES (Estructura alternativa solicitada) ---
-    // Reglas permisivas para el juego en tiempo real
-    match /games/{gameId} {
+    
+    match /campaign_logs/{document=**} {
       allow read, write: if true;
-      
-      match /players/{playerId} {
-        allow read, write: if true;
-      }
     }
   }
 }

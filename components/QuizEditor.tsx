@@ -236,7 +236,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   // CRUD (Condensed)
   const addQuestion = () => { const newQ: Question = { id: uuid(), text: '', options: [{id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}], correctOptionId: '', correctOptionIds: [], timeLimit: 20, questionType: QUESTION_TYPES.MULTIPLE_CHOICE }; newQ.correctOptionId = newQ.options[0].id; newQ.correctOptionIds = [newQ.options[0].id]; setQuiz(prev => { const newQs = [...prev.questions, newQ]; setTimeout(() => setCurrentPage(Math.ceil(newQs.length / ITEMS_PER_PAGE)), 50); return { ...prev, questions: newQs }; }); setExpandedQuestionId(newQ.id); };
   const duplicateQuestion = (qId: string) => { const original = quiz.questions.find(q => q.id === qId); if (!original) return; const newOptions = original.options.map(o => ({...o, id: uuid()})); const newCorrectIds = (original.correctOptionIds || []).map(oldId => { const idx = original.options.findIndex(o => o.id === oldId); return idx !== -1 ? newOptions[idx].id : null; }).filter(id => id !== null) as string[]; const clone: Question = { ...original, id: uuid(), text: `${original.text} (Copia)`, options: newOptions, correctOptionIds: newCorrectIds, correctOptionId: newCorrectIds[0] || "" }; setQuiz(prev => { const index = prev.questions.findIndex(q => q.id === qId); const newQs = [...prev.questions]; newQs.splice(index + 1, 0, clone); return { ...prev, questions: newQs }; }); toast.info("Pregunta duplicada"); };
-  const removeQuestion = (id: string, e?: React.MouseEvent) => { if(e) e.stopPropagation(); if(confirm(t.delete_confirm)) { setQuiz(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) })); if (expandedQuestionId === id) setExpandedQuestionId(null); } };
+  
+  // REMOVED CONFIRMATION
+  const removeQuestion = (id: string, e?: React.MouseEvent) => { 
+      if(e) e.stopPropagation(); 
+      setQuiz(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) })); 
+      if (expandedQuestionId === id) setExpandedQuestionId(null); 
+  };
+
   const updateQuestion = (id: string, updates: Partial<Question>) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => q.id === id ? { ...q, ...updates } : q) })); };
   const updateOption = (qId: string, oId: string, text: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; return { ...q, options: q.options.map(o => o.id === oId ? { ...o, text } : o) }; }) })); };
   const addOption = (qId: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; if (q.options.length >= 6 && q.questionType !== QUESTION_TYPES.FILL_GAP) return q; return { ...q, options: [...q.options, { id: uuid(), text: '' }] }; }) })); };

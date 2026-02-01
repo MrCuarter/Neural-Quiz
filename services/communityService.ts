@@ -66,79 +66,38 @@ export const publishQuiz = async (quiz: Quiz, finalTags: string[]): Promise<stri
  * Search Quizzes in Community
  * Queries the main 'quizzes' collection where isPublic == true
  */
-export const searchQuizzes = async (searchTerm: string = "", languageFilter: string = "ALL"): Promise<Quiz[]> => {
+export const searchQuizzes = async (searchTerm: string = "", languageFilter: string = "ALL", ageFilter: string = "ALL"): Promise<Quiz[]> => {
     const colRef = collection(db, COLLECTION_NAME);
-    let q;
-
     const term = searchTerm.toLowerCase().trim();
+    const ageTag = ageFilter !== "ALL" ? ageFilter.toLowerCase() : "";
 
     try {
-        // BASE QUERY: Must be public
-        const constraints: any[] = [where("isPublic", "==", true)];
-
-        // Language Filter
-        if (languageFilter !== "ALL") {
-            constraints.push(where("language", "==", languageFilter));
+        // --- PRIMARY STRATEGY: Simple Fetch & Client Filter ---
+        // Firestore limits multiple array-contains queries.
+        // We fetch public quizzes (sorted if possible) and filter text/tags locally for flexibility.
+        
+        let q = query(colRef, where("isPublic", "==", true), orderBy("createdAt", "desc"), limit(50));
+        
+        try {
+            const snapshot = await getDocs(q);
+            return processResults(snapshot, term, languageFilter, ageTag);
+        } catch (indexError) {
+            console.warn("[Community] Index missing, falling back to simple query.");
+            // Fallback: No sort
+            q = query(colRef, where("isPublic", "==", true), limit(50));
+            const snapshot = await getDocs(q);
+            return processResults(snapshot, term, languageFilter, ageTag);
         }
-
-        // Search Term (Tags)
-        if (term) {
-            constraints.push(where("tags", "array-contains", term));
-        }
-
-        // Ordering (Newest First)
-        constraints.push(orderBy("createdAt", "desc"));
-        constraints.push(limit(20));
-
-        q = query(colRef, ...constraints);
-
-        const snapshot = await getDocs(q);
-        return mapSnapshotToQuizzes(snapshot);
 
     } catch (error: any) {
-        console.warn("[Community] Index missing or query failed. Attempting fallback...");
-        
-        // --- FALLBACK ATTEMPT (Client-side Filtering) ---
-        // If specific index is missing, fetch broader set and filter locally
-        try {
-            // Simplified Query (Just Public)
-            let qFallback = query(colRef, where("isPublic", "==", true), orderBy("createdAt", "desc"), limit(50));
-            
-            // If ordering fails too, try unordered
-            if (error.code === 'failed-precondition') {
-                 qFallback = query(colRef, where("isPublic", "==", true), limit(50));
-            }
-
-            const snapshot = await getDocs(qFallback);
-            let results = mapSnapshotToQuizzes(snapshot);
-
-            // Client-side Filter: Language
-            if (languageFilter !== "ALL") {
-                results = results.filter(q => q.language === languageFilter);
-            }
-
-            // Client-side Filter: Tags
-            if (term) {
-                results = results.filter(q => q.tags?.some(t => t.toLowerCase().includes(term)));
-            }
-            
-            // Client-side Sort (Newest first)
-            return results.sort((a, b) => {
-                const da = new Date(a.createdAt).getTime();
-                const db = new Date(b.createdAt).getTime();
-                return db - da;
-            });
-
-        } catch (fallbackError) {
-            console.error("[Community] Fallback failed too:", fallbackError);
-            return [];
-        }
+        console.error("[Community] Search failed:", error);
+        return [];
     }
 };
 
-// Helper
-const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
-    const results: Quiz[] = [];
+const processResults = (snapshot: any, term: string, languageFilter: string, ageTag: string): Quiz[] => {
+    let results: Quiz[] = [];
+    
     snapshot.forEach((doc: any) => {
         const data = doc.data() as DocumentData;
         results.push({
@@ -146,17 +105,43 @@ const mapSnapshotToQuizzes = (snapshot: any): Quiz[] => {
             title: data.title,
             description: data.description,
             questions: data.questions,
-            tags: data.tags,
-            language: data.language || 'es', // Default to 'es' if missing
+            tags: data.tags || [],
+            language: data.language || 'es', 
             authorName: data.authorName,
-            userId: data.userId, // Keep track of owner
+            userId: data.userId, 
             isPublic: data.isPublic,
-            // Convert timestamp safely
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
             updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(),
             visits: data.visits || 0,
             clones: data.clones || 0
         } as Quiz);
     });
-    return results;
+
+    // --- CLIENT SIDE FILTERING ---
+    
+    // 1. Language
+    if (languageFilter !== "ALL") {
+        results = results.filter(q => q.language === languageFilter);
+    }
+
+    // 2. Age/Grade (Stored as Tags)
+    if (ageTag) {
+        // Checks if any tag includes the age string (e.g. 'secondary' matches 'secondary education')
+        results = results.filter(q => q.tags?.some(t => t.toLowerCase().includes(ageTag)));
+    }
+
+    // 3. Search Term (Title or Tags)
+    if (term) {
+        results = results.filter(q => 
+            q.title.toLowerCase().includes(term) || 
+            q.tags?.some(t => t.toLowerCase().includes(term))
+        );
+    }
+
+    // Sort client side just in case fallback query lost order
+    return results.sort((a, b) => {
+        const da = new Date(a.createdAt).getTime();
+        const db = new Date(b.createdAt).getTime();
+        return db - da;
+    });
 };

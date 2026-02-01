@@ -140,37 +140,70 @@ export const logoutFirebase = async () => {
 };
 
 // --- 5. FUNCIONES DE GESTIÓN DE DATOS (FIRESTORE) ---
-// (Resto de funciones: saveQuizToFirestore, getUserQuizzes, etc. se mantienen igual)
 
-export const saveQuizToFirestore = async (quiz: Quiz, userId: string, asCopy: boolean = false): Promise<string> => {
+export const saveQuizToFirestore = async (quiz: Quiz, _unusedUserId?: string, asCopy: boolean = false): Promise<string> => {
     if (isOfflineMode) throw new Error("Offline Mode");
+    
+    // --- NUEVA LÓGICA DE IDENTIDAD ---
     const currentUser = auth.currentUser;
-    const effectiveUid = currentUser?.uid || userId;
-    if (!effectiveUid) throw new Error("User ID is undefined");
+    let finalUserId = "";
+    let finalAuthorName = "";
+    let forcePublic = false;
+
+    if (currentUser) {
+        // Usuario Autenticado
+        finalUserId = currentUser.uid;
+        finalAuthorName = currentUser.displayName || "Usuario";
+        forcePublic = false; // Respeta la decisión del usuario
+    } else {
+        // Usuario Anónimo (Guest Universal)
+        finalUserId = 'neural_guest_universal';
+        finalAuthorName = 'Neural Explorer 👽';
+        forcePublic = true; // Los anónimos SIEMPRE publican en comunidad
+    }
 
     const collectionRef = collection(db, "quizzes");
+    
     const rawData = {
-        userId: effectiveUid,
+        userId: finalUserId,
+        authorName: finalAuthorName,
         title: quiz.title || "Untitled Quiz",
         description: quiz.description || "",
         questions: quiz.questions || [],
-        tags: quiz.tags || []
+        tags: quiz.tags || [],
+        isPublic: forcePublic ? true : (quiz.isPublic || false), // Forzar si es guest
+        language: quiz.language || 'es'
     };
+    
     const cleanData = JSON.parse(JSON.stringify(rawData));
 
     try {
+        // Lógica de Guardado vs Actualización
+        // Si hay ID, no es copia, y el usuario es el dueño (o es guest creando uno nuevo, aunque guest no puede editar existentes)
         if (quiz.id && !asCopy) {
+            // Validacion extra: Si es guest, no debería poder editar un documento existente a menos que acabara de crearlo en esta sesión (limitación de reglas)
+            // Intentamos actualizar. Si falla por reglas (guest editando quiz de otro guest), lanzará error.
             const docRef = doc(db, "quizzes", quiz.id);
             await updateDoc(docRef, { ...cleanData, updatedAt: serverTimestamp() });
             return quiz.id;
         } else {
+            // Crear Nuevo
             if (asCopy) cleanData.title = `${cleanData.title} (Copy)`;
-            const payload = { ...cleanData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+            const payload = { 
+                ...cleanData, 
+                createdAt: serverTimestamp(), 
+                updatedAt: serverTimestamp(),
+                visits: 0,
+                clones: 0
+            };
             const docRef = await addDoc(collectionRef, payload);
             return docRef.id;
         }
     } catch (e: any) {
         console.error("Firestore Save Error:", e);
+        if (e.code === 'permission-denied' && !currentUser) {
+            throw new Error("No tienes permiso para editar este quiz público. Clónalo para hacer cambios.");
+        }
         throw e;
     }
 };
@@ -199,7 +232,14 @@ export const checkAndIncrementRaidLimit = async (userId: string): Promise<boolea
 
 export const createEvaluation = async (evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<string> => {
     if (isOfflineMode) throw new Error("Offline Mode");
-    const payload = { ...evaluation, createdAt: serverTimestamp(), isActive: true, status: 'active', participants: 0 };
+    
+    // Standardize guest host ID if not present (fallback)
+    let finalHostId = evaluation.hostUserId;
+    if (!finalHostId || finalHostId === 'guest_host') {
+        finalHostId = 'neural_guest_universal';
+    }
+
+    const payload = { ...evaluation, hostUserId: finalHostId, createdAt: serverTimestamp(), isActive: true, status: 'active', participants: 0 };
     const docRef = await addDoc(collection(db, "evaluations"), JSON.parse(JSON.stringify(payload)));
     return docRef.id;
 };
