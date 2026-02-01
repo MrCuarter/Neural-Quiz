@@ -424,7 +424,12 @@ const NeuralApp: React.FC = () => {
   if (view === 'home') {
       return (
           <div className="flex flex-col bg-[#020617] text-white overflow-x-hidden min-h-screen">
-              <Header language={language} setLanguage={setLanguage} onHelp={() => handleSafeExit('help')} onMyQuizzes={() => handleSafeExit('my_quizzes')} onHome={() => handleSafeExit('home')} onTeacherHub={() => handleSafeExit('teacher_hub')} />
+              <Header 
+                  language={language} 
+                  setLanguage={setLanguage} 
+                  onHelp={() => handleSafeExit('help')} 
+                  onNavigate={(target) => handleSafeExit(target as ViewState)} // Use handleSafeExit for all nav
+              />
               <LandingV2 onNavigate={(targetView: string) => setView(targetView as ViewState)} user={user} onLoginReq={handleLoginRequest} />
               <Footer onPrivacy={() => setView('privacy')} onTerms={() => setView('terms')} />
           </div>
@@ -442,7 +447,12 @@ const NeuralApp: React.FC = () => {
 
   return (
     <div className="flex flex-col bg-[#020617] text-white overflow-x-hidden">
-      <Header language={language} setLanguage={setLanguage} onHelp={() => handleSafeExit('help')} onMyQuizzes={() => handleSafeExit('my_quizzes')} onHome={() => handleSafeExit('home')} onTeacherHub={() => handleSafeExit('teacher_hub')} />
+      <Header 
+          language={language} 
+          setLanguage={setLanguage} 
+          onHelp={() => handleSafeExit('help')} 
+          onNavigate={(target) => handleSafeExit(target as ViewState)} // Unified navigation handler
+      />
       {showMissingAnswersModal && renderMissingAnswersModal()}
 
       <main className="min-h-screen flex flex-col p-4 md:p-8 relative z-10 w-full max-w-[1920px] mx-auto">
