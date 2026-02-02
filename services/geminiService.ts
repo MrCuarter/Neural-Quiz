@@ -142,9 +142,8 @@ interface GenParams {
   customToneContext?: string; 
 }
 
-// *** CRITICAL: HARDCODED PRODUCTION MODEL FOR CHEAP/HIGH QUOTA ***
-// gemini-2.0-flash is the current standard for speed and low cost ($0.10/1M input tokens)
-const MODEL_NAME = "gemini-2.0-flash"; 
+// *** CRITICAL: UPDATED MODEL TO 3-FLASH-PREVIEW FOR COMPLIANCE ***
+const MODEL_NAME = "gemini-3-flash-preview"; 
 
 /**
  * CLEANER FUNCTION FOR AI RESPONSE

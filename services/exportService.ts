@@ -621,9 +621,130 @@ const generateFlippityXLSX = (quiz: Quiz, title: string, options?: any): Generat
     };
 };
 
-const generateWordwall = (q:Quiz, t:string) => ({ filename: `${t}_wordwall.txt`, content: q.questions.map(q => q.text).join("\n"), mimeType: 'text/plain' });
-const generateAiken = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "Aiken", mimeType: 'text/plain' });
-const generateGIFT = (q:Quiz, t:string) => ({ filename: `${t}.txt`, content: "GIFT", mimeType: 'text/plain' });
+// --- IMPLEMENTED EXPORTERS ---
+
+// 1. AIKEN FORMAT (Moodle Standard)
+const generateAiken = (quiz: Quiz, title: string): GeneratedFile => {
+    const lines: string[] = [];
+    
+    quiz.questions.forEach(q => {
+        // Aiken supports MC and TF primarily
+        if (q.questionType !== QUESTION_TYPES.MULTIPLE_CHOICE && 
+            q.questionType !== QUESTION_TYPES.TRUE_FALSE && 
+            q.questionType !== QUESTION_TYPES.MULTI_SELECT) { 
+            return; 
+        }
+
+        // Clean text (single line required for Aiken question)
+        const cleanText = q.text.replace(/[\r\n]+/g, " ").trim();
+        lines.push(cleanText);
+
+        const options = q.options;
+        let correctLetter = "";
+
+        // Determine correct answer
+        const correctIds = q.correctOptionIds || (q.correctOptionId ? [q.correctOptionId] : []);
+        
+        options.forEach((opt, idx) => {
+            const letter = String.fromCharCode(65 + idx); // A, B, C...
+            const optText = opt.text.replace(/[\r\n]+/g, " ").trim();
+            lines.push(`${letter}) ${optText}`);
+
+            if (correctIds.includes(opt.id)) {
+                correctLetter = letter;
+            }
+        });
+
+        if (correctLetter) {
+            lines.push(`ANSWER: ${correctLetter}`);
+        }
+        
+        lines.push(""); // Empty line between questions
+    });
+
+    return {
+        filename: `${title}_aiken.txt`,
+        content: lines.join("\n"),
+        mimeType: "text/plain"
+    };
+};
+
+// 2. GIFT FORMAT (Moodle Advanced)
+const generateGIFT = (quiz: Quiz, title: string): GeneratedFile => {
+    let content = "";
+
+    quiz.questions.forEach((q, idx) => {
+        // Title
+        const qTitle = `::Q${idx + 1}::`; 
+        
+        // Text (escape special chars: ~ = # { } :)
+        const escapeGIFT = (str: string) => str.replace(/([~=#\{\}:])/g, "\\$1");
+        const qText = escapeGIFT(q.text);
+
+        let answerBlock = "";
+
+        if (q.questionType === QUESTION_TYPES.TRUE_FALSE) {
+            // {TRUE} or {FALSE}
+            const correctIds = q.correctOptionIds || [];
+            const correctOpt = q.options.find(o => correctIds.includes(o.id));
+            const isTrue = correctOpt?.text.toLowerCase().includes('verdadero') || correctOpt?.text.toLowerCase().includes('true');
+            answerBlock = `{${isTrue ? "TRUE" : "FALSE"}}`;
+        } 
+        else if (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE) {
+            // { =Correct ~Wrong ~Wrong }
+            const opts = q.options.map(o => {
+                const isCorrect = q.correctOptionIds?.includes(o.id) || q.correctOptionId === o.id;
+                const prefix = isCorrect ? "=" : "~";
+                return `${prefix}${escapeGIFT(o.text)}`;
+            });
+            answerBlock = `{ ${opts.join(" ")} }`;
+        }
+        else if (q.questionType === QUESTION_TYPES.FILL_GAP || q.questionType === 'Short Answer') {
+             // { =Answer1 =Answer2 }
+             const opts = q.options.map(o => `=${escapeGIFT(o.text)}`);
+             answerBlock = `{ ${opts.join(" ")} }`;
+        }
+        else {
+            // Fallback for others (Open ended)
+            answerBlock = "{}";
+        }
+
+        content += `${qTitle} ${qText} ${answerBlock}\n\n`;
+    });
+
+    return {
+        filename: `${title}_gift.txt`,
+        content: content,
+        mimeType: "text/plain"
+    };
+};
+
+// 3. WORDWALL (Simple Text)
+const generateWordwall = (quiz: Quiz, title: string): GeneratedFile => {
+    const lines: string[] = [];
+    
+    quiz.questions.forEach((q, i) => {
+        const cleanText = q.text.replace(/[\r\n]+/g, " ").trim();
+        lines.push(`${i + 1}. ${cleanText}`);
+        
+        // Correct first, then incorrects
+        const correctIds = q.correctOptionIds || [q.correctOptionId];
+        const correctOptions = q.options.filter(o => correctIds.includes(o.id));
+        const incorrectOptions = q.options.filter(o => !correctIds.includes(o.id));
+        
+        correctOptions.forEach(o => lines.push(`* ${o.text.trim()}`)); // Mark correct
+        incorrectOptions.forEach(o => lines.push(o.text.trim()));
+        
+        lines.push("");
+    });
+
+    return { 
+        filename: `${title}_wordwall.txt`, 
+        content: lines.join("\n"), 
+        mimeType: 'text/plain' 
+    };
+};
+
 const generateWaygroundXLSX = (q:Quiz, t:string) => generateKahootXLSX(q,t);
 const generateIdoceoXLSX_LEGACY = (q:Quiz, t:string) => generateKahootXLSX(q,t); 
 const generateFlippityXLSX_LEGACY = (q:Quiz, t:string, o:any) => generateKahootXLSX(q,t);

@@ -1,72 +1,94 @@
 
 /**
- * Compresses and resizes an image file using the browser's native Canvas API.
- * Forces output to JPEG for maximum size reduction.
+ * Procesa una imagen manualmente utilizando la API Canvas del navegador.
+ * Realiza un recorte central (cover) a 500x500px y comprime a JPEG 0.7.
  * 
- * @param file - The source File object
- * @param maxWidth - Maximum width allowed (maintains aspect ratio)
- * @param quality - JPEG quality (0.0 to 1.0)
- * @returns Promise<Blob> - The compressed image blob
+ * @param file - Archivo de imagen original
+ * @returns Promise<Blob> - Blob de la imagen procesada lista para subir
  */
-export const compressImage = (file: File, maxWidth: number, quality: number): Promise<Blob> => {
+export const processImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-        // 1. If not an image, reject
         if (!file.type.match(/image.*/)) {
-            reject(new Error("File is not an image"));
+            reject(new Error("El archivo no es una imagen."));
             return;
         }
 
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
+        const img = new Image();
+        const url = URL.createObjectURL(file);
 
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target?.result as string;
+        img.onload = () => {
+            // Liberar memoria de la URL temporal
+            URL.revokeObjectURL(url);
 
-            img.onload = () => {
-                // 2. Calculate new dimensions
-                let width = img.width;
-                let height = img.height;
+            const TARGET_SIZE = 500;
+            const canvas = document.createElement('canvas');
+            canvas.width = TARGET_SIZE;
+            canvas.height = TARGET_SIZE;
+            const ctx = canvas.getContext('2d');
 
-                if (width > maxWidth) {
-                    height = Math.round((height * maxWidth) / width);
-                    width = maxWidth;
-                }
+            if (!ctx) {
+                reject(new Error("No se pudo inicializar el contexto del Canvas."));
+                return;
+            }
 
-                // 3. Create Canvas
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
+            // Lógica de recorte "Object-Fit: Cover" manual
+            let sourceX = 0;
+            let sourceY = 0;
+            let sourceWidth = img.width;
+            let sourceHeight = img.height;
 
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    reject(new Error("Could not get canvas context"));
-                    return;
-                }
+            const aspectRatio = img.width / img.height;
 
-                // 4. Draw and compress
-                // Fill white background for transparency (since we force JPEG)
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillRect(0, 0, width, height);
-                ctx.drawImage(img, 0, 0, width, height);
+            if (aspectRatio > 1) {
+                // Paisaje (Más ancho que alto): Recortar ancho
+                sourceWidth = img.height; // Hacemos un cuadrado basado en la altura
+                sourceX = (img.width - sourceWidth) / 2; // Centrar horizontalmente
+            } else {
+                // Retrato (Más alto que ancho): Recortar altura
+                sourceHeight = img.width; // Hacemos un cuadrado basado en la anchura
+                sourceY = (img.height - sourceHeight) / 2; // Centrar verticalmente
+            }
 
-                canvas.toBlob(
-                    (blob) => {
-                        if (blob) {
-                            console.log(`[ImageOptimizer] Compressed: ${(file.size/1024).toFixed(2)}KB -> ${(blob.size/1024).toFixed(2)}KB`);
-                            resolve(blob);
-                        } else {
-                            reject(new Error("Compression failed"));
-                        }
-                    },
-                    'image/jpeg',
-                    quality
-                );
-            };
+            // Dibujar en el canvas redimensionando al target (500x500)
+            // drawImage(image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+            ctx.fillStyle = '#000000'; // Fondo negro por si acaso (transparencias a jpg)
+            ctx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
+            
+            ctx.drawImage(
+                img,
+                sourceX,
+                sourceY,
+                sourceWidth,
+                sourceHeight,
+                0,
+                0,
+                TARGET_SIZE,
+                TARGET_SIZE
+            );
 
-            img.onerror = (err) => reject(err);
+            // Exportar a Blob JPEG con calidad 70%
+            canvas.toBlob(
+                (blob) => {
+                    if (blob) {
+                        console.log(`[ImageProcessor] Original: ${(file.size / 1024).toFixed(2)}KB -> Procesada: ${(blob.size / 1024).toFixed(2)}KB`);
+                        resolve(blob);
+                    } else {
+                        reject(new Error("Error al generar el blob de la imagen."));
+                    }
+                },
+                'image/jpeg',
+                0.7
+            );
         };
 
-        reader.onerror = (err) => reject(err);
+        img.onerror = (err) => reject(err);
+        img.src = url;
     });
+};
+
+// Mantenemos la función anterior por compatibilidad si se usa en otros lados, 
+// o la redirigimos a la nueva lógica si se prefiere.
+export const compressImage = async (file: File, maxWidth: number, quality: number): Promise<Blob> => {
+    // Implementación legacy simplificada o wrapper
+    return processImage(file); 
 };

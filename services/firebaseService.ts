@@ -27,7 +27,7 @@ import {
   setDoc,
   increment
 } from "firebase/firestore";
-import { getStorage } from "firebase/storage"; 
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"; 
 import { getAnalytics } from "firebase/analytics";
 import { Quiz, Evaluation, EvaluationAttempt } from "../types";
 
@@ -137,6 +137,73 @@ export const loginWithEmail = async (email: string, pass: string) => {
 export const logoutFirebase = async () => {
   if (isOfflineMode) return;
   try { await signOut(auth); } catch (error) { console.error("Logout error:", error); }
+};
+
+// --- USER PROFILE MANAGEMENT ---
+
+export interface UserProfileData {
+    displayName: string;
+    bio?: string;
+    website?: string;
+    socialLinks?: {
+        twitter?: string;
+        linkedin?: string;
+    };
+    photoURL?: string;
+}
+
+export const getUserProfile = async (userId: string): Promise<UserProfileData | null> => {
+    if (isOfflineMode) return null;
+    const docRef = doc(db, "users", userId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+        return snap.data() as UserProfileData;
+    }
+    return null;
+};
+
+export const updateUserProfile = async (
+    userId: string, 
+    data: UserProfileData, 
+    photoFile?: Blob
+): Promise<void> => {
+    if (isOfflineMode) throw new Error("Modo Offline");
+
+    let finalPhotoURL = data.photoURL;
+
+    // 1. Si hay nueva foto, subir a Storage
+    if (photoFile) {
+        try {
+            // Ruta fija para sobrescribir y ahorrar espacio: profile_images/{userId}.jpg
+            const storageRef = ref(storage, `profile_images/${userId}.jpg`);
+            await uploadBytes(storageRef, photoFile);
+            
+            // Obtener URL con timestamp para evitar caché del navegador
+            const url = await getDownloadURL(storageRef);
+            finalPhotoURL = `${url}?t=${Date.now()}`;
+        } catch (e) {
+            console.error("Error subiendo imagen:", e);
+            throw new Error("Error al subir la imagen de perfil.");
+        }
+    }
+
+    const updateData = {
+        ...data,
+        photoURL: finalPhotoURL,
+        updatedAt: serverTimestamp()
+    };
+
+    // 2. Actualizar Auth Profile (Nombre y Foto base)
+    if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+            displayName: data.displayName,
+            photoURL: finalPhotoURL
+        });
+    }
+
+    // 3. Actualizar Documento Firestore (Datos extendidos)
+    const userRef = doc(db, "users", userId);
+    await setDoc(userRef, updateData, { merge: true });
 };
 
 // --- 5. FUNCIONES DE GESTIÓN DE DATOS (FIRESTORE) ---

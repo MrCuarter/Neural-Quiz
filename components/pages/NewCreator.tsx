@@ -7,7 +7,7 @@ import {
     ArrowLeft, Sparkles, BrainCircuit, Wand2, PenTool, 
     ChevronDown, ChevronUp, FilePlus, UploadCloud, Link as LinkIcon, 
     ClipboardPaste, CheckCircle2, AlertTriangle, Save, Play, 
-    Download, LayoutTemplate, Settings, RefreshCw, Plus, FileText, Monitor, Calendar, GraduationCap, Signal, BarChart3
+    Download, LayoutTemplate, Settings, RefreshCw, Plus, FileText, Monitor, Calendar, GraduationCap, Signal, BarChart3, AlignLeft
 } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz } from '../../services/geminiService';
 import { searchImage } from '../../services/imageService';
@@ -59,8 +59,9 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
     const [generationStatus, setGenerationStatus] = useState('');
     const [isGenSuccess, setIsGenSuccess] = useState(false);
     
-    // Context Visibility State (Hidden by default)
+    // Context Visibility & Tabs State
     const [showContextSection, setShowContextSection] = useState(false);
+    const [contextTab, setContextTab] = useState<'upload' | 'url' | 'paste'>('upload');
     const contextFileInputRef = useRef<HTMLInputElement>(null);
 
     // --- IMPORT STATE ---
@@ -282,35 +283,41 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                     </div>
                 </div>
 
-                {/* CENTRAL TOOLBAR */}
-                <div className="flex gap-2 bg-gray-900/50 p-1 rounded-lg border border-gray-800">
+                {/* CENTRAL TOOLBAR - INTEGRATED */}
+                <div className="flex gap-2 bg-gray-900/50 p-1 rounded-lg border border-gray-800 overflow-x-auto max-w-full">
                     <button 
                         onClick={() => setActivePanel('NONE')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-bold font-mono ${activePanel === 'NONE' ? 'bg-gray-700 border-gray-500 text-white shadow-lg' : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-bold font-mono whitespace-nowrap ${activePanel === 'NONE' ? 'bg-gray-700 border-gray-500 text-white shadow-lg' : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'}`}
                     >
                         <PenTool className="w-4 h-4" /> MODO MANUAL
                     </button>
 
                     <button 
                         onClick={() => setActivePanel('AI')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-bold font-mono ${activePanel === 'AI' ? 'bg-cyan-900/50 border-cyan-400 text-cyan-100 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-bold font-mono whitespace-nowrap ${activePanel === 'AI' ? 'bg-cyan-900/50 border-cyan-400 text-cyan-100 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'}`}
                     >
                         <Sparkles className="w-4 h-4" /> GENERADOR IA
                     </button>
 
                     <button 
                         onClick={() => setActivePanel('IMPORT')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-bold font-mono ${activePanel === 'IMPORT' ? 'bg-pink-900/50 border-pink-400 text-pink-100 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md border transition-all text-sm font-bold font-mono whitespace-nowrap ${activePanel === 'IMPORT' ? 'bg-pink-900/50 border-pink-400 text-pink-100 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'}`}
                     >
                         <Wand2 className="w-4 h-4" /> IMPORTAR
                     </button>
+
+                    <div className="w-px bg-gray-700 mx-1"></div>
+
+                    <button 
+                        onClick={onExport}
+                        className="flex items-center gap-2 px-4 py-2 rounded-md border border-transparent text-green-400 hover:text-green-300 hover:bg-green-900/20 transition-all text-sm font-bold font-mono whitespace-nowrap"
+                    >
+                        <Download className="w-4 h-4" /> EXPORTAR
+                    </button>
                 </div>
 
-                <div className="flex gap-2">
-                    <CyberButton onClick={onExport} className="h-10 text-xs px-4 bg-green-700 hover:bg-green-600 border-none">
-                        <Download className="w-4 h-4 mr-2" /> EXPORTAR
-                    </CyberButton>
-                </div>
+                {/* Empty div for layout balance if needed, or just let justify-between handle it */}
+                <div className="hidden md:block w-4"></div>
             </div>
 
             {/* MAIN WORKSPACE */}
@@ -483,7 +490,7 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                 </div>
                             </div>
 
-                            {/* 3. Context (Collapsible) */}
+                            {/* 3. Context (Collapsible) with Tabs */}
                             <div className="h-px bg-gray-800 w-full my-6" />
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowContextSection(!showContextSection)}>
@@ -496,20 +503,68 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                 
                                 {showContextSection && (
                                     <div className="animate-in slide-in-from-top-2 space-y-4">
-                                        <div 
-                                            className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer hover:bg-white/5 ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700'}`}
-                                            onDragEnter={(e) => {e.preventDefault(); setDragActive(true)}}
-                                            onDragLeave={() => setDragActive(false)}
-                                            onDrop={(e) => {e.preventDefault(); setDragActive(false); if(e.dataTransfer.files) processContextFiles(e.dataTransfer.files)}}
-                                            onClick={() => contextFileInputRef.current?.click()}
-                                        >
-                                            <UploadCloud className="w-12 h-12 mx-auto text-gray-600 mb-2" />
-                                            <p className="text-gray-300 font-bold">ARRASTRA O HAZ CLIC</p>
-                                            <p className="text-xs text-gray-500">(.txt, .md, .csv, .json, .pdf)</p>
-                                            <input type="file" ref={contextFileInputRef} className="hidden" accept=".pdf,.txt,.md,.json,.csv" onChange={handleContextFileInput} multiple />
+                                        
+                                        {/* TAB SWITCHER */}
+                                        <div className="flex gap-2 mb-2 bg-black/40 p-1 rounded-lg border border-gray-800 w-full md:w-fit">
+                                            <button 
+                                                onClick={() => setContextTab('upload')}
+                                                className={`flex-1 md:flex-none flex items-center gap-2 px-4 py-2 rounded text-xs font-bold font-mono transition-all ${contextTab === 'upload' ? 'bg-pink-900/50 text-pink-100 border border-pink-500/30' : 'text-gray-500 hover:text-white'}`}
+                                            >
+                                                <UploadCloud className="w-3 h-3" /> SUBIR ARCHIVO
+                                            </button>
+                                            <button 
+                                                onClick={() => setContextTab('url')}
+                                                className={`flex-1 md:flex-none flex items-center gap-2 px-4 py-2 rounded text-xs font-bold font-mono transition-all ${contextTab === 'url' ? 'bg-pink-900/50 text-pink-100 border border-pink-500/30' : 'text-gray-500 hover:text-white'}`}
+                                            >
+                                                <LinkIcon className="w-3 h-3" /> PEGAR URL
+                                            </button>
+                                            <button 
+                                                onClick={() => setContextTab('paste')}
+                                                className={`flex-1 md:flex-none flex items-center gap-2 px-4 py-2 rounded text-xs font-bold font-mono transition-all ${contextTab === 'paste' ? 'bg-pink-900/50 text-pink-100 border border-pink-500/30' : 'text-gray-500 hover:text-white'}`}
+                                            >
+                                                <AlignLeft className="w-3 h-3" /> PEGAR TEXTO
+                                            </button>
                                         </div>
-                                        <CyberTextArea value={genParams.context} onChange={(e) => setGenParams({...genParams, context: e.target.value})} placeholder="Pega tu texto sin formato, contenido de PDF o contenido web aquí..." className="h-32 font-mono text-sm" />
-                                        <CyberInput placeholder="O pega URLs de referencia..." value={genParams.urls} onChange={(e) => setGenParams({...genParams, urls: e.target.value})} />
+
+                                        {/* CONTENT AREAS */}
+                                        {contextTab === 'upload' && (
+                                            <div 
+                                                className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer hover:bg-white/5 ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700'}`}
+                                                onDragEnter={(e) => {e.preventDefault(); setDragActive(true)}}
+                                                onDragLeave={() => setDragActive(false)}
+                                                onDrop={(e) => {e.preventDefault(); setDragActive(false); if(e.dataTransfer.files) processContextFiles(e.dataTransfer.files)}}
+                                                onClick={() => contextFileInputRef.current?.click()}
+                                            >
+                                                <UploadCloud className="w-12 h-12 mx-auto text-gray-600 mb-2" />
+                                                <p className="text-gray-300 font-bold">ARRASTRA O HAZ CLIC</p>
+                                                <p className="text-xs text-gray-500">(.txt, .md, .csv, .json, .pdf)</p>
+                                                <input type="file" ref={contextFileInputRef} className="hidden" accept=".pdf,.txt,.md,.json,.csv" onChange={handleContextFileInput} multiple />
+                                            </div>
+                                        )}
+
+                                        {contextTab === 'url' && (
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-mono text-gray-500 uppercase">URLs de referencia (Una por línea)</label>
+                                                <CyberTextArea 
+                                                    value={genParams.urls} 
+                                                    onChange={(e) => setGenParams({...genParams, urls: e.target.value})} 
+                                                    placeholder="https://wikipedia.org/wiki/..."
+                                                    className="h-24 font-mono text-xs" 
+                                                />
+                                            </div>
+                                        )}
+
+                                        {contextTab === 'paste' && (
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-mono text-gray-500 uppercase">Pegar Texto Directo</label>
+                                                <CyberTextArea 
+                                                    value={genParams.context} 
+                                                    onChange={(e) => setGenParams({...genParams, context: e.target.value})} 
+                                                    placeholder="Pega aquí el contenido de un PDF, Word o web..." 
+                                                    className="h-48 font-mono text-sm" 
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
