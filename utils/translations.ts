@@ -233,6 +233,7 @@ export const translations = {
     fmt_aiken: "Estándar LMS (Moodle, Blackboard, Canvas). Texto plano.",
     fmt_gift: "Formato avanzado Moodle (Símbolos para emparejar).",
     fmt_json: "Datos crudos para desarrolladores.",
+    fmt_widget_csv: "CSV simple para widgets. [Pregunta, Correcta, Incorrectas, Imagen]",
     
     preview_action: "VISTA PREVIA Y ACCIÓN",
     connect_create: "CONECTAR Y CREAR (GOOGLE)",
@@ -446,6 +447,7 @@ export const translations = {
     fmt_aiken: "Standard LMS (Moodle, Blackboard, Canvas). Plain text.",
     fmt_gift: "Advanced Moodle format (Matching symbols).",
     fmt_json: "Raw data backup for developers.",
+    fmt_widget_csv: "Simple CSV for widgets. [Question, Correct, Incorrects, Image]",
     
     preview_action: "PREVIEW & ACTION",
     connect_create: "CONNECT & CREATE (GOOGLE)",

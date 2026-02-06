@@ -310,6 +310,7 @@ export enum ExportFormat {
   AIKEN = 'AIKEN', // Moodle/Blackboard standard text
   JSON = 'JSON',
   GIFT = 'GIFT', // Moodle advanced
+  WIDGET_CSV = 'WIDGET_CSV', // New Simplified Widget Format
 }
 
 export interface GeneratedFile {
@@ -335,6 +336,10 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     'UNIVERSAL': { 
         name: 'Neural Quiz (Nativo)', 
         types: Object.values(QUESTION_TYPES) 
+    },
+    [ExportFormat.WIDGET_CSV]: {
+        name: 'Widget CSV',
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.FILL_GAP]
     },
     [ExportFormat.PDF_PRINT]: {
         name: 'Printable PDF',

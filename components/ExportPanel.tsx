@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { ExportFormat, Quiz, Question } from '../types';
 import { exportQuiz } from '../services/exportService';
@@ -16,11 +17,7 @@ interface ExportPanelProps {
   initialTargetPlatform?: string;
 }
 
-// ... ExportPreviewCard Component remains exactly the same as previous file ...
-// (Omitting ExportPreviewCard full code block here to save space, assume it is identical to existing file.
-// The only change is in the main ExportPanel component logic below.)
-
-// RE-INJECT ExportPreviewCard for clarity
+// ExportPreviewCard Component
 const ExportPreviewCard: React.FC<{
     format: any,
     quiz: Quiz,
@@ -160,7 +157,7 @@ const ExportPreviewCard: React.FC<{
         if (!previewContent) return null;
         const mime = previewContent.mimeType || "";
         const isXLSX = previewContent.isBase64 && mime.includes('spreadsheetml');
-        const isCSV = format.id && (format.id.includes('CSV') || format.id === ExportFormat.BLOOKET || format.id === ExportFormat.QUIZALIZE);
+        const isCSV = format.id && (format.id.includes('CSV') || format.id === ExportFormat.BLOOKET || format.id === ExportFormat.QUIZALIZE || format.id === ExportFormat.WIDGET_CSV);
         
         if (isXLSX) {
             try {
@@ -293,6 +290,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
 
   const formats = [
     { id: ExportFormat.UNIVERSAL_CSV, name: "Neural Quiz (Nativo)", desc: t.fmt_universal, logo: "https://i.postimg.cc/dV3L6xkG/Neural-Quiz.png", allowedTypes: ['*'] },
+    { id: ExportFormat.WIDGET_CSV, name: "Widget CSV", desc: t.fmt_widget_csv, logo: "https://upload.wikimedia.org/wikipedia/commons/6/65/Crystal_Clear_mimetype_csv.png", allowedTypes: ['Multiple Choice', 'Fill in the Blank'] },
     { id: ExportFormat.KAHOOT, name: "Kahoot!", desc: t.fmt_kahoot, logo: "https://i.postimg.cc/D8YmShxz/Kahoot.png", allowedTypes: ['Multiple Choice', 'True/False', 'Type Answer', 'Poll'] },
     { id: ExportFormat.GOOGLE_FORMS, name: "Google Forms", desc: t.fmt_google_forms, logo: "https://i.postimg.cc/T3HGdbMd/Forms.png", allowedTypes: ['Multiple Choice', 'True/False'] },
     { id: ExportFormat.GOOGLE_SLIDES_API, name: "Google Slides", desc: t.fmt_google_slides_api, logo: "https://i.postimg.cc/9MTyB3f3/slides.png", allowedTypes: ['Multiple Choice', 'True/False'] },
