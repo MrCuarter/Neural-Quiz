@@ -7,7 +7,7 @@ import {
     ArrowLeft, Sparkles, BrainCircuit, Wand2, PenTool, 
     ChevronDown, ChevronUp, FilePlus, UploadCloud, Link as LinkIcon, 
     ClipboardPaste, CheckCircle2, AlertTriangle, Save, Play, 
-    Download, LayoutTemplate, Settings, RefreshCw, Plus, FileText, Monitor, Calendar, GraduationCap, Signal, BarChart3, AlignLeft
+    Download, LayoutTemplate, Settings, RefreshCw, Plus, FileText, Monitor, Calendar, GraduationCap, Signal, BarChart3, AlignLeft, RotateCcw
 } from 'lucide-react';
 import { generateQuizQuestions, parseRawTextToQuiz } from '../../services/geminiService';
 import { searchImage } from '../../services/imageService';
@@ -94,6 +94,38 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
         // Allow digits, +, - and spaces
         const clean = val.replace(/[^0-9+\-\s]/g, '');
         setTargetAge(clean);
+    };
+
+    const handleResetQuiz = () => {
+        // Empty state definition
+        const emptyState: Quiz = {
+            title: '',
+            description: '',
+            questions: [],
+            tags: [],
+            id: undefined // Ensure we detach from any DB ID
+        };
+
+        // Case 0: Already empty
+        if (initialQuiz.questions.length === 0 && !initialQuiz.title) {
+            setQuiz(emptyState);
+            return;
+        }
+
+        // Case 1: Saved in Library (Has ID) -> Safe to clear editor
+        if (initialQuiz.id) {
+            setQuiz(emptyState);
+            toast.info("Editor reiniciado. Tu quiz anterior sigue guardado en tu librería.");
+            setActivePanel('NONE');
+            return;
+        }
+
+        // Case 2: Not Saved (No ID) -> Warn user
+        if (window.confirm("Este quiz no está guardado y se perderán todos los datos. ¿Quieres continuar?")) {
+            setQuiz(emptyState);
+            toast.info("Editor reiniciado.");
+            setActivePanel('NONE');
+        }
     };
 
     // --- AI LOGIC ---
@@ -316,8 +348,17 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                     </button>
                 </div>
 
-                {/* Empty div for layout balance if needed, or just let justify-between handle it */}
-                <div className="hidden md:block w-4"></div>
+                {/* START OVER BUTTON */}
+                <div className="hidden md:block">
+                    <CyberButton 
+                        variant="ghost" 
+                        onClick={handleResetQuiz}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-900/20 text-xs px-3"
+                        title="Reiniciar Editor (Borrar Todo)"
+                    >
+                        <RotateCcw className="w-4 h-4 mr-2" /> REINICIAR
+                    </CyberButton>
+                </div>
             </div>
 
             {/* MAIN WORKSPACE */}
