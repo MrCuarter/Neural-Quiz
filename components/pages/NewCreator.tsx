@@ -53,6 +53,7 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
         tone: string;
         language: string;
         customToneContext: string;
+        prioritizeGiphy: boolean; // NEW: Pop Culture Mode
     }>({
         topic: '',
         count: 5,
@@ -62,7 +63,8 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
         urls: '',
         tone: 'Neutral',
         language: 'Spanish',
-        customToneContext: ''
+        customToneContext: '',
+        prioritizeGiphy: false
     });
     const [isGenerating, setIsGenerating] = useState(false);
     const [genProgress, setGenProgress] = useState(0);
@@ -217,7 +219,8 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                 };
                 
                 if (!qObj.imageUrl && qObj.imageSearchQuery) {
-                    const imgRes = await searchImage(qObj.imageSearchQuery, qObj.fallback_category);
+                    // Pass prioritizeGiphy flag
+                    const imgRes = await searchImage(qObj.imageSearchQuery, qObj.fallback_category, genParams.prioritizeGiphy);
                     if (imgRes) qObj.imageUrl = imgRes.url;
                 }
                 return qObj;
@@ -516,6 +519,15 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                         />
                                     </div>
                                 )}
+
+                                {/* NEW: POP CULTURE MODE TOGGLE */}
+                                <div className="mt-4 bg-purple-900/20 border border-purple-500/30 p-3 rounded-lg flex items-center gap-3">
+                                    <CyberCheckbox 
+                                        label="🎮 MODO CULTURA POP (Priorizar GIFs/Memes)" 
+                                        checked={genParams.prioritizeGiphy} 
+                                        onChange={(c) => setGenParams({...genParams, prioritizeGiphy: c})}
+                                    />
+                                </div>
                             </div>
 
                             <div className="h-px bg-gray-800 w-full my-6" />
