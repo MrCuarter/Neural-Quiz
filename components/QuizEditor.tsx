@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, ArrowRightCircle, Rocket, Star, Wrench } from 'lucide-react';
+import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, ArrowRightCircle, Rocket, Star, Wrench, ToggleLeft, ListChecks, List } from 'lucide-react';
 import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
 import { detectAndParseStructure } from '../services/importService';
 import { getSafeImageUrl } from '../services/imageProxyService'; 
@@ -310,7 +310,17 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const handleAddTag = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && newTag.trim()) { const currentTags = quiz.tags || []; if (!currentTags.includes(newTag.trim())) { setQuiz(prev => ({ ...prev, tags: [...currentTags, newTag.trim()] })); } setNewTag(''); } };
   const removeTag = (tag: string) => { setQuiz(prev => ({ ...prev, tags: (prev.tags || []).filter(t => t !== tag) })); };
   const getGroupedTypeOptions = () => { const allowedTypes = PLATFORM_SPECS[targetPlatform].types; const validationGroup = [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); const noValidationGroup = [QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); return [{ label: "CON VALIDACIÓN DE RESPUESTA", options: validationGroup }, { label: "SIN VALIDACIÓN DE RESPUESTA", options: noValidationGroup }]; };
-  const getTypeIcon = (type?: string) => { if (type === QUESTION_TYPES.TRUE_FALSE) return <CheckSquare className="w-4 h-4" />; if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />; if (type === QUESTION_TYPES.OPEN_ENDED) return <MessageSquare className="w-4 h-4" />; if (type === QUESTION_TYPES.ORDER) return <ListOrdered className="w-4 h-4" />; if (type === QUESTION_TYPES.MULTI_SELECT) return <CheckSquare className="w-4 h-4" />; return <Zap className="w-4 h-4" />; };
+  
+  // FIX: Better distinct icons for True/False and Multi-Select
+  const getTypeIcon = (type?: string) => { 
+      if (type === QUESTION_TYPES.TRUE_FALSE) return <ToggleLeft className="w-4 h-4" />; 
+      if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />; 
+      if (type === QUESTION_TYPES.OPEN_ENDED) return <MessageSquare className="w-4 h-4" />; 
+      if (type === QUESTION_TYPES.ORDER) return <ListOrdered className="w-4 h-4" />; 
+      if (type === QUESTION_TYPES.MULTI_SELECT) return <ListChecks className="w-4 h-4" />; 
+      return <List className="w-4 h-4" />; // Default MC
+  };
+  
   const getTypeColor = (type?: string) => { if (type === QUESTION_TYPES.TRUE_FALSE) return "text-blue-400 bg-blue-900/30 border-blue-500/50"; if (type === QUESTION_TYPES.FILL_GAP) return "text-yellow-400 bg-yellow-900/30 border-yellow-500/50"; if (type === QUESTION_TYPES.OPEN_ENDED) return "text-pink-400 bg-pink-900/30 border-pink-500/50"; if (type === QUESTION_TYPES.ORDER) return "text-purple-400 bg-purple-900/30 border-purple-500/50"; if (type === QUESTION_TYPES.MULTI_SELECT) return "text-green-400 bg-green-900/30 border-green-500/50"; return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; };
 
   // --- QUALITY CHECK LOGIC ---

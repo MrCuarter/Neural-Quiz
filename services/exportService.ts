@@ -70,7 +70,7 @@ const escapeCSV = (str: string | number | undefined | null): string => {
   return stringified;
 };
 
-// --- WIDGET CSV GENERATOR (SIMPLE FORMAT) ---
+// --- WIDGET CSV GENERATOR (WIDGET GENIALLY) ---
 // Format MC (Single): Question [URL] [Lx],Correct,Incorrect1,Incorrect2...
 // Format MC (Multi): Question [URL] [Lx],*Correct1,Incorrect,*Correct2...
 // Format FillGap: Question [URL] [Lx],Answer1|Answer2...
@@ -78,6 +78,7 @@ const generateWidgetCSV = (quiz: Quiz, filename: string): GeneratedFile => {
     let csvContent = "";
     
     // Filter compatible questions (MC, Fill Gap, Multi Select)
+    // NO SLICE LIMIT APPLIED. ALL COMPATIBLE QUESTIONS ARE EXPORTED.
     const validQuestions = quiz.questions.filter(q => 
         q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || 
         q.questionType === QUESTION_TYPES.FILL_GAP ||
@@ -89,9 +90,12 @@ const generateWidgetCSV = (quiz: Quiz, filename: string): GeneratedFile => {
         
         // 1. Prepare Question Text with Image URL and Difficulty Level
         let qText = q.text.trim();
+        
+        // Add Image URL
         if (q.imageUrl) {
             qText += ` [${q.imageUrl}]`;
         }
+        
         // Add Difficulty [L1]..[L5] (Default L1)
         const difficulty = q.difficulty || 1;
         qText += ` [L${difficulty}]`;

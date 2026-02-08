@@ -338,7 +338,7 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
         types: Object.values(QUESTION_TYPES) 
     },
     [ExportFormat.WIDGET_CSV]: {
-        name: 'Widget CSV',
+        name: 'Widget Genially (CSV)',
         types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.MULTI_SELECT]
     },
     [ExportFormat.PDF_PRINT]: {
@@ -378,7 +378,7 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
         types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.MULTI_SELECT]
     },
     [ExportFormat.GENIALLY]: { 
-        name: 'Genially', 
+        name: 'Genially (XLSX)', 
         types: [
             QUESTION_TYPES.MULTIPLE_CHOICE, // Elección única
             QUESTION_TYPES.MULTI_SELECT,    // Elección múltiple
