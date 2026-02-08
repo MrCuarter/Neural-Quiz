@@ -1,261 +1,39 @@
-
-import React, { useState, useRef, useEffect } from 'react';
-import { Quiz, Question, Option, PLATFORM_SPECS, QUESTION_TYPES, ExportFormat, ImageCredit } from '../types';
-import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox } from './ui/CyberUI';
-import { Trash2, Plus, CheckCircle2, Circle, Upload, Link as LinkIcon, Download, ChevronDown, ChevronUp, AlertCircle, Bot, Zap, Globe, AlignLeft, CheckSquare, Type, Palette, ArrowDownUp, GripVertical, AlertTriangle, Image as ImageIcon, XCircle, Wand2, Eye, FileSearch, Check, Save, Copy, Tag, LayoutList, ChevronLeft, ChevronRight, Hash, Share2, Lock, Unlock, FolderOpen, Gamepad2, CopyPlus, ArrowRight, Merge, FilePlus, ListOrdered, MessageSquare, ArrowRightCircle, Rocket, Star, Wrench, ToggleLeft, ListChecks, List } from 'lucide-react';
-import { generateQuizQuestions, enhanceQuestion } from '../services/geminiService';
-import { detectAndParseStructure } from '../services/importService';
-import { getSafeImageUrl } from '../services/imageProxyService'; 
-import { toggleQuizVisibility, updateCloningPermission } from '../services/shareService'; 
-import { publishQuiz } from '../services/communityService'; 
-import { uploadImageToCloudinary } from '../services/cloudinaryService'; 
-import { useToast } from './ui/Toast';
-import { PublishModal } from './PublishModal'; 
-import { SaveSuccessModal } from './modals/SaveSuccessModal'; 
-import { ImagePickerModal } from './ui/ImagePickerModal';
-import { AuthModal } from './auth/AuthModal'; // ADDED AUTH MODAL IMPORT
-import { ImageResult } from '../services/imageService';
-import { getUserQuizzes, saveQuizToFirestore } from '../services/firebaseService';
-import * as XLSX from 'xlsx';
+import React, { useState } from 'react';
+import { Quiz, Question, Option, QUESTION_TYPES, PLATFORM_SPECS } from '../types';
+import { CyberButton, CyberCard, CyberInput, CyberSelect } from './ui/CyberUI';
+import { generateQuizQuestions } from '../services/geminiService';
+import { Plus, Trash2, Save, Play, Download, Wand2, ArrowLeft, ArrowRight, X } from 'lucide-react';
 
 interface QuizEditorProps {
-  quiz: Quiz;
-  setQuiz: React.Dispatch<React.SetStateAction<Quiz>>;
-  onExport: () => void; 
-  onSave: (asCopy?: boolean) => Promise<void>; 
-  isSaving?: boolean;
-  user?: any;
-  showImportOptions?: boolean;
-  t: any;
-  onPlay: (quiz: Quiz) => void;
-  currentLanguage?: string;
-  onNavigate?: (view: string) => void;
+    quiz: Quiz;
+    setQuiz: React.Dispatch<React.SetStateAction<Quiz>>;
+    onExport: () => void;
+    onSave: (asCopy?: boolean) => Promise<string | void>;
+    isSaving: boolean;
+    user: any;
+    t: any;
+    onPlay: (quiz: Quiz) => void;
+    currentLanguage?: string;
+    onNavigate: (view: string) => void;
 }
 
-// Helper Component for Stars
-const DifficultyRating = ({ level, onChange }: { level: number | undefined, onChange: (n: number) => void }) => {
-    const current = level || 0;
-    return (
-        <div className="flex gap-0.5 items-center bg-black/20 px-2 py-1 rounded border border-gray-800" title={`Dificultad: Nivel ${current}`}>
-            {[1, 2, 3, 4, 5].map(star => (
-                <button 
-                    key={star} 
-                    onClick={(e) => { e.stopPropagation(); onChange(star); }}
-                    className={`focus:outline-none transition-transform hover:scale-110`}
-                >
-                    <Star 
-                        className={`w-3 h-3 ${star <= current ? 'fill-yellow-400 text-yellow-400' : 'text-gray-700 hover:text-gray-500'}`} 
-                    />
-                </button>
-            ))}
-        </div>
-    );
-};
+export const QuizEditor: React.FC<QuizEditorProps> = ({ 
+    quiz, setQuiz, onExport, onSave, isSaving, user, t, onPlay, currentLanguage, onNavigate 
+}) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 5;
+    
+    // AI Modal State
+    const [showAiModal, setShowAiModal] = useState(false);
+    const [aiTopic, setAiTopic] = useState('');
+    const [aiCount, setAiCount] = useState(5);
+    const [aiLanguage, setAiLanguage] = useState('Spanish');
+    const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
+    const [isGenerating, setIsGenerating] = useState(false);
 
-export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport, onSave, isSaving, user, showImportOptions = true, t, onPlay, currentLanguage = 'es', onNavigate }) => {
-  const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
-  const [targetPlatform, setTargetPlatform] = useState<string>('UNIVERSAL');
-  const [hasSelectedPlatform, setHasSelectedPlatform] = useState(false);
-  const toast = useToast();
-  
-  // AI & Modal State
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiTopic, setAiTopic] = useState('');
-  const [aiCount, setAiCount] = useState(3);
-  const [aiLanguage, setAiLanguage] = useState('Spanish'); 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [enhancingId, setEnhancingId] = useState<string | null>(null);
-  
-  // Image Picker State
-  const [showImagePicker, setShowImagePicker] = useState(false);
-  const [pickingImageForId, setPickingImageForId] = useState<string | null>(null);
-  const [pickingImageForOptionId, setPickingImageForOptionId] = useState<string | null>(null); 
-  const [pickingImageCurrentUrl, setPickingImageCurrentUrl] = useState<string | null>(null);
-  const [pickingImageCurrentCredit, setPickingImageCurrentCredit] = useState<ImageCredit | undefined>(undefined); 
-  
-  // Share/Publish/Auth State
-  const [showPublishModal, setShowPublishModal] = useState(false);
-  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false); 
-  const [showAuthModal, setShowAuthModal] = useState(false); // NEW AUTH STATE
-  const [isPublishing, setIsPublishing] = useState(false);
-  
-  // Add to Existing State
-  const [showAddToExisting, setShowAddToExisting] = useState(false);
-  const [userQuizzes, setUserQuizzes] = useState<Quiz[]>([]);
-  const [selectedTargetQuizId, setSelectedTargetQuizId] = useState<string>('');
-  const [isAddingToExisting, setIsAddingToExisting] = useState(false);
+    const uuid = () => Math.random().toString(36).substring(2, 9);
 
-  // Tags State
-  const [newTag, setNewTag] = useState('');
-
-  // --- PAGINATION & DND STATE ---
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
-  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
-  const [draggedOption, setDraggedOption] = useState<{qId: string, idx: number} | null>(null);
-  const cardRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
-
-  useEffect(() => {
-      if (quiz.questions.length > 0) setHasSelectedPlatform(true);
-  }, []);
-
-  const uuid = () => Math.random().toString(36).substring(2, 9);
-
-  // --- PAGINATION LOGIC ---
-  const totalPages = Math.ceil(quiz.questions.length / ITEMS_PER_PAGE);
-  
-  useEffect(() => {
-      if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
-      if (currentPage < 1) setCurrentPage(1);
-  }, [quiz.questions.length, totalPages]);
-
-  const getCurrentPageQuestions = () => {
-      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-      return quiz.questions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  };
-
-  const jumpToQuestion = (index: number) => {
-      const targetPage = Math.ceil((index + 1) / ITEMS_PER_PAGE);
-      setCurrentPage(targetPage);
-      const q = quiz.questions[index];
-      setExpandedQuestionId(q.id);
-      setTimeout(() => {
-          const el = cardRefs.current[q.id];
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
-  };
-
-  const changePage = (newPage: number) => {
-      if (newPage < 1 || newPage > totalPages) return;
-      setCurrentPage(newPage);
-      const firstIndexOnPage = (newPage - 1) * ITEMS_PER_PAGE;
-      const q = quiz.questions[firstIndexOnPage];
-      if (q) {
-          setExpandedQuestionId(q.id);
-          setTimeout(() => {
-              const el = cardRefs.current[q.id];
-              if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-          }, 100);
-      }
-  };
-
-  // --- SAVE & PUBLISH FLOW MODIFIED ---
-  const handleSaveAndPrompt = async () => {
-      // 1. Check Auth FIRST
-      if (!user) {
-          setShowAuthModal(true);
-          return;
-      }
-
-      try {
-          await onSave(false); // Save first
-          if (!quiz.isPublic) {
-              // Show the new beautiful Success Modal instead of native confirm
-              setShowSaveSuccessModal(true);
-          } else {
-              // Already public, just notify save (Toast handled in onSave)
-          }
-      } catch(e) {
-          // Toast handled in onSave
-      }
-  };
-
-  // NEW: Transition from Success Modal to Publish Modal
-  const handleProceedToPublish = () => {
-      setShowSaveSuccessModal(false);
-      setShowPublishModal(true);
-  };
-
-  // ... (Standard handlers: AddToExisting, Publish, ImagePicker, CRUD) ...
-  
-  const handleOpenAddToExisting = async () => {
-      if (!user) { toast.warning("Inicia sesión para usar esta función."); return; }
-      setShowAddToExisting(true);
-      try { const q = await getUserQuizzes(user.uid); setUserQuizzes(q); } catch (e) { toast.error("Error cargando quizzes"); }
-  };
-
-  const confirmAddToExisting = async () => {
-      if (!selectedTargetQuizId) return;
-      setIsAddingToExisting(true);
-      try {
-          const targetQuiz = userQuizzes.find(q => q.id === selectedTargetQuizId);
-          if (!targetQuiz) throw new Error("Quiz not found");
-          const newQuestions = quiz.questions.map(q => ({ ...q, id: uuid(), options: q.options.map(o => ({...o, id: uuid()})), correctOptionId: "" }));
-          const updatedQuiz: Quiz = { ...targetQuiz, questions: [...targetQuiz.questions, ...quiz.questions], updatedAt: new Date() };
-          await saveQuizToFirestore(updatedQuiz, user.uid);
-          toast.success("Preguntas añadidas correctamente.");
-          setShowAddToExisting(false);
-      } catch (e) { toast.error("Error al guardar."); } finally { setIsAddingToExisting(false); }
-  };
-
-  const handleOpenPublish = () => {
-      if (!user) { setShowAuthModal(true); return; }
-      if (quiz.questions.length < 1) { toast.warning("Añade preguntas antes de publicar."); return; }
-      setShowPublishModal(true);
-  };
-
-  const handleConfirmPublish = async (tags: string[]) => {
-      setIsPublishing(true);
-      try {
-          setQuiz(prev => ({ ...prev, tags }));
-          await publishQuiz(quiz, tags);
-          toast.success("¡Quiz publicado en la Comunidad!");
-          setShowPublishModal(false);
-      } catch (e: any) { toast.error("Error al publicar: " + e.message); } finally { setIsPublishing(false); }
-  };
-
-  // Image Picker Logic
-  const openImagePicker = (qId: string, currentUrl?: string, optionId?: string, credit?: ImageCredit) => {
-      setPickingImageForId(qId); setPickingImageForOptionId(optionId || null); setPickingImageCurrentUrl(currentUrl || null); setPickingImageCurrentCredit(credit); setShowImagePicker(true);
-  };
-  const handleImageSelected = (result: ImageResult) => {
-      if (pickingImageForId) {
-          if (pickingImageForOptionId) {
-              const q = quiz.questions.find(q => q.id === pickingImageForId);
-              if (q) {
-                  const updatedOptions = q.options.map(o => o.id === pickingImageForOptionId ? { ...o, imageUrl: result.url } : o);
-                  updateQuestion(pickingImageForId, { options: updatedOptions });
-                  toast.success("Imagen de opción actualizada");
-              }
-          } else {
-              const credit = result.attribution ? { name: result.attribution.authorName, link: result.attribution.authorUrl, source: result.attribution.sourceName as any } : undefined;
-              updateQuestion(pickingImageForId, { imageUrl: result.url, imageCredit: credit });
-              toast.success("Imagen actualizada");
-          }
-      }
-      setPickingImageForId(null); setPickingImageForOptionId(null); setPickingImageCurrentUrl(null); setPickingImageCurrentCredit(undefined); setShowImagePicker(false);
-  };
-  const removeOptionImage = (qId: string, optId: string) => {
-      const q = quiz.questions.find(q => q.id === qId); if (!q) return;
-      const updatedOptions = q.options.map(o => o.id === optId ? { ...o, imageUrl: undefined } : o);
-      updateQuestion(qId, { options: updatedOptions });
-  };
-
-  // CRUD (Condensed)
-  const addQuestion = () => { const newQ: Question = { id: uuid(), text: '', options: [{id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}, {id: uuid(), text: ''}], correctOptionId: '', correctOptionIds: [], timeLimit: 20, questionType: QUESTION_TYPES.MULTIPLE_CHOICE }; newQ.correctOptionId = newQ.options[0].id; newQ.correctOptionIds = [newQ.options[0].id]; setQuiz(prev => { const newQs = [...prev.questions, newQ]; setTimeout(() => setCurrentPage(Math.ceil(newQs.length / ITEMS_PER_PAGE)), 50); return { ...prev, questions: newQs }; }); setExpandedQuestionId(newQ.id); };
-  const duplicateQuestion = (qId: string) => { const original = quiz.questions.find(q => q.id === qId); if (!original) return; const newOptions = original.options.map(o => ({...o, id: uuid()})); const newCorrectIds = (original.correctOptionIds || []).map(oldId => { const idx = original.options.findIndex(o => o.id === oldId); return idx !== -1 ? newOptions[idx].id : null; }).filter(id => id !== null) as string[]; const clone: Question = { ...original, id: uuid(), text: `${original.text} (Copia)`, options: newOptions, correctOptionIds: newCorrectIds, correctOptionId: newCorrectIds[0] || "" }; setQuiz(prev => { const index = prev.questions.findIndex(q => q.id === qId); const newQs = [...prev.questions]; newQs.splice(index + 1, 0, clone); return { ...prev, questions: newQs }; }); toast.info("Pregunta duplicada"); };
-  
-  // REMOVED CONFIRMATION
-  const removeQuestion = (id: string, e?: React.MouseEvent) => { 
-      if(e) e.stopPropagation(); 
-      setQuiz(prev => ({ ...prev, questions: prev.questions.filter(q => q.id !== id) })); 
-      if (expandedQuestionId === id) setExpandedQuestionId(null); 
-  };
-
-  const updateQuestion = (id: string, updates: Partial<Question>) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => q.id === id ? { ...q, ...updates } : q) })); };
-  const updateOption = (qId: string, oId: string, text: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; return { ...q, options: q.options.map(o => o.id === oId ? { ...o, text } : o) }; }) })); };
-  const addOption = (qId: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; if (q.options.length >= 6 && q.questionType !== QUESTION_TYPES.FILL_GAP) return q; return { ...q, options: [...q.options, { id: uuid(), text: '' }] }; }) })); };
-  const removeOption = (qId: string, oId: string) => { setQuiz(prev => ({ ...prev, questions: prev.questions.map(q => { if (q.id !== qId) return q; if (q.options.length <= 2 && q.questionType !== QUESTION_TYPES.FILL_GAP) return q; if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length <= 1) return q; return { ...q, options: q.options.filter(o => o.id !== oId) }; }) })); };
-  const handleCorrectSelection = (q: Question, optionId: string) => { if (q.questionType === QUESTION_TYPES.POLL) return; if (q.questionType === QUESTION_TYPES.MULTI_SELECT) { let currentIds = q.correctOptionIds || []; if (currentIds.length === 0 && q.correctOptionId) currentIds = [q.correctOptionId]; if (currentIds.includes(optionId)) { currentIds = currentIds.filter(id => id !== optionId); } else { currentIds = [...currentIds, optionId]; } updateQuestion(q.id, { correctOptionIds: currentIds, correctOptionId: currentIds.length > 0 ? currentIds[0] : "" }); } else { updateQuestion(q.id, { correctOptionId: optionId, correctOptionIds: [optionId] }); } };
-  const handleTypeChange = (qId: string, newType: string) => { const question = quiz.questions.find(q => q.id === qId); if (!question) return; let updates: Partial<Question> = { questionType: newType }; if (newType === QUESTION_TYPES.TRUE_FALSE) { const trueId = uuid(); updates.options = [{ id: trueId, text: t.q_tf_true }, { id: uuid(), text: t.q_tf_false }]; updates.correctOptionId = trueId; updates.correctOptionIds = [trueId]; } else if (newType === QUESTION_TYPES.ORDER) { updates.correctOptionId = ""; updates.correctOptionIds = []; const newOpts = []; for(let i=0; i<4; i++) newOpts.push({id: uuid(), text: ''}); updates.options = newOpts; } else if (newType === QUESTION_TYPES.FILL_GAP) { if (question.options.length === 0) { updates.options = [{ id: uuid(), text: '' }]; } updates.correctOptionId = question.options[0]?.id || ""; updates.correctOptionIds = [question.options[0]?.id || ""]; updates.matchConfig = { ignoreAccents: true, caseSensitive: false }; } else if (newType === QUESTION_TYPES.OPEN_ENDED) { updates.options = [{ id: uuid(), text: '' }]; updates.correctOptionId = ""; updates.correctOptionIds = []; updates.feedback = ""; } updateQuestion(qId, updates); };
-  const toggleExpand = (id: string) => { setExpandedQuestionId(prev => prev === id ? null : id); };
-  const validateQuestion = (q: Question) => { const hasText = q.text.trim().length > 0; if (q.questionType === QUESTION_TYPES.OPEN_ENDED || q.questionType === QUESTION_TYPES.POLL) return hasText; if (q.questionType === QUESTION_TYPES.FILL_GAP) return hasText && q.options.length > 0 && q.options[0].text.trim().length > 0; if (q.questionType === QUESTION_TYPES.ORDER) return hasText && q.options.length >= 2 && q.options.every(o => o.text.trim().length > 0); const ids = q.correctOptionIds && q.correctOptionIds.length > 0 ? q.correctOptionIds : (q.correctOptionId ? [q.correctOptionId] : []); const hasCorrect = ids.length > 0 && q.options.some(o => ids.includes(o.id)); const hasOptions = q.options.filter(o => o.text.trim().length > 0).length >= 2; return hasText && hasCorrect && hasOptions; };
-  const handleEnhanceQuestion = async (q: Question) => { setEnhancingId(q.id); try { const enhancedQ = await enhanceQuestion(q, quiz.description || "", currentLanguage); setQuiz(prev => ({ ...prev, questions: prev.questions.map(oldQ => oldQ.id === q.id ? { ...enhancedQ, id: oldQ.id } : oldQ) })); } catch (e) { alert("Could not enhance question."); } finally { setEnhancingId(null); } };
-  const ensureOptions = (q: Question) => { if ((q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.POLL) && q.options.length === 0) { const newOpts = [{ id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }, { id: uuid(), text: '' }]; updateQuestion(q.id, { options: newOpts }); } else if (q.questionType === QUESTION_TYPES.FILL_GAP && q.options.length === 0) { updateQuestion(q.id, { options: [{ id: uuid(), text: '' }] }); } };
-  
-  const handleAiGenerate = async () => { 
+    const handleAiGenerate = async () => { 
       if (!aiTopic.trim()) return; 
       setIsGenerating(true); 
       try { 
@@ -265,14 +43,23 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           const newQuestions: Question[] = aiResult.questions.map((gq: any) => { 
               const qId = uuid(); 
               const options: Option[] = gq.options.map((opt: any) => ({ id: opt.id || uuid(), text: opt.text })); 
+              
+              // FIX: Auto-detect Multi-Select based on correct answer count
+              const correctIds = gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []);
+              let determinedType = gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE;
+              
+              if (correctIds.length > 1) {
+                  determinedType = QUESTION_TYPES.MULTI_SELECT;
+              }
+
               return { 
                   id: qId, 
                   text: gq.text, 
                   options: options, 
-                  correctOptionId: gq.correctOptionId || options[0]?.id || "", 
-                  correctOptionIds: gq.correctOptionIds || (gq.correctOptionId ? [gq.correctOptionId] : []), 
+                  correctOptionId: correctIds[0] || "", 
+                  correctOptionIds: correctIds, 
                   timeLimit: 30, 
-                  questionType: gq.questionType || QUESTION_TYPES.MULTIPLE_CHOICE, 
+                  questionType: determinedType, 
                   feedback: gq.feedback, 
                   imageUrl: gq.imageUrl, 
                   imageSearchQuery: gq.imageSearchQuery, 
@@ -305,509 +92,170 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
       } finally { 
           setIsGenerating(false); 
       } 
-  };
+    };
 
-  const handleAddTag = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && newTag.trim()) { const currentTags = quiz.tags || []; if (!currentTags.includes(newTag.trim())) { setQuiz(prev => ({ ...prev, tags: [...currentTags, newTag.trim()] })); } setNewTag(''); } };
-  const removeTag = (tag: string) => { setQuiz(prev => ({ ...prev, tags: (prev.tags || []).filter(t => t !== tag) })); };
-  const getGroupedTypeOptions = () => { const allowedTypes = PLATFORM_SPECS[targetPlatform].types; const validationGroup = [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); const noValidationGroup = [QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL].filter(t => allowedTypes.includes(t)).map(t => ({ value: t, label: t })); return [{ label: "CON VALIDACIÓN DE RESPUESTA", options: validationGroup }, { label: "SIN VALIDACIÓN DE RESPUESTA", options: noValidationGroup }]; };
-  
-  // FIX: Better distinct icons for True/False and Multi-Select
-  const getTypeIcon = (type?: string) => { 
-      if (type === QUESTION_TYPES.TRUE_FALSE) return <ToggleLeft className="w-4 h-4" />; 
-      if (type === QUESTION_TYPES.FILL_GAP) return <Type className="w-4 h-4" />; 
-      if (type === QUESTION_TYPES.OPEN_ENDED) return <MessageSquare className="w-4 h-4" />; 
-      if (type === QUESTION_TYPES.ORDER) return <ListOrdered className="w-4 h-4" />; 
-      if (type === QUESTION_TYPES.MULTI_SELECT) return <ListChecks className="w-4 h-4" />; 
-      return <List className="w-4 h-4" />; // Default MC
-  };
-  
-  const getTypeColor = (type?: string) => { if (type === QUESTION_TYPES.TRUE_FALSE) return "text-blue-400 bg-blue-900/30 border-blue-500/50"; if (type === QUESTION_TYPES.FILL_GAP) return "text-yellow-400 bg-yellow-900/30 border-yellow-500/50"; if (type === QUESTION_TYPES.OPEN_ENDED) return "text-pink-400 bg-pink-900/30 border-pink-500/50"; if (type === QUESTION_TYPES.ORDER) return "text-purple-400 bg-purple-900/30 border-purple-500/50"; if (type === QUESTION_TYPES.MULTI_SELECT) return "text-green-400 bg-green-900/30 border-green-500/50"; return "text-cyan-400 bg-cyan-900/30 border-cyan-500/50"; };
+    const handleUpdateQuestion = (qId: string, field: keyof Question, value: any) => {
+        setQuiz(prev => ({
+            ...prev,
+            questions: prev.questions.map(q => q.id === qId ? { ...q, [field]: value } : q)
+        }));
+    };
 
-  // --- QUALITY CHECK LOGIC ---
-  const incompleteQuestions = quiz.questions.filter(q => !validateQuestion(q) || q.needsEnhanceAI);
-  const handleBulkEnhance = () => {
-      // For now, prompt user to enhance individually or manual fix
-      // Ideally this would iterate over incompleteQuestions and call enhanceQuestion
-      alert("Por favor, revisa las preguntas marcadas en rojo y utiliza el botón 'Generar con IA' si está disponible, o complétalas manualmente.");
-  };
+    const handleDeleteQuestion = (qId: string) => {
+        if (confirm(t.delete_confirm)) {
+            setQuiz(prev => ({
+                ...prev,
+                questions: prev.questions.filter(q => q.id !== qId)
+            }));
+        }
+    };
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      
-      {/* GLOBAL MODALS */}
-      <AuthModal 
-          isOpen={showAuthModal} 
-          onClose={() => setShowAuthModal(false)} 
-      />
-      <PublishModal 
-          isOpen={showPublishModal} 
-          onClose={() => setShowPublishModal(false)}
-          onConfirm={handleConfirmPublish}
-          initialTags={quiz.tags || []}
-          isPublishing={isPublishing}
-      />
-      <SaveSuccessModal 
-          isOpen={showSaveSuccessModal}
-          onClose={() => setShowSaveSuccessModal(false)}
-          onPublishRequest={handleProceedToPublish}
-          quiz={quiz}
-          user={user}
-      />
-      <ImagePickerModal
-          isOpen={showImagePicker}
-          onClose={() => setShowImagePicker(false)}
-          onSelect={handleImageSelected}
-          initialUrl={pickingImageCurrentUrl || undefined} 
-          initialCredit={pickingImageCurrentCredit} 
-      />
+    const handleAddManual = () => {
+        const newQ: Question = {
+            id: uuid(),
+            text: "Nueva pregunta",
+            options: [
+                { id: uuid(), text: "Opción 1" },
+                { id: uuid(), text: "Opción 2" }
+            ],
+            correctOptionId: "",
+            correctOptionIds: [],
+            questionType: QUESTION_TYPES.MULTIPLE_CHOICE,
+            timeLimit: 20
+        };
+        // Set first option as correct by default for convenience
+        newQ.correctOptionId = newQ.options[0].id;
+        newQ.correctOptionIds = [newQ.options[0].id];
 
-      {/* ... (Existing AddToExisting Modal) ... */}
-      {showAddToExisting && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-              <CyberCard className="w-full max-w-lg border-purple-500/50">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-cyber font-bold text-white text-lg">AÑADIR A QUIZ EXISTENTE</h3>
-                      <button onClick={() => setShowAddToExisting(false)}><XCircle className="w-5 h-5 text-gray-500"/></button>
-                  </div>
-                  <div className="space-y-4">
-                      <p className="text-sm text-gray-400">Selecciona el quiz al que quieres añadir las preguntas actuales ({quiz.questions.length}):</p>
-                      <div className="max-h-60 overflow-y-auto custom-scrollbar border border-gray-800 rounded bg-black/40 p-2 space-y-2">
-                          {userQuizzes.map(q => (
-                              <button 
-                                  key={q.id}
-                                  onClick={() => setSelectedTargetQuizId(q.id!)}
-                                  className={`w-full text-left p-3 rounded border transition-all ${selectedTargetQuizId === q.id ? 'bg-purple-900/40 border-purple-500 text-white' : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'}`}
-                              >
-                                  <div className="font-bold text-sm">{q.title}</div>
-                                  <div className="text-xs opacity-70">{q.questions.length} preguntas existinges</div>
-                              </button>
-                          ))}
-                      </div>
-                      <CyberButton onClick={confirmAddToExisting} isLoading={isAddingToExisting} disabled={!selectedTargetQuizId} className="w-full">
-                          CONFIRMAR Y FUSIONAR
-                      </CyberButton>
-                  </div>
-              </CyberCard>
-          </div>
-      )}
+        setQuiz(prev => {
+            const updated = [...prev.questions, newQ];
+            setTimeout(() => setCurrentPage(Math.ceil(updated.length / ITEMS_PER_PAGE)), 50);
+            return { ...prev, questions: updated };
+        });
+    };
 
-      {/* --- TITLE & TAGS HEADER --- */}
-      <div className="flex flex-col gap-4 border-b border-gray-800 pb-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="w-full">
-                  <input 
-                      type="text" 
-                      value={quiz.title} 
-                      onChange={(e) => setQuiz(prev => ({...prev, title: e.target.value}))}
-                      className="bg-transparent text-3xl font-cyber text-cyan-400 border-b border-transparent hover:border-cyan-500/50 focus:border-cyan-500 focus:outline-none w-full transition-all"
-                      placeholder="Quiz Title..."
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                          {(quiz.tags || []).map(tag => (
-                              <span key={tag} className="flex items-center gap-1 bg-cyan-950/40 text-cyan-300 text-xs px-2 py-1 rounded border border-cyan-900/50">
-                                  <Tag className="w-3 h-3" /> {tag}
-                                  <button onClick={() => removeTag(tag)} className="hover:text-white"><XCircle className="w-3 h-3" /></button>
-                              </span>
-                          ))}
-                          <div className="relative">
-                              <input 
-                                  type="text" 
-                                  value={newTag}
-                                  onChange={(e) => setNewTag(e.target.value)}
-                                  onKeyDown={handleAddTag}
-                                  placeholder="+ Tag"
-                                  className="bg-black/20 text-xs text-gray-400 border border-gray-800 rounded px-2 py-1 w-20 focus:w-32 transition-all focus:border-cyan-500 focus:outline-none"
-                              />
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      </div>
+    // Pagination
+    const totalPages = Math.ceil(quiz.questions.length / ITEMS_PER_PAGE);
+    const displayedQuestions = quiz.questions.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-xl font-cyber text-gray-300">{t.questions_db} [{quiz.questions.length}]</h2>
-          </div>
-          <div className="flex items-center gap-4 w-full md:w-auto">
-             <CyberButton onClick={addQuestion} className="flex-1 md:flex-none flex items-center gap-2 text-xs h-9"><Plus className="w-4 h-4" /> {t.add_manual}</CyberButton>
-             {/* Removed AI Button as requested */}
-          </div>
-      </div>
-
-      {showAiModal && (
-          <div className="border border-purple-500/50 bg-purple-950/10 p-6 rounded-lg animate-in slide-in-from-top-4">
-              <div className="flex items-center gap-2 mb-4 text-purple-400 font-cyber"><Bot className="w-5 h-5" /><h3>{t.ai_modal_title}</h3></div>
-              <div className="flex flex-col md:flex-row gap-4 items-end">
-                  <div className="flex-1 w-full"><CyberInput label={t.topic_label} placeholder={t.gen_placeholder} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}/></div>
-                  <div className="w-full md:w-40">
-                      <CyberSelect 
-                          label="IDIOMA" 
-                          options={[
-                              { value: 'Spanish', label: '🇪🇸 Español' },
-                              { value: 'English', label: '🇬🇧 English' },
-                              { value: 'French', label: '🇫🇷 Français' },
-                              { value: 'German', label: '🇩🇪 Deutsch' },
-                              { value: 'Italian', label: '🇮🇹 Italiano' },
-                              { value: 'Portuguese', label: '🇵🇹 Português' },
-                              { value: 'Catalan', label: '🏴 Catalan' },
-                              { value: 'Basque', label: '🏴 Euskera' },
-                              { value: 'Galician', label: '🏴 Galego' }
-                          ]}
-                          value={aiLanguage} 
-                          onChange={(e) => setAiLanguage(e.target.value)} 
-                      />
-                  </div>
-                  <div className="w-24"><CyberInput type="number" label="#" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value))} min={1} max={10}/></div>
-                  <CyberButton onClick={handleAiGenerate} isLoading={isGenerating} disabled={!aiTopic}>{t.ai_modal_add}</CyberButton>
-                  <CyberButton variant="ghost" onClick={() => setShowAiModal(false)}>{t.ai_modal_close}</CyberButton>
-              </div>
-              <p className="text-xs text-purple-300/60 mt-2 font-mono">* {t.editor_types_desc}</p>
-          </div>
-      )}
-
-      {/* --- TWO COLUMN LAYOUT --- */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start mt-6">
-          
-          {/* SIDEBAR (TOC + SHARING) */}
-          {quiz.questions.length > 0 && (
-              <div className="w-full lg:w-64 flex-shrink-0 lg:sticky lg:top-24 max-h-[calc(100vh-100px)] flex flex-col gap-4">
-                  
-                  {/* NEW: LAUNCH BUTTON IN SIDEBAR */}
-                  <CyberButton 
-                      onClick={() => onPlay(quiz)}
-                      className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 border-none shadow-lg text-white font-black"
-                  >
-                      <Rocket className="w-4 h-4 mr-2" /> LANZAR ARCADE
-                  </CyberButton>
-
-                  {/* TOC */}
-                  <div className="bg-black/40 border border-gray-800 rounded-lg overflow-hidden flex flex-col flex-1 max-h-[400px]">
-                      <div className="p-3 border-b border-gray-800 bg-gray-900/50 font-mono text-xs font-bold text-gray-400 flex items-center justify-between">
-                          <span className="flex items-center gap-2"><LayoutList className="w-3 h-3" /> INDEX</span>
-                          <span className="text-[10px] text-gray-600">{quiz.questions.length} Items</span>
-                      </div>
-                      <div className="overflow-y-auto custom-scrollbar flex-1 p-1 space-y-1">
-                          {quiz.questions.map((q, idx) => {
-                              const isValid = validateQuestion(q);
-                              const isActive = expandedQuestionId === q.id;
-                              const isDragging = draggedItemIndex === idx;
-                              
-                              return (
-                                  <div 
-                                      key={q.id}
-                                      draggable
-                                      onDragStart={(e) => {
-                                          setDraggedItemIndex(idx);
-                                      }}
-                                      onDragOver={(e) => {
-                                          e.preventDefault();
-                                          if (draggedItemIndex === null || draggedItemIndex === idx) return;
-                                          const newQuestions = [...quiz.questions];
-                                          const draggedItem = newQuestions[draggedItemIndex];
-                                          newQuestions.splice(draggedItemIndex, 1);
-                                          newQuestions.splice(idx, 0, draggedItem);
-                                          setQuiz(prev => ({ ...prev, questions: newQuestions }));
-                                          setDraggedItemIndex(idx);
-                                      }}
-                                      onDragEnd={() => setDraggedItemIndex(null)}
-                                      onClick={() => jumpToQuestion(idx)}
-                                      className={`
-                                          group flex items-center gap-2 p-2 rounded cursor-pointer transition-all border
-                                          ${isActive ? 'bg-cyan-900/30 border-cyan-500/50 text-cyan-200' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400'}
-                                          ${isDragging ? 'opacity-50 dashed border-gray-500' : ''}
-                                      `}
-                                  >
-                                      <div className="cursor-grab text-gray-700 hover:text-gray-400">
-                                          <GripVertical className="w-3 h-3" />
-                                      </div>
-                                      <span className="font-mono font-bold w-5 text-xs">{idx + 1}.</span>
-                                      <span className="text-xs leading-tight line-clamp-2 flex-1 break-words">{q.text || "Empty..."}</span>
-                                      {isValid ? <CheckCircle2 className="w-3 h-3 text-green-500/50" /> : <AlertTriangle className="w-3 h-3 text-red-500" />}
-                                  </div>
-                              );
-                          })}
-                      </div>
-                  </div>
-              </div>
-          )}
-
-          {/* MAIN EDITOR AREA */}
-          <div className="flex-1 w-full min-w-0">
-              {quiz.questions.length === 0 ? (
-                <div className="text-center py-20 text-gray-600 font-mono-cyber border-2 border-dashed border-gray-800 rounded-lg">{t.no_data}</div>
-              ) : (
-                <>
-                    <div className="grid gap-4 mb-6">
-                      {getCurrentPageQuestions().map((q) => {
-                        const index = quiz.questions.findIndex(ql => ql.id === q.id); 
-                        const isValid = validateQuestion(q);
-                        const isExpanded = expandedQuestionId === q.id;
-                        
-                        const correctIds = q.correctOptionIds && q.correctOptionIds.length > 0 
-                                           ? q.correctOptionIds 
-                                           : (q.correctOptionId ? [q.correctOptionId] : []);
-                        
-                        const correctTexts = q.options.filter(o => correctIds.includes(o.id)).map(o => o.text).join(", ");
-                        
-                        return (
-                          <div 
-                            key={q.id} 
-                            ref={el => { cardRefs.current[q.id] = el; }}
-                            className={`transition-all duration-300 ${isExpanded ? 'scale-[1.01] z-10' : ''}`}
-                          >
-                            <CyberCard title={!isExpanded ? `Q-${index + 1}` : undefined} className={`group transition-colors cursor-pointer ${!isValid ? 'border-red-500/50' : isExpanded ? 'border-cyan-500/50' : 'hover:border-cyan-500/30'}`}>
-                              
-                              {/* --- COLLAPSED VIEW --- */}
-                              <div className="flex items-center justify-between" onClick={() => toggleExpand(q.id)}>
-                                  <div className="flex items-center gap-4 flex-1 overflow-hidden">
-                                      {!isExpanded && (
-                                          <div className="flex-1 flex flex-col gap-1 w-full">
-                                              {/* Top Line: Icon | Stars | Text | Image Thumb */}
-                                              <div className="flex items-center gap-3 w-full">
-                                                  <div className={`p-1.5 rounded border ${getTypeColor(q.questionType)}`}>
-                                                      {getTypeIcon(q.questionType)}
-                                                  </div>
-                                                  
-                                                  {/* Difficulty Rating (Collapsed) */}
-                                                  <DifficultyRating 
-                                                      level={q.difficulty} 
-                                                      onChange={(l) => updateQuestion(q.id, { difficulty: l })} 
-                                                  />
-
-                                                  <span className={`font-bold font-mono text-sm md:text-base break-words flex-1 pr-4 ${!q.text ? 'text-gray-600 italic' : 'text-gray-300'}`}>
-                                                      {q.text || t.enter_question}
-                                                  </span>
-                                                  {q.imageUrl && (
-                                                      <div className="w-8 h-8 rounded border border-gray-700 bg-black overflow-hidden shrink-0">
-                                                          <img src={q.imageUrl} alt="Q" className="w-full h-full object-cover" />
-                                                      </div>
-                                                  )}
-                                                  {!isValid && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
-                                              </div>
-                                              
-                                              {/* Bottom Line: Correct Answer */}
-                                              {correctTexts && (
-                                                  <div className="flex items-center gap-1 text-[10px] text-green-500/80 font-mono pl-10">
-                                                      <Check className="w-3 h-3" /> {correctTexts}
-                                                  </div>
-                                              )}
-                                          </div>
-                                      )}
-                                      
-                                      {/* Header Title when Expanded */}
-                                      {isExpanded && <div className="flex items-center gap-2 text-cyan-400"><span className="font-cyber text-lg">{t.editing} Q-{index+1}</span></div>}
-                                  </div>
-                                  
-                                  {/* Right Actions - Z-Index Boosted to fix click issue */}
-                                  <div className="flex items-center gap-2 relative z-20">
-                                      {!isExpanded && (
-                                          <>
-                                              <button onClick={(e) => { e.stopPropagation(); duplicateQuestion(q.id); }} className="p-2 text-gray-600 hover:text-cyan-400 transition-colors rounded hover:bg-cyan-900/20" title="Duplicar"><Copy className="w-4 h-4" /></button>
-                                              <button onClick={(e) => removeQuestion(q.id, e)} className="p-2 text-gray-600 hover:text-red-500 transition-colors rounded hover:bg-red-900/20" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
-                                          </>
-                                      )}
-                                      <div className="p-2 text-cyan-500">{isExpanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}</div>
-                                  </div>
-                              </div>
-
-                              {/* --- EXPANDED VIEW --- */}
-                              {isExpanded && (
-                                  <div className="space-y-6 mt-6 border-t border-gray-800 pt-6 animate-in slide-in-from-top-2 cursor-default" onClick={e => e.stopPropagation()}>
-                                      {/* ... (Existing expanded question content preserved) ... */}
-                                      <div className="flex flex-col md:flex-row gap-4 items-end">
-                                          <div className="flex-1">
-                                              <CyberSelect 
-                                                  label={t.q_type_label} 
-                                                  options={getGroupedTypeOptions() as any} 
-                                                  value={q.questionType || QUESTION_TYPES.MULTIPLE_CHOICE} 
-                                                  onChange={(e) => handleTypeChange(q.id, e.target.value)} 
-                                              />
-                                          </div>
-                                          
-                                          {/* Difficulty Rating (Expanded) */}
-                                          <div className="mb-2">
-                                              <label className="text-xs font-mono text-gray-500 block mb-1">DIFICULTAD</label>
-                                              <DifficultyRating 
-                                                  level={q.difficulty} 
-                                                  onChange={(l) => updateQuestion(q.id, { difficulty: l })} 
-                                              />
-                                          </div>
-
-                                          <div className="w-full md:w-32">
-                                              <label className="text-xs font-mono text-gray-500 block mb-1">{t.timer_sec}</label>
-                                              <input type="number" value={q.timeLimit} onChange={(e) => updateQuestion(q.id, { timeLimit: parseInt(e.target.value) || 0 })} className="bg-black/50 border border-gray-700 w-full p-3 text-center font-mono text-cyan-400 focus:border-cyan-500 outline-none rounded-sm" />
-                                          </div>
-                                      </div>
-
-                                      {/* QUESTION TEXT + IMAGE BUTTON ROW */}
-                                      <div className="flex gap-4">
-                                          <div className="flex-1 space-y-2">
-                                              <CyberTextArea label={t.q_text_label} placeholder={t.enter_question} value={q.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value })} className="text-lg font-bold min-h-[80px]" />
-                                          </div>
-                                          
-                                          {/* IMAGE TRIGGER BOX */}
-                                          <div className="w-32 shrink-0 flex flex-col gap-1">
-                                              <label className="text-xs font-mono text-cyan-400/80 uppercase tracking-widest block opacity-0">IMG</label> 
-                                              {q.imageUrl ? (
-                                                  <div 
-                                                      onClick={() => openImagePicker(q.id, q.imageUrl, undefined, q.imageCredit)} 
-                                                      className="h-full min-h-[80px] w-full border border-gray-700 bg-black/40 rounded overflow-hidden relative group cursor-pointer hover:border-cyan-500 transition-all flex items-center justify-center"
-                                                  >
-                                                      <img src={q.imageUrl} className="w-full h-full object-contain max-h-[120px]" alt="Q" />
-                                                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                          <ImageIcon className="w-6 h-6 text-white" />
-                                                      </div>
-                                                      <button 
-                                                          onClick={(e) => { e.stopPropagation(); updateQuestion(q.id, { imageUrl: '' }); }}
-                                                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
-                                                      >
-                                                          <XCircle className="w-3 h-3" />
-                                                      </button>
-                                                  </div>
-                                              ) : (
-                                                  <button 
-                                                      onClick={() => openImagePicker(q.id)}
-                                                      className="h-full min-h-[80px] w-full border border-dashed border-gray-700 bg-black/20 rounded flex flex-col items-center justify-center text-gray-500 hover:text-cyan-400 hover:border-cyan-500/50 hover:bg-cyan-900/10 transition-all gap-1"
-                                                  >
-                                                      <ImageIcon className="w-6 h-6" />
-                                                      <span className="text-[9px] font-mono font-bold uppercase">AÑADIR IMG</span>
-                                                  </button>
-                                              )}
-                                          </div>
-                                      </div>
-
-                                      {/* OPTIONS AREA */}
-                                      <div className="bg-black/20 p-4 rounded border border-gray-800/50">
-                                          {(q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT || q.questionType === QUESTION_TYPES.TRUE_FALSE || q.questionType === QUESTION_TYPES.POLL || q.questionType === QUESTION_TYPES.ORDER || !q.questionType) && (
-                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                  {q.options.map((opt, i) => {
-                                                      const isMulti = q.questionType === QUESTION_TYPES.MULTI_SELECT;
-                                                      const isTF = q.questionType === QUESTION_TYPES.TRUE_FALSE;
-                                                      const isPoll = q.questionType === QUESTION_TYPES.POLL;
-                                                      const isOrder = q.questionType === QUESTION_TYPES.ORDER;
-                                                      const isSelected = correctIds.includes(opt.id);
-                                                      
-                                                      return (
-                                                      <div 
-                                                          key={opt.id} 
-                                                          className={`flex items-center gap-3 bg-black/30 p-2 rounded border transition-colors group-focus-within:border-cyan-500 ${isSelected ? 'border-green-500/50 bg-green-950/10' : 'border-gray-800 hover:border-gray-600'}`}
-                                                      >
-                                                          {isOrder && <div className="text-gray-600 cursor-grab"><GripVertical className="w-4 h-4"/></div>}
-                                                          {isOrder && <span className="font-mono text-xs font-bold text-purple-400 w-4">{i + 1}º</span>}
-                                                          
-                                                          {!isPoll && !isOrder && (
-                                                              <button onClick={() => handleCorrectSelection(q, opt.id)} className={`flex-shrink-0 transition-colors ${isSelected ? 'text-green-400' : 'text-gray-600 hover:text-gray-400'}`} title={t.mark_correct}>
-                                                                {isMulti ? (isSelected ? <CheckSquare className="w-6 h-6"/> : <div className="w-6 h-6 border-2 border-gray-600 rounded-sm hover:border-gray-400" />) : (isSelected ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />)}
-                                                              </button>
-                                                          )}
-                                                          
-                                                          <div className="flex-1 flex gap-2 items-center">
-                                                              {opt.imageUrl ? (
-                                                                  <div className="relative group/img w-8 h-8 shrink-0">
-                                                                      <img src={opt.imageUrl} className="w-8 h-8 object-cover rounded border border-gray-600" />
-                                                                      <button onClick={() => removeOptionImage(q.id, opt.id)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity"><XCircle className="w-2 h-2" /></button>
-                                                                  </div>
-                                                              ) : (
-                                                                  <button onClick={() => openImagePicker(q.id, undefined, opt.id)} className="text-gray-600 hover:text-cyan-400 shrink-0" title="Añadir imagen a opción"><ImageIcon className="w-4 h-4" /></button>
-                                                              )}
-                                                              <input type="text" value={opt.text} onChange={(e) => updateOption(q.id, opt.id, e.target.value)} className="bg-transparent w-full text-sm font-mono text-gray-300 focus:outline-none focus:text-cyan-300" placeholder={`${t.option_placeholder} ${i + 1}`} />
-                                                          </div>
-
-                                                          {!isTF && <button onClick={() => removeOption(q.id, opt.id)} className="text-gray-600 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}
-                                                      </div>
-                                                      );
-                                                  })}
-                                                  {q.questionType !== QUESTION_TYPES.TRUE_FALSE && q.options.length < 6 && (
-                                                      <button onClick={() => addOption(q.id)} className="flex items-center justify-center gap-2 bg-black/20 border border-dashed border-gray-700 p-2 rounded text-gray-500 hover:text-cyan-400 hover:border-cyan-500 transition-all">
-                                                          <Plus className="w-4 h-4" /> {t.option_placeholder}
-                                                      </button>
-                                                  )}
-                                              </div>
-                                          )}
-                                          
-                                      </div>
-
-                                      <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
-                                          <CyberButton variant="danger" onClick={() => removeQuestion(q.id)} className="text-xs h-9">
-                                              <Trash2 className="w-4 h-4 mr-2" /> ELIMINAR
-                                          </CyberButton>
-                                          <CyberButton variant="secondary" onClick={() => duplicateQuestion(q.id)} className="text-xs h-9"><CopyPlus className="w-4 h-4 mr-2" /> DUPLICAR</CyberButton>
-                                          <CyberButton onClick={addQuestion} className="text-xs h-9 bg-green-700 hover:bg-green-600 border-none"><Plus className="w-4 h-4 mr-2" /> AÑADIR NUEVA</CyberButton>
-                                      </div>
-                                  </div>
-                              )}
-                            </CyberCard>
-                          </div>
-                        );
-                      })}
+    return (
+        <div className="space-y-8 pb-20">
+            {/* Header / Quiz Info */}
+            <CyberCard className="border-cyan-500/30 p-6 space-y-4">
+                <div className="flex justify-between items-start">
+                    <h2 className="text-xl font-cyber text-white">DETALLES DEL QUIZ</h2>
+                    <div className="flex gap-2">
+                        <CyberButton onClick={() => onSave(false)} isLoading={isSaving} className="text-xs h-8">
+                            <Save className="w-3 h-3 mr-2" /> GUARDAR
+                        </CyberButton>
+                        <CyberButton variant="secondary" onClick={onExport} className="text-xs h-8">
+                            <Download className="w-3 h-3 mr-2" /> EXPORTAR
+                        </CyberButton>
+                        <CyberButton variant="neural" onClick={() => onPlay(quiz)} className="text-xs h-8">
+                            <Play className="w-3 h-3 mr-2" /> JUGAR
+                        </CyberButton>
                     </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <CyberInput 
+                        label="TÍTULO" 
+                        value={quiz.title} 
+                        onChange={(e) => setQuiz({...quiz, title: e.target.value})} 
+                    />
+                    <CyberInput 
+                        label="DESCRIPCIÓN" 
+                        value={quiz.description} 
+                        onChange={(e) => setQuiz({...quiz, description: e.target.value})} 
+                    />
+                </div>
+            </CyberCard>
 
-                    {/* QUALITY CHECK BANNER */}
-                    {incompleteQuestions.length > 0 && (
-                        <div className="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4 mb-6 animate-pulse flex flex-col md:flex-row items-center gap-4">
-                            <div className="flex items-center gap-3">
-                                <AlertTriangle className="w-8 h-8 text-yellow-500" />
-                                <div>
-                                    <h4 className="text-yellow-200 font-bold font-cyber">DATOS INCOMPLETOS DETECTADOS</h4>
-                                    <p className="text-xs text-yellow-100/70 font-mono">
-                                        Hay {incompleteQuestions.length} preguntas sin opciones válidas o respuesta correcta.
-                                    </p>
-                                </div>
+            {/* Questions Toolbar */}
+            <div className="flex justify-between items-center bg-black/40 p-4 rounded-lg border border-gray-800">
+                <h3 className="font-cyber text-lg text-cyan-400">PREGUNTAS ({quiz.questions.length})</h3>
+                <div className="flex gap-2">
+                    <CyberButton onClick={() => setShowAiModal(true)} variant="secondary" className="text-xs h-9">
+                        <Wand2 className="w-3 h-3 mr-2" /> {t.add_gen_ai}
+                    </CyberButton>
+                    <CyberButton onClick={handleAddManual} className="text-xs h-9">
+                        <Plus className="w-3 h-3 mr-2" /> {t.add_manual}
+                    </CyberButton>
+                </div>
+            </div>
+
+            {/* Question List */}
+            <div className="space-y-4">
+                {displayedQuestions.map((q, i) => (
+                    <CyberCard key={q.id} className="border-gray-800 hover:border-gray-600 transition-colors">
+                        <div className="flex justify-between items-start mb-4">
+                            <span className="font-mono text-gray-500 text-xs">#{((currentPage - 1) * ITEMS_PER_PAGE) + i + 1}</span>
+                            <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-400">
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <CyberInput 
+                                value={q.text} 
+                                onChange={(e) => handleUpdateQuestion(q.id, 'text', e.target.value)} 
+                                placeholder={t.enter_question}
+                            />
+                            {/* Simplified Option View for brevity in manual editor */}
+                            <div className="pl-4 border-l-2 border-gray-800 space-y-2">
+                                {q.options.map((opt, idx) => (
+                                    <div key={opt.id} className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${q.correctOptionIds?.includes(opt.id) ? 'bg-green-500' : 'bg-gray-600'}`} />
+                                        <input 
+                                            className="bg-transparent text-sm text-gray-300 w-full outline-none border-b border-transparent focus:border-cyan-500"
+                                            value={opt.text}
+                                            onChange={(e) => {
+                                                const newOpts = [...q.options];
+                                                newOpts[idx].text = e.target.value;
+                                                handleUpdateQuestion(q.id, 'options', newOpts);
+                                            }}
+                                        />
+                                    </div>
+                                ))}
                             </div>
-                            <CyberButton 
-                                onClick={handleBulkEnhance} 
-                                className="ml-auto bg-yellow-600 hover:bg-yellow-500 border-none text-black"
-                            >
-                                <Wrench className="w-4 h-4 mr-2" /> REPARAR CON IA
+                        </div>
+                    </CyberCard>
+                ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex justify-center gap-2 mt-6">
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-gray-800 rounded disabled:opacity-50 text-white"><ArrowLeft className="w-4 h-4" /></button>
+                    <span className="px-4 py-2 bg-black rounded text-white font-mono text-sm">Página {currentPage} / {totalPages}</span>
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-gray-800 rounded disabled:opacity-50 text-white"><ArrowRight className="w-4 h-4" /></button>
+                </div>
+            )}
+
+            {/* AI Modal */}
+            {showAiModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+                    <CyberCard className="w-full max-w-lg border-purple-500/50">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-cyber text-lg text-purple-400">{t.ai_modal_title}</h3>
+                            <button onClick={() => setShowAiModal(false)}><X className="w-5 h-5 text-gray-500" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <CyberInput label={t.topic_label} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <CyberInput type="number" label={t.count_label} value={aiCount} onChange={(e) => setAiCount(Number(e.target.value))} />
+                                <CyberSelect 
+                                    label="IDIOMA" 
+                                    options={[{value: 'Spanish', label: 'Español'}, {value: 'English', label: 'English'}]} 
+                                    value={aiLanguage} 
+                                    onChange={(e) => setAiLanguage(e.target.value)} 
+                                />
+                            </div>
+                            <CyberButton onClick={handleAiGenerate} isLoading={isGenerating} className="w-full bg-purple-600 hover:bg-purple-500 border-none">
+                                {t.ai_modal_add}
                             </CyberButton>
                         </div>
-                    )}
-
-                    {/* PAGINATION CONTROLS */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between border-t border-gray-800 pt-6">
-                            <CyberButton variant="ghost" onClick={() => changePage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-xs">
-                                <ChevronLeft className="w-4 h-4" /> PREV
-                            </CyberButton>
-                            <div className="flex items-center gap-2"><span className="text-xs font-mono text-gray-500">PAGE {currentPage} OF {totalPages}</span></div>
-                            <CyberButton variant="ghost" onClick={() => changePage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-xs">
-                                NEXT <ChevronRight className="w-4 h-4" />
-                            </CyberButton>
-                        </div>
-                    )}
-
-                    {/* NEW: LAUNCH BUTTON AT BOTTOM */}
-                    <div className="mt-8 mb-4">
-                        <button 
-                            onClick={() => onPlay(quiz)}
-                            className="w-full py-4 rounded-xl border-2 border-yellow-500/50 bg-yellow-900/20 hover:bg-yellow-900/40 hover:border-yellow-400 text-yellow-100 font-cyber font-bold tracking-widest flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(234,179,8,0.1)] hover:shadow-[0_0_30px_rgba(234,179,8,0.3)] group"
-                        >
-                            <Gamepad2 className="w-6 h-6 group-hover:animate-bounce" /> 
-                            LANZAR EN MODO ARCADE
-                        </button>
-                    </div>
-
-                    {/* --- NEW FOOTER ACTION BAR (PHASE 1 END) --- */}
-                    <div className="mt-8 pt-8 border-t-2 border-gray-800 flex flex-col md:flex-row gap-4 items-center justify-end">
-                        
-                        <CyberButton onClick={handleSaveAndPrompt} isLoading={isSaving} variant="secondary" className="w-full md:w-auto">
-                            <Save className="w-5 h-5 mr-2" /> GUARDAR EN MI LIBRERÍA
-                        </CyberButton>
-
-                        <CyberButton onClick={handleOpenPublish} variant="secondary" className="w-full md:w-auto bg-purple-900/20 border-purple-500/50 text-purple-200">
-                            <Globe className="w-5 h-5 mr-2" /> PUBLICAR EN COMUNIDAD
-                        </CyberButton>
-
-                        <CyberButton onClick={onExport} className="w-full md:w-auto h-14 text-lg px-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-none">
-                            EXPORTAR DATOS <ArrowRightCircle className="w-6 h-6 ml-2" />
-                        </CyberButton>
-                    </div>
-                </>
-              )}
-          </div>
-      </div>
-    </div>
-  );
+                    </CyberCard>
+                </div>
+            )}
+        </div>
+    );
 };
