@@ -211,7 +211,11 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
         prompt += `\nTONE: ${tone.toUpperCase()}. Adapt the wording of questions and feedback to be ${tone}.`;
     }
     
-    if (types.length > 0) prompt += `\nInclude these question types if suitable: ${types.join(', ')}.`;
+    if (types.length > 0) {
+        // Enforce even distribution of types
+        prompt += `\nQUESTION TYPES DISTRIBUTION: You MUST distribute the ${safeCount} questions evenly among these selected types: ${types.join(', ')}. (e.g. if 2 types selected, 50% each).`;
+    }
+
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
     if (urls && urls.length > 0) prompt += `\n\nRef URLs:\n${urls.join('\n')}`;
 
