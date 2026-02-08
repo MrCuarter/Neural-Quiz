@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 import { validateQuizQuestions } from "../utils/validation";
@@ -85,9 +84,9 @@ const questionSchema: Schema = {
     fallback_category: { type: Type.STRING },
     reconstructed: { type: Type.BOOLEAN },
     sourceEvidence: { type: Type.STRING },
-    difficulty: { type: Type.INTEGER, description: "1 to 5 based on complexity." }
+    difficulty: { type: Type.INTEGER, description: "Calculated difficulty level (1-5)." }
   },
-  required: ["text", "options", "type", "imageSearchQuery", "fallback_category"]
+  required: ["text", "options", "type", "imageSearchQuery", "fallback_category", "difficulty"]
 };
 
 const quizRootSchema: Schema = {
@@ -105,28 +104,49 @@ Tu misión es generar cuestionarios JSON precisos.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
 Genera "tags" útiles.
 
-NIVELES DE DIFICULTAD (Asigna el campo "difficulty" del 1 al 5):
-1. BÁSICO: Preguntas muy simples, directas. V/F, 2-3 opciones. Reconocimiento inmediato.
-2. INICIAL: Fáciles con pequeño reto. 3-4 opciones. Checkbox simples. Requieren atención básica.
-3. INTERMEDIO: Dificultad media. 4-5 opciones. Distractores plausibles. Obligan a pensar.
-4. AVANZADO: Exigentes. 5-6 opciones. Checkbox complejas. Precisión y análisis.
-5. EXPERTO: Máxima dificultad. Distractores muy elaborados. Reflexión crítica y transferencia.
+ALGORITMO DE DIFICULTAD (OBLIGATORIO: Asigna 'difficulty' integer de 1 a 5 para CADA pregunta):
+Debes calcular el nivel de dificultad siguiendo estrictamente estos pasos:
+
+1. NIVEL BASE POR TIPO DE PREGUNTA:
+   - True/False: Base ⭐1
+   - Multiple Choice (1 respuesta): Base ⭐2
+   - Short Answer / Checkbox (Multi-Select): Base ⭐3
+   - Sort/Order: Base ⭐4
+
+2. AJUSTE POR EDAD (Target Audience):
+   - 6-7 años: +1 (Sube dificultad percibida)
+   - 8-9 años: +0
+   - 10-11 años: -1 (Baja 1 si es simple)
+   - 12+ años: -1
+   (Mantén la base resultante entre 1 y 4 antes del siguiente paso).
+
+3. AJUSTE POR COMPLEJIDAD DEL CONTENIDO (La Dificultad Real):
+   Evalúa la pregunta y suma puntos:
+   A. Carga Lingüística: Simple(0), Media(+1), Alta/Técnica(+2)
+   B. Complejidad Cognitiva: Recordar(0), Comprender(+1), Aplicar(+2), Inferir(+3)
+   C. Distractores: Obvios(0), Plausibles(+1), Trampa(+2)
+   
+   Suma A+B+C y aplica al nivel:
+   - 0-1 ptos: +0 ⭐
+   - 2-3 ptos: +1 ⭐
+   - 4-5 ptos: +2 ⭐
+   - 6+ ptos: +3 ⭐
+
+4. REGLA DE VARIANZA (CRUCIAL):
+   - Si el usuario pide un solo tipo de pregunta (ej. solo Checkbox para 8 años), NO pongas todas al mismo nivel.
+   - Debes variar la complejidad del contenido (Paso 3) para generar un mix equilibrado (1/3 Fáciles, 1/3 Medias, 1/3 Difíciles).
+   - El resultado final 'difficulty' debe ser un número entre 1 y 5.
 
 REGLAS DE TIPOS DE PREGUNTA:
 1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones (salvo nivel 1). Solo una correcta.
 2. "Fill in the Blank" (Respuesta Corta):
    - La opción con índice 0 es la respuesta principal perfecta.
-   - Las opciones con índices 1, 2, 3 deben ser VARIACIONES ACEPTADAS o SINÓNIMOS (ej: "II Guerra Mundial", "2ª GM", "Segunda Guerra Mundial").
-   - NO generes distractores falsos para este tipo, solo variaciones válidas.
-
-REGLAS DE FEEDBACK:
-- El feedback debe ser puramente educativo, curioso o explicativo.
-- PROHIBIDO empezar con palabras de validación como "Correcto", "¡Muy bien!", "Acertaste", "Incorrecto", "Efectivamente".
-- Ve directo al grano. Ejemplo BIEN: "El guepardo alcanza 110km/h en 3 segundos." Ejemplo MAL: "¡Correcto! El guepardo es rápido."
+   - Las opciones con índices 1, 2, 3 deben ser VARIACIONES ACEPTADAS o SINÓNIMOS.
+   - NO generes distractores falsos para este tipo.
 
 REGLAS DE IMÁGENES:
 1. Genera SIEMPRE "imageSearchQuery" para la pregunta principal.
-2. ENTORNO AL 5% DE LAS PREGUNTAS (1 de cada 20 aprox): Genera preguntas visuales donde las opciones tengan imágenes. Para ello, rellena el campo "imageSearchQuery" dentro de los objetos "options".`;
+2. ENTORNO AL 5% DE LAS PREGUNTAS: Genera preguntas visuales (imágenes en las opciones).`;
 
 interface GenParams {
   topic: string;
@@ -151,15 +171,10 @@ const MODEL_NAME = "gemini-3-flash-preview";
  */
 function cleanAIResponse(text: string): string {
   if (!text) return "{}";
-  // 1. Eliminar bloques de código markdown ```json y ```
   let clean = text.replace(/```json/g, '').replace(/```/g, '');
-  
-  // 2. Buscar dónde empieza el primer corchete [ o llave {
   const firstBracket = clean.indexOf('[');
   const firstBrace = clean.indexOf('{');
-  
   let start = -1;
-  // Determinamos cuál aparece primero (o si solo aparece uno)
   if (firstBracket !== -1 && firstBrace !== -1) {
       start = Math.min(firstBracket, firstBrace);
   } else if (firstBracket !== -1) {
@@ -167,16 +182,12 @@ function cleanAIResponse(text: string): string {
   } else if (firstBrace !== -1) {
       start = firstBrace;
   }
-
-  // 3. Buscar dónde termina el último corchete ] o llave }
   const lastBracket = clean.lastIndexOf(']');
   const lastBrace = clean.lastIndexOf('}');
   const end = Math.max(lastBracket, lastBrace);
-
   if (start !== -1 && end !== -1) {
       clean = clean.substring(start, end + 1);
   }
-  
   return clean.trim();
 }
 
@@ -184,39 +195,34 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
   return withRetry(async () => {
     const ai = getAI();
     const { topic, count, types, age, difficulty = '3', context, urls, language = 'Spanish', includeFeedback, tone = 'Neutral', customToneContext } = params;
-    // UPDATED LIMIT TO 50
     const safeCount = Math.min(Math.max(count, 1), 50);
 
     let prompt = "";
 
-    // INJECT CUSTOM CONTEXT
     if (tone === 'Custom' && customToneContext) {
-        prompt += `CONTEXTO OBLIGATORIO: Adapta TODAS las preguntas y enunciados al siguiente escenario narrativo o temática: '${customToneContext}'. Intenta integrar los problemas dentro de esta historia (ej: si es matemáticas y el tema es piratas, cuenta monedas de oro).\n\n`;
+        prompt += `CONTEXTO OBLIGATORIO: Adapta TODAS las preguntas al escenario: '${customToneContext}'.\n\n`;
     }
 
     prompt += `Generate a Quiz about "${topic}".`;
     prompt += `\nTarget Audience (Age/Level): ${age}. Output Language: ${language}.`;
     
-    // DIFFICULTY LOGIC (MAP TO 1-5 SCALES)
+    // DIFFICULTY LOGIC INJECTION
     if (difficulty === 'Multinivel') {
-        prompt += `\nDIFFICULTY STRATEGY: MULTILEVEL MIX.
-        1. CONTEXT ANALYSIS: First, check if the topic "${topic}" specifies a grade, age, or level. If it does, center the difficulty around that. If NOT, strictly use the Target Audience "${age}" as the baseline.
-        2. BALANCED DISTRIBUTION: You MUST generate a balanced mix of questions. Attempt to provide an equal number of questions for each Level (1, 2, 3, 4, 5).
-        3. ASSIGNMENT: Explicitly calculate and populate the 'difficulty' field (integer 1-5) for EVERY question based on this strategy.`;
+        prompt += `\nDIFFICULTY MODE: MULTILEVEL MIX. 
+        Apply the Difficulty Algorithm strictly. 
+        Ensure a bell curve distribution of difficulty stars (1-5) based on content complexity vs age.`;
     } else {
         const diffNum = parseInt(difficulty);
-        const descMap = ["Basic", "Initial", "Intermediate", "Advanced", "Expert"];
-        const diffDesc = descMap[Math.min(Math.max(diffNum - 1, 0), 4)];
-        prompt += `\nDIFFICULTY: Level ${diffNum} - ${diffDesc}. Strictly follow the Level ${diffNum} guidelines provided in system instructions.`;
+        prompt += `\nTARGET DIFFICULTY: Level ${diffNum}. 
+        However, use the Difficulty Algorithm to ensure specific questions vary slightly around this mean based on their type and content complexity.`;
     }
     
     if (tone !== 'Custom') {
-        prompt += `\nTONE: ${tone.toUpperCase()}. Adapt the wording of questions and feedback to be ${tone}.`;
+        prompt += `\nTONE: ${tone.toUpperCase()}.`;
     }
     
     if (types.length > 0) {
-        // Enforce even distribution of types
-        prompt += `\nQUESTION TYPES DISTRIBUTION: You MUST distribute the ${safeCount} questions evenly among these selected types: ${types.join(', ')}. (e.g. if 2 types selected, 50% each).`;
+        prompt += `\nALLOWED TYPES: ${types.join(', ')}. Distribute evenly if possible, but respect content fit.`;
     }
 
     if (context) prompt += `\n\nContext:\n${context.substring(0, 30000)}`;
@@ -257,11 +263,15 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: any): Promise<any[]> => {
     return withRetry(async () => {
         const ai = getAI();
-        const prompt = `Extract questions from: ${rawText.substring(0, 5000)}. Language: ${language}.`;
+        const prompt = `Extract questions from: ${rawText.substring(0, 5000)}. Language: ${language}. Calculate difficulty (1-5) for each.`;
         const response = await ai.models.generateContent({
             model: MODEL_NAME,
             contents: prompt,
-            config: { responseMimeType: "application/json", responseSchema: quizRootSchema }
+            config: { 
+                responseMimeType: "application/json", 
+                responseSchema: quizRootSchema,
+                systemInstruction: SYSTEM_INSTRUCTION 
+            }
         });
         
         const cleanedText = cleanAIResponse(response.text || "{}");
@@ -270,7 +280,6 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
 };
 
 export const enhanceQuestion = async (q: Question, context: string, language: string): Promise<Question> => {
-    // Basic mock/placeholder logic
     return q; 
 };
 

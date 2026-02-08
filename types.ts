@@ -339,7 +339,8 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     },
     [ExportFormat.WIDGET_CSV]: {
         name: 'Widget Genially (CSV)',
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.MULTI_SELECT]
+        // ADDED TRUE_FALSE HERE to allow it without warnings
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE]
     },
     [ExportFormat.PDF_PRINT]: {
         name: 'Printable PDF',

@@ -285,7 +285,8 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                   feedback: gq.feedback, 
                   imageUrl: gq.imageUrl, 
                   imageSearchQuery: gq.imageSearchQuery, 
-                  fallback_category: gq.fallback_category 
+                  fallback_category: gq.fallback_category,
+                  difficulty: gq.difficulty || 1 // Map difficulty from AI
               }; 
           }); 
           

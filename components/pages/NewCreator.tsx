@@ -202,7 +202,8 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                     ...gq, 
                     id: uuid(), 
                     correctOptionIds: correctIds,
-                    questionType: qType 
+                    questionType: qType,
+                    difficulty: gq.difficulty || 1 // Map difficulty from AI
                 };
                 
                 if (!qObj.imageUrl && qObj.imageSearchQuery) {
