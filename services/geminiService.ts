@@ -199,7 +199,10 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
     
     // DIFFICULTY LOGIC (MAP TO 1-5 SCALES)
     if (difficulty === 'Multinivel') {
-        prompt += `\nDIFFICULTY: Mixed/Multilevel. Generate a balanced mix of Level 1 (Basic) to Level 5 (Expert) questions.`;
+        prompt += `\nDIFFICULTY STRATEGY: MULTILEVEL MIX.
+        1. CONTEXT ANALYSIS: First, check if the topic "${topic}" specifies a grade, age, or level. If it does, center the difficulty around that. If NOT, strictly use the Target Audience "${age}" as the baseline.
+        2. BALANCED DISTRIBUTION: You MUST generate a balanced mix of questions. Attempt to provide an equal number of questions for each Level (1, 2, 3, 4, 5).
+        3. ASSIGNMENT: Explicitly calculate and populate the 'difficulty' field (integer 1-5) for EVERY question based on this strategy.`;
     } else {
         const diffNum = parseInt(difficulty);
         const descMap = ["Basic", "Initial", "Intermediate", "Advanced", "Expert"];
