@@ -23,7 +23,8 @@ const getEnv = (key: string): string => {
 const KEYS = {
     UNSPLASH: getEnv("VITE_UNSPLASH_ACCESS_KEY"),
     PEXELS: getEnv("VITE_PEXELS_API_KEY"),
-    PIXABAY: getEnv("VITE_PIXABAY_API_KEY")
+    PIXABAY: getEnv("VITE_PIXABAY_API_KEY"),
+    GIPHY: getEnv("VITE_GIPHY_API_KEY")
 };
 
 // --- SECURE ASSETS CONFIG (GITHUB RAW) ---
@@ -43,7 +44,7 @@ export interface ImageResult {
     url: string;       
     alt: string;       
     attribution: {
-        sourceName: string; // 'Unsplash' | 'Pexels' | 'Pixabay' | 'Local'
+        sourceName: string; // 'Unsplash' | 'Pexels' | 'Pixabay' | 'Giphy' | 'Local'
         authorName: string;
         authorUrl: string;
         downloadLocation?: string | null; // Vital for Unsplash API compliance
@@ -160,21 +161,47 @@ const fetchPixabay = async (query: string): Promise<ImageResult> => {
     };
 };
 
+const fetchGiphy = async (query: string): Promise<ImageResult> => {
+    if (!KEYS.GIPHY) throw new Error("No API Key");
+
+    const url = `https://api.giphy.com/v1/gifs/search?api_key=${KEYS.GIPHY}&q=${encodeURIComponent(query)}&limit=1&rating=g`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Giphy Error: ${res.status}`);
+
+    const data = await res.json();
+    if (!data.data || data.data.length === 0) throw new Error("No results");
+
+    const gif = data.data[0];
+    return {
+        url: gif.images.original.url,
+        alt: gif.title || query,
+        attribution: {
+            sourceName: 'Giphy',
+            authorName: gif.username || 'Giphy User',
+            authorUrl: gif.url,
+            downloadLocation: null
+        }
+    };
+};
+
 // --- AGGREGATED SEARCH (For UI Modal) ---
 export const searchStockImages = async (query: string): Promise<ImageResult[]> => {
     if (!query.trim()) return [];
     
     // This allows parallel fetching for the UI picker to show variety
-    const [unsplash, pexels, pixabay] = await Promise.allSettled([
+    // Giphy is added as a source for stock search too
+    const [unsplash, pexels, pixabay, giphy] = await Promise.allSettled([
         fetchUnsplash(query).then(r => [r]).catch(() => []), 
         fetchPexels(query).then(r => [r]).catch(() => []),
-        fetchPixabay(query).then(r => [r]).catch(() => [])
+        fetchPixabay(query).then(r => [r]).catch(() => []),
+        fetchGiphy(query).then(r => [r]).catch(() => [])
     ]);
 
     const results: ImageResult[] = [];
     if (unsplash.status === 'fulfilled') results.push(...unsplash.value);
     if (pexels.status === 'fulfilled') results.push(...pexels.value);
     if (pixabay.status === 'fulfilled') results.push(...pixabay.value);
+    if (giphy.status === 'fulfilled') results.push(...giphy.value);
 
     return results;
 };
@@ -182,8 +209,9 @@ export const searchStockImages = async (query: string): Promise<ImageResult[]> =
 // --- ROBUST WATERFALL SEARCH (For AI) ---
 
 /**
- * STRICT PRIORITY: Unsplash -> Pexels -> Pixabay -> Secure GitHub Fallback
+ * STRICT PRIORITY: Unsplash -> Pexels -> Giphy -> Fallback
  * Ensures errors in one provider do NOT stop the chain.
+ * Giphy is the ultimate safety net for pop culture.
  */
 export const searchImage = async (rawQuery: string | undefined, fallbackCategory: string = 'default'): Promise<ImageResult> => {
     const query = rawQuery ? rawQuery.trim() : "";
@@ -203,7 +231,7 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
             return result;
         }
     } catch (e) {
-        console.warn(`⚠️ Unsplash falló para "${query}", saltando a Pexels...`, e);
+        // console.warn(`⚠️ Unsplash falló para "${query}", saltando a Pexels...`);
     }
 
     // 2. Try Pexels
@@ -211,18 +239,56 @@ export const searchImage = async (rawQuery: string | undefined, fallbackCategory
         const result = await fetchPexels(query);
         if (result) return result;
     } catch (e) {
-        console.warn(`⚠️ Pexels falló para "${query}", saltando a Pixabay...`, e);
+        // console.warn(`⚠️ Pexels falló para "${query}", saltando a Giphy...`);
     }
 
-    // 3. Try Pixabay
+    // 3. Try Giphy (THE MARIO/STAR WARS RESCUE)
     try {
-        const result = await fetchPixabay(query);
+        const result = await fetchGiphy(query);
         if (result) return result;
     } catch (e) {
-        console.warn(`⚠️ Pixabay falló para "${query}", usando Fallback...`, e);
+        console.warn(`⚠️ Giphy falló para "${query}", usando Fallback...`);
     }
 
     // 4. Fallback (Secure GitHub CDN)
-    console.warn(`[ImageService] 🏳️ All providers failed for "${query}". Using GitHub Fallback.`);
     return getRandomFallback();
+};
+
+/**
+ * SEQUENTIAL BULK PROCESSOR (Throttling)
+ * Replaces parallel Promise.all to respect Giphy Beta API limits (max burst).
+ * Adds 800ms delay between iterations.
+ */
+export const processQuestionsWithImages = async (questions: any[]): Promise<any[]> => {
+    const enhanced = [];
+    
+    for (const q of questions) {
+        const qObj = { ...q };
+        
+        // Process Main Question Image
+        if (!qObj.imageUrl && qObj.imageSearchQuery) {
+            const result = await searchImage(qObj.imageSearchQuery, qObj.fallback_category);
+            qObj.imageUrl = result.url;
+            qObj.imageCredit = result.attribution; // Store attribution
+            
+            // Rate limit delay
+            await new Promise(r => setTimeout(r, 800));
+        }
+
+        // Process Options Images (if any) - Rare but supported
+        if (qObj.options && Array.isArray(qObj.options)) {
+            for (const opt of qObj.options) {
+                if (opt.imageSearchQuery && !opt.imageUrl) {
+                    const res = await searchImage(opt.imageSearchQuery, 'default');
+                    opt.imageUrl = res.url;
+                    await new Promise(r => setTimeout(r, 800)); // Delay between options too
+                }
+                delete opt.imageSearchQuery;
+            }
+        }
+
+        enhanced.push(qObj);
+    }
+    
+    return enhanced;
 };
