@@ -71,25 +71,31 @@ const escapeCSV = (str: string | number | undefined | null): string => {
 };
 
 // --- WIDGET CSV GENERATOR (SIMPLE FORMAT) ---
-// Format MC: Question [URL],Correct,Incorrect1,Incorrect2...
-// Format FillGap: Question [URL],Answer1|Answer2...
+// Format MC (Single): Question [URL] [Lx],Correct,Incorrect1,Incorrect2...
+// Format MC (Multi): Question [URL] [Lx],*Correct1,Incorrect,*Correct2...
+// Format FillGap: Question [URL] [Lx],Answer1|Answer2...
 const generateWidgetCSV = (quiz: Quiz, filename: string): GeneratedFile => {
     let csvContent = "";
     
-    // Filter compatible questions (MC and Fill Gap only)
+    // Filter compatible questions (MC, Fill Gap, Multi Select)
     const validQuestions = quiz.questions.filter(q => 
         q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || 
-        q.questionType === QUESTION_TYPES.FILL_GAP
+        q.questionType === QUESTION_TYPES.FILL_GAP ||
+        q.questionType === QUESTION_TYPES.MULTI_SELECT
     );
 
     for (const q of validQuestions) {
         let row: string[] = [];
         
-        // 1. Prepare Question Text with Image URL in brackets
+        // 1. Prepare Question Text with Image URL and Difficulty Level
         let qText = q.text.trim();
         if (q.imageUrl) {
             qText += ` [${q.imageUrl}]`;
         }
+        // Add Difficulty [L1]..[L5] (Default L1)
+        const difficulty = q.difficulty || 1;
+        qText += ` [L${difficulty}]`;
+
         row.push(qText);
 
         if (q.questionType === QUESTION_TYPES.FILL_GAP) {
@@ -99,17 +105,28 @@ const generateWidgetCSV = (quiz: Quiz, filename: string): GeneratedFile => {
                 .filter(t => t)
                 .join("|");
             row.push(answers);
+        } else if (q.questionType === QUESTION_TYPES.MULTI_SELECT) {
+            // Multi Select: List ALL options, prefix CORRECT ones with *
+            const correctIds = q.correctOptionIds || (q.correctOptionId ? [q.correctOptionId] : []);
+            
+            q.options.forEach(o => {
+                let txt = o.text.trim();
+                if (correctIds.includes(o.id)) {
+                    txt = `*${txt}`;
+                }
+                row.push(txt);
+            });
         } else {
-            // Multiple Choice
+            // Multiple Choice (Single): Correct Answer first, then Distractors (Traditional Format)
             const correctIds = q.correctOptionIds || (q.correctOptionId ? [q.correctOptionId] : []);
             const correctOpt = q.options.find(o => correctIds.includes(o.id));
             const distractors = q.options.filter(o => !correctIds.includes(o.id));
 
             // Correct Answer first
-            row.push(correctOpt ? correctOpt.text : "");
+            row.push(correctOpt ? correctOpt.text.trim() : "");
 
             // Distractors
-            distractors.forEach(d => row.push(d.text));
+            distractors.forEach(d => row.push(d.text.trim()));
         }
 
         // Escape and join
