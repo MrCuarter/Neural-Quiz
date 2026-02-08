@@ -64,7 +64,10 @@ export const QuestionSchema = z.object({
   enhanceReason: z.string().optional(),
   
   // New field
-  imageSearchQuery: z.string().optional()
+  imageSearchQuery: z.string().optional(),
+  
+  // Difficulty Level (1-5)
+  difficulty: z.number().optional()
 }).transform((data) => {
     // Post-processing to normalize aliases
     let qType = data.questionType;

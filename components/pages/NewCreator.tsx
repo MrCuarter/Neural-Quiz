@@ -43,7 +43,17 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
     // Removed targetLevel global state
 
     // --- AI GENERATOR STATE ---
-    const [genParams, setGenParams] = useState({
+    const [genParams, setGenParams] = useState<{
+        topic: string;
+        count: number | string;
+        types: string[];
+        difficulty: string;
+        context: string;
+        urls: string;
+        tone: string;
+        language: string;
+        customToneContext: string;
+    }>({
         topic: '',
         count: 5,
         types: [QUESTION_TYPES.MULTIPLE_CHOICE],
@@ -442,7 +452,14 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">NÚMERO DE PREGUNTAS (MAX 50)</label>
-                                        <CyberInput type="number" value={genParams.count} onChange={(e) => setGenParams({...genParams, count: parseInt(e.target.value) || 5})} className="h-12 font-mono text-lg" min={1} max={50} />
+                                        <CyberInput 
+                                            type="number" 
+                                            value={genParams.count} 
+                                            onChange={(e) => setGenParams({...genParams, count: e.target.value})} 
+                                            className="h-12 font-mono text-lg" 
+                                            min={1} 
+                                            max={50} 
+                                        />
                                     </div>
                                 </div>
                                 
