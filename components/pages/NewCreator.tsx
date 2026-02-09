@@ -448,17 +448,25 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                     <h3 className="font-mono font-bold text-lg">1. CONFIGURACIÓN PRINCIPAL</h3>
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                    <div className="md:col-span-3 space-y-2">
                                         <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">TEMA / ASUNTO</label>
                                         <CyberInput value={genParams.topic} onChange={(e) => setGenParams({...genParams, topic: e.target.value})} placeholder="Ej. 'Historia de Roma', 'Física Cuántica'" className="h-12" />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">NÚMERO DE PREGUNTAS (MAX 50)</label>
+                                    <div className="md:col-span-1 space-y-2">
+                                        <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Nº PREGUNTAS</label>
                                         <CyberInput 
                                             type="number" 
                                             value={genParams.count} 
-                                            onChange={(e) => setGenParams({...genParams, count: e.target.value})} 
+                                            onChange={(e) => {
+                                                const val = parseInt(e.target.value);
+                                                if (val > 50) {
+                                                    toast.info("De momento el límite es 50 por generación, pero siempre puedes añadir más.");
+                                                    setGenParams({...genParams, count: 50});
+                                                } else {
+                                                    setGenParams({...genParams, count: e.target.value});
+                                                }
+                                            }} 
                                             className="h-12 font-mono text-lg" 
                                             min={1} 
                                             max={50} 
@@ -523,7 +531,7 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                 {/* NEW: POP CULTURE MODE TOGGLE */}
                                 <div className="mt-4 bg-purple-900/20 border border-purple-500/30 p-3 rounded-lg flex items-center gap-3">
                                     <CyberCheckbox 
-                                        label="🎮 MODO CULTURA POP (Priorizar GIFs/Memes)" 
+                                        label="Priorizar GIFs frente a imágenes" 
                                         checked={genParams.prioritizeGiphy} 
                                         onChange={(c) => setGenParams({...genParams, prioritizeGiphy: c})}
                                     />
@@ -664,81 +672,6 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                     </div>
                                 </div>
                             )}
-                        </CyberCard>
-                    </div>
-                )}
-
-                {/* --- PANEL: IMPORT --- */}
-                {activePanel === 'IMPORT' && (
-                    <div className="animate-in slide-in-from-top-4">
-                        <CyberCard className="border-pink-500/50 bg-pink-950/10">
-                            <div className="flex justify-between items-center mb-6 border-b border-pink-500/30 pb-2">
-                                <div className="flex items-center gap-2 text-pink-400">
-                                    <Wand2 className="w-5 h-5" />
-                                    <h2 className="text-lg font-cyber font-bold">IMPORTADOR UNIVERSAL</h2>
-                                </div>
-                                <button onClick={() => setActivePanel('NONE')} className="text-xs text-pink-500 hover:text-white">[X] CERRAR</button>
-                            </div>
-
-                            {/* TABS */}
-                            <div className="flex gap-2 mb-6">
-                                <button onClick={() => setImportTab('upload')} className={`flex-1 py-3 font-bold font-mono text-xs rounded transition-colors ${importTab === 'upload' ? 'bg-pink-600 text-white shadow-lg' : 'bg-black/30 text-gray-500 hover:bg-pink-900/20'}`}>
-                                    SUBIR ARCHIVO
-                                </button>
-                                <button onClick={() => setImportTab('url')} className={`flex-1 py-3 font-bold font-mono text-xs rounded transition-colors ${importTab === 'url' ? 'bg-pink-600 text-white shadow-lg' : 'bg-black/30 text-gray-500 hover:bg-pink-900/20'}`}>
-                                    COPIAR URL
-                                </button>
-                                <button onClick={() => setImportTab('paste')} className={`flex-1 py-3 font-bold font-mono text-xs rounded transition-colors ${importTab === 'paste' ? 'bg-pink-600 text-white shadow-lg' : 'bg-black/30 text-gray-500 hover:bg-pink-900/20'}`}>
-                                    PEGAR TEXTO
-                                </button>
-                            </div>
-
-                            {/* TAB CONTENT */}
-                            <div className="bg-black/20 p-6 rounded-lg border border-pink-900/30 min-h-[200px] flex flex-col justify-center">
-                                
-                                {importTab === 'upload' && (
-                                    <div 
-                                        className={`border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer flex flex-col items-center gap-4 ${dragActive ? 'border-pink-400 bg-pink-900/20' : 'border-gray-700 hover:border-pink-500'}`}
-                                        onClick={() => importFileInputRef.current?.click()}
-                                        onDragOver={(e) => {e.preventDefault(); setDragActive(true)}}
-                                        onDragLeave={() => setDragActive(false)}
-                                        onDrop={(e) => {e.preventDefault(); setDragActive(false); if(e.dataTransfer.files[0]) handleImportFile({target:{files:e.dataTransfer.files}} as any)}}
-                                    >
-                                        <FilePlus className="w-12 h-12 text-pink-500" />
-                                        <div>
-                                            <h3 className="font-bold text-white">ARRASTRA TU ARCHIVO AQUÍ</h3>
-                                            <p className="text-xs text-gray-500 mt-1">Excel, CSV, PDF, Imágenes</p>
-                                        </div>
-                                        <input type="file" ref={importFileInputRef} className="hidden" onChange={handleImportFile} accept=".xlsx,.csv,.pdf,.jpg,.png" />
-                                    </div>
-                                )}
-
-                                {importTab === 'url' && (
-                                    <div className="space-y-4 max-w-lg mx-auto w-full">
-                                        <div className="flex items-center gap-2 text-pink-300 justify-center mb-4">
-                                            <LinkIcon className="w-5 h-5" />
-                                            <span className="font-bold">PEGA EL ENLACE DEL QUIZ</span>
-                                        </div>
-                                        <CyberInput placeholder="https://kahoot.it/..." value={urlToConvert} onChange={(e) => setUrlToConvert(e.target.value)} />
-                                        <CyberButton onClick={handleUrlAnalysis} isLoading={isGenerating} className="w-full bg-pink-600 hover:bg-pink-500 border-none">ESCANEAR WEB</CyberButton>
-                                    </div>
-                                )}
-
-                                {importTab === 'paste' && (
-                                    <div className="space-y-4 w-full h-full">
-                                        <CyberTextArea 
-                                            className="w-full h-64 font-mono text-sm"
-                                            placeholder="Pega aquí el contenido de un PDF, Word o web..."
-                                            value={textToConvert}
-                                            onChange={(e) => setTextToConvert(e.target.value)}
-                                        />
-                                        <CyberButton onClick={() => performAnalysis(textToConvert, "Pasted Text")} isLoading={isGenerating} className="w-full bg-pink-600 hover:bg-pink-500 border-none">ANALIZAR TEXTO</CyberButton>
-                                    </div>
-                                )}
-
-                            </div>
-                            
-                            {isGenerating && <div className="mt-6"><CyberProgressBar progress={analysisProgress || 50} text={analysisStatus} /></div>}
                         </CyberCard>
                     </div>
                 )}

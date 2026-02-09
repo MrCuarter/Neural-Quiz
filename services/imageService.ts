@@ -1,3 +1,4 @@
+
 import { getSafeImageUrl } from "./imageProxyService";
 
 // Helper to safely get environment variables
@@ -182,6 +183,34 @@ const fetchGiphy = async (query: string): Promise<ImageResult> => {
             downloadLocation: null
         }
     };
+};
+
+// --- NEW: DEDICATED GIPHY SEARCH (MULTIPLE RESULTS) ---
+export const searchGifs = async (query: string): Promise<ImageResult[]> => {
+    if (!KEYS.GIPHY || !query.trim()) return [];
+
+    try {
+        const url = `https://api.giphy.com/v1/gifs/search?api_key=${KEYS.GIPHY}&q=${encodeURIComponent(query)}&limit=12&rating=g`;
+        const res = await fetch(url);
+        if (!res.ok) return [];
+
+        const data = await res.json();
+        if (!data.data) return [];
+
+        return data.data.map((gif: any) => ({
+            url: gif.images.original.url,
+            alt: gif.title || query,
+            attribution: {
+                sourceName: 'Giphy',
+                authorName: gif.username || 'Giphy User',
+                authorUrl: gif.url,
+                downloadLocation: null
+            }
+        }));
+    } catch (e) {
+        console.error("Search GIFs Error", e);
+        return [];
+    }
 };
 
 // --- AGGREGATED SEARCH (For UI Modal) ---

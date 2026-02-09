@@ -323,13 +323,13 @@ export interface GeneratedFile {
 // SHARED CONSTANTS
 
 export const QUESTION_TYPES = {
-    MULTIPLE_CHOICE: 'Multiple Choice', // Single correct
-    TRUE_FALSE: 'True/False',
-    FILL_GAP: 'Fill in the Blank', // NOW USED AS SHORT ANSWER
-    OPEN_ENDED: 'Pregunta Abierta', // RENAMED
-    MULTI_SELECT: 'Multi-Select (Checkbox)', // Multiple correct
-    POLL: 'Encuesta', // RENAMED
-    ORDER: 'Order / Sort'
+    MULTIPLE_CHOICE: 'Opción Múltiple', // Renamed from 'Multiple Choice'
+    TRUE_FALSE: 'Verdadero/Falso', // Renamed from 'True/False'
+    FILL_GAP: 'Respuesta corta', // Renamed from 'Fill in the Blank'
+    OPEN_ENDED: 'Pregunta Abierta', // Kept same
+    MULTI_SELECT: 'Selección Múltiple', // Renamed from 'Multi-Select (Checkbox)'
+    POLL: 'Encuesta', // Kept same
+    ORDER: 'Ordenar' // Renamed from 'Order / Sort'
 };
 
 export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {

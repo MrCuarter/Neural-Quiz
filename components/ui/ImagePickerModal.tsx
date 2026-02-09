@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { CyberButton, CyberCard, CyberInput } from './CyberUI';
-import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, CheckCircle2, ExternalLink, Maximize2, Trash2 } from 'lucide-react';
+import { X, Upload, Search, Link as LinkIcon, Image as ImageIcon, Loader2, CheckCircle2, ExternalLink, Maximize2, Trash2, Film } from 'lucide-react';
 import { uploadImageToCloudinary } from '../../services/cloudinaryService';
-import { searchStockImages, triggerDownload, ImageResult } from '../../services/imageService';
+import { searchStockImages, searchGifs, triggerDownload, ImageResult } from '../../services/imageService';
 import { getSafeImageUrl } from '../../services/imageProxyService';
 import { ImageCredit } from '../../types';
 
@@ -16,7 +16,7 @@ interface ImagePickerModalProps {
 }
 
 export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onClose, onSelect, initialUrl, initialCredit }) => {
-    const [activeTab, setActiveTab] = useState<'upload' | 'stock' | 'url'>('upload');
+    const [activeTab, setActiveTab] = useState<'upload' | 'stock' | 'giphy' | 'url'>('upload');
     const [loading, setLoading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     
@@ -79,11 +79,16 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
         }
     };
 
-    const handleStockSearch = async () => {
+    const handleSearch = async () => {
         if (!searchQuery.trim()) return;
         setLoading(true);
         try {
-            const results = await searchStockImages(searchQuery);
+            let results: ImageResult[] = [];
+            if (activeTab === 'stock') {
+                results = await searchStockImages(searchQuery);
+            } else if (activeTab === 'giphy') {
+                results = await searchGifs(searchQuery);
+            }
             setSearchResults(results);
         } catch (e) {
             console.error(e);
@@ -148,14 +153,17 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-2 mb-4 shrink-0">
-                    <button onClick={() => setActiveTab('upload')} className={`flex-1 py-2 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'upload' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
+                <div className="flex gap-2 mb-4 shrink-0 overflow-x-auto">
+                    <button onClick={() => setActiveTab('upload')} className={`flex-1 py-2 px-3 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'upload' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
                         <Upload className="w-4 h-4" /> SUBIR / ACTUAL
                     </button>
-                    <button onClick={() => setActiveTab('stock')} className={`flex-1 py-2 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'stock' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
-                        <Search className="w-4 h-4" /> BUSCAR STOCK
+                    <button onClick={() => { setActiveTab('stock'); setSearchResults([]); setSearchQuery(''); }} className={`flex-1 py-2 px-3 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'stock' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
+                        <Search className="w-4 h-4" /> BUSCAR IMAGEN
                     </button>
-                    <button onClick={() => setActiveTab('url')} className={`flex-1 py-2 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'url' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
+                    <button onClick={() => { setActiveTab('giphy'); setSearchResults([]); setSearchQuery(''); }} className={`flex-1 py-2 px-3 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'giphy' ? 'bg-purple-900/50 text-purple-400 border border-purple-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
+                        <Film className="w-4 h-4" /> BUSCAR GIF
+                    </button>
+                    <button onClick={() => setActiveTab('url')} className={`flex-1 py-2 px-3 text-xs font-bold font-mono rounded transition-colors flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'url' ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/50' : 'bg-black/40 text-gray-500 border border-transparent hover:border-gray-600'}`}>
                         <LinkIcon className="w-4 h-4" /> URL
                     </button>
                 </div>
@@ -229,18 +237,18 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                         )
                     )}
 
-                    {/* 2. STOCK SEARCH */}
-                    {activeTab === 'stock' && (
+                    {/* 2. STOCK SEARCH OR GIF SEARCH */}
+                    {(activeTab === 'stock' || activeTab === 'giphy') && (
                         <div className="h-full flex flex-col">
                             <div className="flex gap-2 mb-4">
                                 <CyberInput 
-                                    placeholder="Buscar imágenes (ej: Gatos, Espacio)..." 
+                                    placeholder={activeTab === 'stock' ? "Buscar imágenes (ej: Gatos, Espacio)..." : "Buscar GIFs (ej: Aplausos, Fail)..."}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleStockSearch()}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                     className="text-sm"
                                 />
-                                <CyberButton onClick={handleStockSearch} isLoading={loading}>BUSCAR</CyberButton>
+                                <CyberButton onClick={handleSearch} isLoading={loading}>BUSCAR</CyberButton>
                             </div>
                             
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -252,13 +260,13 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                             <button 
                                                 key={i} 
                                                 onClick={() => handleStockSelect(img)}
-                                                className="aspect-video relative group overflow-hidden rounded border border-gray-800 hover:border-cyan-500 transition-all w-full text-left"
+                                                className={`aspect-video relative group overflow-hidden rounded border border-gray-800 hover:border-cyan-500 transition-all w-full text-left ${activeTab === 'giphy' ? 'border-purple-900/50 hover:border-purple-500' : ''}`}
                                             >
                                                 <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
                                                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity z-10">
-                                                    <CheckCircle2 className="w-8 h-8 text-cyan-400" />
+                                                    <CheckCircle2 className={`w-8 h-8 ${activeTab === 'giphy' ? 'text-purple-400' : 'text-cyan-400'}`} />
                                                 </div>
-                                                {/* Attribution Overlay - STRICT UNSPLASH COMPLIANCE */}
+                                                {/* Attribution Overlay */}
                                                 {img.attribution && (
                                                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2 text-[9px] text-gray-300 leading-tight z-20 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                         {img.attribution.sourceName === 'Unsplash' ? (
@@ -275,7 +283,10 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                     </div>
                                 ) : (
                                     <div className="text-center py-20 text-gray-500 text-xs font-mono">
-                                        Introduce un término para buscar imágenes libres de derechos (Unsplash, Pexels, Pixabay).
+                                        {activeTab === 'stock' 
+                                            ? "Introduce un término para buscar imágenes libres de derechos (Unsplash, Pexels, Pixabay)."
+                                            : "Introduce un término para buscar GIFs en Giphy."
+                                        }
                                     </div>
                                 )}
                             </div>

@@ -736,6 +736,71 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                                                   )}
                                               </div>
                                           )}
+
+                                          {/* FILL GAP UI - NEW SECTION */}
+                                          {q.questionType === QUESTION_TYPES.FILL_GAP && (
+                                              <div className="space-y-6">
+                                                  <div className="bg-blue-900/10 border border-blue-500/30 p-3 rounded text-xs text-blue-200">
+                                                      <p>{t.q_fill_gap_desc || "El alumno debe escribir la respuesta exacta. Añade variaciones aceptadas abajo."}</p>
+                                                  </div>
+
+                                                  <div className="space-y-2">
+                                                      <label className="text-xs font-mono text-green-400 uppercase tracking-widest font-bold flex items-center gap-2">
+                                                          <CheckCircle2 className="w-4 h-4" /> RESPUESTA CORRECTA PRINCIPAL
+                                                      </label>
+                                                      <input 
+                                                          type="text" 
+                                                          value={q.options[0]?.text || ''} 
+                                                          onChange={(e) => {
+                                                              if (q.options.length === 0) {
+                                                                  const newOpt = { id: uuid(), text: e.target.value };
+                                                                  updateQuestion(q.id, { options: [newOpt], correctOptionId: newOpt.id, correctOptionIds: [newOpt.id] });
+                                                              } else {
+                                                                  updateOption(q.id, q.options[0].id, e.target.value);
+                                                              }
+                                                          }}
+                                                          className="bg-black/40 border border-green-500/50 text-green-100 p-4 rounded w-full font-mono font-bold focus:border-green-400 outline-none text-lg placeholder:text-gray-700"
+                                                          placeholder="Respuesta exacta..."
+                                                      />
+                                                  </div>
+
+                                                  <div className="space-y-2 pt-2 border-t border-gray-800">
+                                                      <label className="text-xs font-mono text-gray-500 uppercase tracking-widest">VARIACIONES ACEPTADAS (SINÓNIMOS)</label>
+                                                      
+                                                      {q.options.length > 1 ? (
+                                                          <div className="grid gap-2">
+                                                              {q.options.slice(1).map((opt, idx) => (
+                                                                  <div key={opt.id} className="flex gap-2 items-center group">
+                                                                      <span className="text-gray-600 font-mono text-xs w-6 text-right">{idx + 2}.</span>
+                                                                      <input 
+                                                                          type="text" 
+                                                                          value={opt.text} 
+                                                                          onChange={(e) => updateOption(q.id, opt.id, e.target.value)}
+                                                                          className="bg-black/30 border border-gray-700 text-gray-300 p-2 rounded flex-1 text-sm focus:border-cyan-500 outline-none"
+                                                                          placeholder="Variación..."
+                                                                      />
+                                                                      <button 
+                                                                          onClick={() => removeOption(q.id, opt.id)}
+                                                                          className="p-2 text-gray-600 hover:text-red-500 hover:bg-red-900/20 rounded transition-colors"
+                                                                      >
+                                                                          <Trash2 className="w-4 h-4" />
+                                                                      </button>
+                                                                  </div>
+                                                              ))}
+                                                          </div>
+                                                      ) : (
+                                                          <p className="text-xs text-gray-600 italic">No hay variaciones añadidas.</p>
+                                                      )}
+
+                                                      <button 
+                                                          onClick={() => addOption(q.id)}
+                                                          className="mt-3 text-xs flex items-center gap-2 text-cyan-400 hover:text-cyan-300 px-3 py-2 rounded hover:bg-cyan-900/20 transition-all border border-dashed border-gray-700 hover:border-cyan-500/50 w-full justify-center"
+                                                      >
+                                                          <Plus className="w-3 h-3" /> AÑADIR VARIACIÓN
+                                                      </button>
+                                                  </div>
+                                              </div>
+                                          )}
                                           
                                       </div>
 
