@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Question, QUESTION_TYPES } from "../types";
 import { validateQuizQuestions } from "../utils/validation";
@@ -141,8 +142,11 @@ REGLAS DE TIPOS DE PREGUNTA:
 1. "Multiple Choice" (Respuesta Única): DEBE tener 4 opciones (salvo nivel 1). Solo una correcta.
 2. "Fill in the Blank" (Respuesta Corta):
    - La opción con índice 0 es la respuesta principal perfecta.
-   - Las opciones con índices 1, 2, 3 deben ser VARIACIONES ACEPTADAS o SINÓNIMOS.
-   - NO generes distractores falsos para este tipo.
+   - Las opciones ADICIONALES (si existen) deben ser ÚNICAMENTE variaciones válidas (sinónimos, números en letra).
+   - SI NO HAY VARIACIONES VÁLIDAS, GENERA SOLO 1 OPCIÓN (la correcta). NO RELLENES CON DATOS FALSOS.
+   - Ejemplo 1: P: "¿Cuánto es 2+2?" -> Opciones: ["4", "cuatro"]. (Correcto, hay variación).
+   - Ejemplo 2: P: "¿Protagonista de Zelda?" -> Opciones: ["Link"]. (Correcto, no hay variación).
+   - PROHIBIDO inventar distractores incorrectos para este tipo.
 
 REGLAS DE IMÁGENES:
 1. Genera SIEMPRE "imageSearchQuery" para la pregunta principal.
