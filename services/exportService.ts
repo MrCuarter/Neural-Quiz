@@ -1,4 +1,3 @@
-
 import { ExportFormat, GeneratedFile, Quiz, Question, QUESTION_TYPES } from "../types";
 import * as XLSX from 'xlsx';
 import { jsPDF } from "jspdf";
@@ -40,7 +39,7 @@ export const exportQuiz = async (quiz: Quiz, format: ExportFormat, options?: any
     case ExportFormat.IDOCEO: return generateIdoceoXLSX(quiz, sanitizedTitle);
     case ExportFormat.PLICKERS: return generatePlickers(quiz, sanitizedTitle, options);
     case ExportFormat.BAAMBOOZLE: const baam = generateKahootXLSX(quiz, sanitizedTitle); return { ...baam, filename: `${sanitizedTitle}_baamboozle.xlsx` };
-    case ExportFormat.BLOOKET: return generateBlooketCSV(quiz, sanitizedTitle);
+    case ExportFormat.BLOOKET: return generateBlooketXLSX(quiz, sanitizedTitle);
     case ExportFormat.GIMKIT_CLASSIC: return generateGimkitClassicCSV(quiz, sanitizedTitle);
     case ExportFormat.GIMKIT_TEXT: return generateGimkitTextCSV(quiz, sanitizedTitle);
     case ExportFormat.GENIALLY: return generateGeniallyXLSX(quiz, sanitizedTitle);
@@ -338,7 +337,7 @@ const generateUniversalCSV = (quiz: Quiz, filename: string): GeneratedFile => {
         const row = [
             escapeCSV(q.text),
             escapeCSV(q.questionType || "Multiple Choice"),
-            q.timeLimit || 20,
+            escapeCSV(q.timeLimit || 20), // Ensure this is a string
             escapeCSV(q.options[0]?.text),
             escapeCSV(q.options[1]?.text),
             escapeCSV(q.options[2]?.text),
@@ -409,13 +408,35 @@ const generateKahootXLSX = (quiz: Quiz, filename: string): GeneratedFile => {
     return { filename: `${filename}_kahoot.xlsx`, content: wbout, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', isBase64: true };
 };
 
-const generateBlooketCSV = (quiz: Quiz, filename: string): GeneratedFile => {
-    let csv = "Question Text,Answer 1,Answer 2,Answer 3,Answer 4,Time Limit,Correct Answer(s)\n";
+const generateBlooketXLSX = (quiz: Quiz, filename: string): GeneratedFile => {
+    const ws_data = [
+        ["Question Text", "Answer 1", "Answer 2", "Answer 3", "Answer 4", "Time Limit", "Correct Answer(s)"]
+    ];
     quiz.questions.forEach(q => {
         const correctTexts = q.options.filter(o => o.id === q.correctOptionId || q.correctOptionIds?.includes(o.id)).map(o => o.text);
-        csv += `${escapeCSV(q.text)},${escapeCSV(q.options[0]?.text)},${escapeCSV(q.options[1]?.text)},${escapeCSV(q.options[2]?.text)},${escapeCSV(q.options[3]?.text)},${q.timeLimit || 20},${escapeCSV(correctTexts.join('|'))}\n`;
+        const row = [
+            q.text,
+            q.options[0]?.text || "",
+            q.options[1]?.text || "",
+            q.options[2]?.text || "",
+            q.options[3]?.text || "",
+            String(q.timeLimit || 20), // Converted to string
+            correctTexts.join('|')
+        ];
+        ws_data.push(row);
     });
-    return { filename: `${filename}_blooket.csv`, content: csv, mimeType: 'text/csv' };
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    XLSX.utils.book_append_sheet(wb, ws, "BlooketQuiz");
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+    
+    return { 
+        filename: `${filename}_blooket.xlsx`, 
+        content: wbout, 
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+        isBase64: true 
+    };
 }
 
 const generateGimkitClassicCSV = (quiz: Quiz, filename: string): GeneratedFile => {
