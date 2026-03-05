@@ -174,7 +174,7 @@ const fetchGiphy = async (query: string): Promise<ImageResult> => {
 
     const gif = data.data[0];
     return {
-        url: gif.images.original.url,
+        url: gif.images.original.url, // USE ORIGINAL FOR ANIMATION
         alt: gif.title || query,
         attribution: {
             sourceName: 'Giphy',
@@ -198,7 +198,7 @@ export const searchGifs = async (query: string): Promise<ImageResult[]> => {
         if (!data.data) return [];
 
         return data.data.map((gif: any) => ({
-            url: gif.images.original.url,
+            url: gif.images.original.url, // USE ORIGINAL FOR ANIMATION
             alt: gif.title || query,
             attribution: {
                 sourceName: 'Giphy',

@@ -14,7 +14,7 @@ import { PublishModal } from './PublishModal';
 import { SaveSuccessModal } from './modals/SaveSuccessModal'; 
 import { ImagePickerModal } from './ui/ImagePickerModal';
 import { AuthModal } from './auth/AuthModal'; // ADDED AUTH MODAL IMPORT
-import { ImageResult } from '../services/imageService';
+import { ImageResult, processQuestionsWithImages } from '../services/imageService';
 import { getUserQuizzes, saveQuizToFirestore } from '../services/firebaseService';
 import * as XLSX from 'xlsx';
 
@@ -63,6 +63,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
   const [aiTopic, setAiTopic] = useState('');
   const [aiCount, setAiCount] = useState(3);
   const [aiLanguage, setAiLanguage] = useState('Spanish'); 
+  const [prioritizeGiphy, setPrioritizeGiphy] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   
@@ -297,8 +298,20 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
           };
           const langCode = langMap[aiLanguage] || 'en';
 
+          // PROCESS IMAGES IF GIPHY PRIORITIZED
+          let finalQuestions = newQuestions;
+          if (prioritizeGiphy) {
+              try {
+                  // Cast to any to match service signature if needed, or ensure types align
+                  finalQuestions = await processQuestionsWithImages(newQuestions, true);
+              } catch (err) {
+                  console.error("Error fetching GIFs:", err);
+                  // Continue with text-only if GIF fetch fails
+              }
+          }
+
           setQuiz(prev => { 
-              const updatedQs = [...prev.questions, ...newQuestions]; 
+              const updatedQs = [...prev.questions, ...finalQuestions]; 
               const newTags = Array.from(new Set([...(prev.tags || []), ...(aiResult.tags || [])])); 
               setTimeout(() => setCurrentPage(Math.ceil(updatedQs.length / ITEMS_PER_PAGE)), 50); 
               return { 
@@ -472,6 +485,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({ quiz, setQuiz, onExport,
                   <div className="w-24"><CyberInput type="number" label="#" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value))} min={1} max={10}/></div>
                   <CyberButton onClick={handleAiGenerate} isLoading={isGenerating} disabled={!aiTopic}>{t.ai_modal_add}</CyberButton>
                   <CyberButton variant="ghost" onClick={() => setShowAiModal(false)}>{t.ai_modal_close}</CyberButton>
+              </div>
+              <div className="flex items-center gap-4 mt-4 bg-black/20 p-2 rounded border border-gray-800">
+                  <CyberCheckbox 
+                      label="Priorizar GIFs animados de Giphy" 
+                      checked={prioritizeGiphy} 
+                      onChange={setPrioritizeGiphy} 
+                  />
+                  <span className="text-[10px] text-gray-500 font-mono ml-auto hidden md:inline-block">Powered by GIPHY API</span>
               </div>
               <p className="text-xs text-purple-300/60 mt-2 font-mono">* {t.editor_types_desc}</p>
           </div>

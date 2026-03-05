@@ -531,10 +531,11 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                 {/* NEW: POP CULTURE MODE TOGGLE */}
                                 <div className="mt-4 bg-purple-900/20 border border-purple-500/30 p-3 rounded-lg flex items-center gap-3">
                                     <CyberCheckbox 
-                                        label="Priorizar GIFs frente a imágenes" 
+                                        label="Priorizar GIFs animados de Giphy" 
                                         checked={genParams.prioritizeGiphy} 
                                         onChange={(c) => setGenParams({...genParams, prioritizeGiphy: c})}
                                     />
+                                    <span className="text-[10px] text-gray-500 font-mono ml-auto hidden md:inline-block">Powered by GIPHY API</span>
                                 </div>
                             </div>
 

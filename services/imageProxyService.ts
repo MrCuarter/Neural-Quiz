@@ -14,6 +14,9 @@ export const getSafeImageUrl = (originalUrl: string | undefined | null): string 
     // 0. Idempotency Check: If already proxied, don't wrap again
     if (url.includes('wsrv.nl')) return url;
 
+    // SKIP GIPHY TO PRESERVE ANIMATION
+    if (url.includes('giphy.com')) return url;
+
     // 1. Filter out unsupported local formats
     if (url.startsWith('data:') || url.startsWith('blob:')) {
         console.warn("[ImageProxy] Skipped Data/Blob URI (Not supported by Import APIs)");

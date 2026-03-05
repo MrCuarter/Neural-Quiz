@@ -240,14 +240,16 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                     {/* 2. STOCK SEARCH OR GIF SEARCH */}
                     {(activeTab === 'stock' || activeTab === 'giphy') && (
                         <div className="h-full flex flex-col">
-                            <div className="flex gap-2 mb-4">
-                                <CyberInput 
-                                    placeholder={activeTab === 'stock' ? "Buscar imágenes (ej: Gatos, Espacio)..." : "Buscar GIFs (ej: Aplausos, Fail)..."}
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                    className="text-sm"
-                                />
+                            <div className="flex gap-2 mb-4 items-center">
+                                <div className="flex-1">
+                                    <CyberInput 
+                                        placeholder={activeTab === 'stock' ? "Buscar imágenes (ej: Gatos, Espacio)..." : "Buscar GIFs (ej: Aplausos, Fail)..."}
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                        className="text-sm"
+                                    />
+                                </div>
                                 <CyberButton onClick={handleSearch} isLoading={loading}>BUSCAR</CyberButton>
                             </div>
                             
