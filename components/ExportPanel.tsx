@@ -6,6 +6,7 @@ import { exportToGoogleForms } from '../services/googleFormsService';
 import { exportToGoogleSlides } from '../services/googleSlidesService'; 
 import { signInWithGoogle } from '../services/firebaseService'; 
 import { generateQuizCategories, adaptQuestionsToPlatform } from '../services/geminiService';
+import { validateQuizForPlatform, ValidationIssue } from '../services/validationService';
 import { CyberButton, CyberCard, CyberInput } from './ui/CyberUI';
 import { FileDown, Copy, Check, Terminal, AlertTriangle, List, Keyboard, Info, ArrowRightLeft, ToyBrick, GraduationCap, Gamepad2, QrCode, Grid3X3, MousePointerClick, Wand2, Wrench, Loader2, ExternalLink, X, Image as ImageIcon, FileText, Presentation, Repeat, LayoutGrid } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -303,7 +304,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
     { id: ExportFormat.GENIALLY, name: "Genially", desc: t.fmt_genially, logo: "https://i.postimg.cc/rKpKysNw/Genially.png", allowedTypes: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL] },
     { id: ExportFormat.PLICKERS, name: "Plickers", desc: t.fmt_plickers, logo: "https://i.postimg.cc/zVP3yNxX/Plickers.png", allowedTypes: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE] },
     { id: ExportFormat.WOOCLAP, name: "Wooclap", desc: t.fmt_wooclap, logo: "https://i.postimg.cc/SKc8L982/Wooclap.png", allowedTypes: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.MULTI_SELECT] },
-    { id: ExportFormat.IDOCEO, name: "iDoceo", desc: t.fmt_idoceo, logo: "https://i.postimg.cc/2VX31Y0S/i-Doceo.png", allowedTypes: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE] },
+    { id: ExportFormat.IDOCEO, name: "iDoceo", desc: t.fmt_idoceo, logo: "https://i.postimg.cc/2VX31Y0S/i-Doceo.png", allowedTypes: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.MULTI_SELECT] },
     { id: ExportFormat.FLIPPITY, name: "Flippity", desc: t.fmt_flippity, logo: "https://i.postimg.cc/jdTHMZvS/Flippity.png", allowedTypes: ['*'] },
     { id: ExportFormat.QUIZLET_QA, name: "Quizlet", desc: t.fmt_quizlet, logo: "https://i.postimg.cc/Cz6dR0cZ/Quizlet.png", allowedTypes: ['*'] },
     { id: ExportFormat.DECKTOYS_QA, name: "Deck.Toys", desc: t.fmt_decktoys, logo: "https://i.postimg.cc/PPqPfJQP/Decktoys.png", allowedTypes: ['*'] },
@@ -331,19 +332,18 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
       setSelectedFormats([...withoutGimkit, mode]);
   };
 
-  const incompatibleQuestions = useMemo(() => {
-     let badQs = new Set<Question>();
-     selectedFormats.forEach(fmtId => {
-         const fmt = formats.find(f => f.id === fmtId);
-         if (fmt && fmt.allowedTypes && !fmt.allowedTypes.includes('*')) {
-             quiz.questions.forEach(q => {
-                 if (!fmt.allowedTypes.includes(q.questionType || QUESTION_TYPES.MULTIPLE_CHOICE)) {
-                     badQs.add(q);
-                 }
-             });
-         }
-     });
-     return Array.from(badQs);
+  const validationIssues = useMemo(() => {
+      const issues: { format: string, issues: ValidationIssue[] }[] = [];
+      selectedFormats.forEach(fmtId => {
+          const report = validateQuizForPlatform(quiz, fmtId);
+          if (!report.isValid) {
+              issues.push({
+                  format: formats.find(f => f.id === fmtId)?.name || fmtId,
+                  issues: report.issues
+              });
+          }
+      });
+      return issues;
   }, [quiz, selectedFormats]);
 
   const activeFlippityCols = useMemo(() => {
@@ -353,11 +353,23 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
   }, [quiz.questions.length, flippityMode]);
 
   const handleAutoFix = async () => {
-      if (!setQuiz || incompatibleQuestions.length === 0) return;
+      if (!setQuiz || validationIssues.length === 0) return;
       setIsFixing(true);
       try {
-          // Adapt to default (Multiple Choice)
-          const adaptedQuestions = await adaptQuestionsToPlatform(incompatibleQuestions, "Multiple Choice Universal", [QUESTION_TYPES.MULTIPLE_CHOICE]);
+          const targetFormatId = selectedFormats.find(fmtId => !validateQuizForPlatform(quiz, fmtId).isValid);
+          if (!targetFormatId) return;
+
+          const formatSpec = formats.find(f => f.id === targetFormatId);
+          const report = validateQuizForPlatform(quiz, targetFormatId);
+          
+          const incompatibleQs = report.incompatibleQuestions;
+          
+          const adaptedQuestions = await adaptQuestionsToPlatform(
+              incompatibleQs, 
+              formatSpec?.name || "Target Platform", 
+              formatSpec?.allowedTypes || [QUESTION_TYPES.MULTIPLE_CHOICE]
+          );
+
           setQuiz(prev => {
               const newQs = [...prev.questions];
               adaptedQuestions.forEach(aq => {
@@ -366,8 +378,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
               });
               return { ...prev, questions: newQs };
           });
-          alert("Auto-fix applied!");
-      } catch (error) { alert("Failed to adapt questions."); } 
+          alert("Auto-fix applied! Please review the changes.");
+      } catch (error) { 
+          console.error(error);
+          alert("Failed to adapt questions."); 
+      } 
       finally { setIsFixing(false); }
   };
 
@@ -475,19 +490,37 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ quiz, setQuiz, t, init
             </div>
           )}
 
-          {incompatibleQuestions.length > 0 && (
-             <div className="bg-red-950/30 border border-red-500 rounded p-4 animate-pulse">
-                <div className="flex items-center gap-3 mb-2 text-red-400 font-cyber font-bold">
-                    <AlertTriangle className="w-5 h-5" />
-                    <h3>{t.platform_incompatibility}</h3>
+          {validationIssues.length > 0 && (
+             <div className="bg-red-950/30 border border-red-500 rounded-lg p-6 animate-pulse">
+                <div className="flex items-center gap-3 mb-4 text-red-400 font-cyber font-bold text-lg">
+                    <AlertTriangle className="w-6 h-6" />
+                    <h3>{t.platform_incompatibility || "Compatibility Issues Detected"}</h3>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 items-center">
-                   <p className="text-xs text-red-200 font-mono flex-1">
-                       {t.incompatible_desc} ({incompatibleQuestions.length} questions affected)
-                   </p>
+                
+                <div className="space-y-4 mb-4">
+                    {validationIssues.map((vi, idx) => (
+                        <div key={idx} className="bg-black/40 p-3 rounded border border-red-500/30">
+                            <h4 className="text-red-300 font-bold text-sm mb-2">{vi.format}:</h4>
+                            <ul className="list-disc list-inside space-y-1">
+                                {vi.issues.slice(0, 3).map((issue, i) => (
+                                    <li key={i} className="text-xs text-red-200 font-mono">
+                                        <span className="font-bold">Q: "{issue.questionText.substring(0, 20)}..."</span> - {issue.message}
+                                    </li>
+                                ))}
+                                {vi.issues.length > 3 && (
+                                    <li className="text-xs text-red-400 font-mono italic">
+                                        ...and {vi.issues.length - 3} more issues.
+                                    </li>
+                                )}
+                            </ul>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 items-center justify-end">
                    {setQuiz && (
-                       <CyberButton variant="neural" onClick={handleAutoFix} isLoading={isFixing} className="text-xs py-2 h-8 whitespace-nowrap">
-                           <Wrench className="w-3 h-3" /> {t.autofix}
+                       <CyberButton variant="neural" onClick={handleAutoFix} isLoading={isFixing} className="text-sm py-2 h-10 whitespace-nowrap w-full sm:w-auto">
+                           <Wrench className="w-4 h-4 mr-2" /> {t.autofix || "Auto-Fix with AI"}
                        </CyberButton>
                    )}
                 </div>

@@ -306,6 +306,76 @@ export const generateQuizCategories = async (questionTexts: string[], count: num
     });
 };
 
-export const adaptQuestionsToPlatform = async (questions: Question[], platformName: string, allowedTypes: string[]): Promise<Question[]> => {
-    return questions;
+export const adaptQuestionsToPlatform = async (questions: Question[], platformName: string, allowedTypes: string[], constraints?: any): Promise<Question[]> => {
+    return withRetry(async () => {
+        const ai = getAI();
+        
+        const prompt = `
+        ROLE: Expert Educational Content Adapter.
+        TARGET PLATFORM: ${platformName}
+        
+        CONSTRAINTS:
+        - Allowed Question Types: ${allowedTypes.join(', ')}
+        - Max Question Length: ${constraints?.maxQuestionLength || 'Flexible'} characters
+        - Max Answer Length: ${constraints?.maxAnswerLength || 'Flexible'} characters
+        - Max Options: ${constraints?.maxOptions || 'Flexible'}
+        - Min Options: ${constraints?.minOptions || 2}
+        
+        TASK:
+        1. Analyze the provided questions.
+        2. REWRITE or REFORMAT any question that violates the constraints or uses an unsupported type.
+        3. For unsupported types (e.g., 'Order' to 'Multiple Choice'), create a conceptual equivalent.
+        4. Shorten text if it exceeds limits.
+        5. Adjust option counts (add distractors or remove least likely options).
+        6. Return the FULL list of questions, where incompatible ones are now adapted.
+        
+        INPUT QUESTIONS:
+        ${JSON.stringify(questions.map(q => ({
+            id: q.id,
+            text: q.text,
+            options: q.options.map(o => o.text),
+            correctOptionId: q.correctOptionId,
+            type: q.questionType
+        })))}
+        `;
+
+        const response = await ai.models.generateContent({
+            model: MODEL_NAME,
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: quizRootSchema,
+                systemInstruction: "You are a precise content adapter. Return valid JSON matching the Question schema."
+            }
+        });
+
+        const text = response.text;
+        if (!text) throw new Error("Empty response from AI adaptation");
+
+        const cleanedText = cleanAIResponse(text);
+        const data = JSON.parse(cleanedText);
+        
+        // Merge adapted data back into original objects to preserve IDs and other metadata not sent to AI
+        const adaptedQuestions = data.questions || [];
+        
+        return adaptedQuestions.map((aq: any, index: number) => {
+            const original = questions[index] || {};
+            // Map back options to include IDs if possible, or generate new ones
+            const adaptedOptions = aq.options.map((opt: any, optIdx: number) => ({
+                id: original.options?.[optIdx]?.id || `opt-${Math.random().toString(36).substr(2, 9)}`,
+                text: opt.text,
+                imageUrl: opt.imageUrl // AI might suggest images, but we usually keep original or null
+            }));
+
+            return {
+                ...original,
+                text: aq.text,
+                questionType: aq.type || aq.questionType, // Handle both fields if AI messes up
+                options: adaptedOptions,
+                // Re-map correct option ID based on index if AI changed order or count
+                correctOptionId: adaptedOptions[aq.correctAnswerIndex || 0]?.id || adaptedOptions[0]?.id,
+                correctOptionIds: aq.correctAnswerIndices ? aq.correctAnswerIndices.map((i: number) => adaptedOptions[i]?.id) : [adaptedOptions[aq.correctAnswerIndex || 0]?.id]
+            };
+        });
+    });
 };

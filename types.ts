@@ -329,7 +329,8 @@ export const QUESTION_TYPES = {
     OPEN_ENDED: 'Pregunta Abierta', // Kept same
     MULTI_SELECT: 'Selección Múltiple', // Renamed from 'Multi-Select (Checkbox)'
     POLL: 'Encuesta', // Kept same
-    ORDER: 'Ordenar' // Renamed from 'Order / Sort'
+    ORDER: 'Ordenar', // Renamed from 'Order / Sort'
+    DRAW: 'Dibujo' // New for Wayground
 };
 
 export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> = {
@@ -392,7 +393,7 @@ export const PLATFORM_SPECS: Record<string, { name: string, types: string[] }> =
     },
     [ExportFormat.WAYGROUND]: { 
         name: 'Wayground', 
-        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL] 
+        types: [QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL, QUESTION_TYPES.DRAW] 
     },
     [ExportFormat.PLICKERS]: {
         name: 'Plickers',
