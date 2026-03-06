@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, QUESTION_TYPES, PLATFORM_SPECS, ExportFormat } from '../../types';
 import { CyberButton, CyberInput, CyberCard, CyberSelect, CyberTextArea, CyberCheckbox, CyberProgressBar } from '../ui/CyberUI';
-import { QuizEditor } from '../QuizEditor';
+import { QuizEditor } from '../OldQuizEditor';
 import { 
     ArrowLeft, Sparkles, BrainCircuit, Wand2, PenTool, 
     ChevronDown, ChevronUp, FilePlus, UploadCloud, Link as LinkIcon, 
@@ -28,15 +28,22 @@ interface NewCreatorProps {
     isSaving: boolean;
     initialQuiz: Quiz;
     setQuiz: React.Dispatch<React.SetStateAction<Quiz>>;
+    initialMode?: 'MANUAL' | 'AI' | 'IMPORT';
 }
 
 export const NewCreator: React.FC<NewCreatorProps> = ({ 
-    onNavigate, user, t, onSaveQuiz, onExport, onPlay, isSaving, initialQuiz, setQuiz 
+    onNavigate, user, t, onSaveQuiz, onExport, onPlay, isSaving, initialQuiz, setQuiz, initialMode 
 }) => {
     const toast = useToast();
     
     // --- UI STATE ---
     const [activePanel, setActivePanel] = useState<'NONE' | 'AI' | 'IMPORT'>('NONE'); 
+
+    useEffect(() => {
+        if (initialMode === 'AI') setActivePanel('AI');
+        else if (initialMode === 'IMPORT') setActivePanel('IMPORT');
+        else setActivePanel('NONE');
+    }, [initialMode]);
 
     // --- GLOBAL QUIZ CONTEXT ---
     const [targetAge, setTargetAge] = useState<string>("0-99");
@@ -535,7 +542,7 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                                         checked={genParams.prioritizeGiphy} 
                                         onChange={(c) => setGenParams({...genParams, prioritizeGiphy: c})}
                                     />
-                                    <span className="text-[10px] text-gray-500 font-mono ml-auto hidden md:inline-block">Powered by GIPHY API</span>
+                                    <img src="https://assets.mistercuarter.es/elements/giphylogo4.png" className="h-6 object-contain ml-auto" alt="Powered by GIPHY" />
                                 </div>
                             </div>
 

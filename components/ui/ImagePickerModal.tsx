@@ -253,11 +253,11 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                 <CyberButton onClick={handleSearch} isLoading={loading}>BUSCAR</CyberButton>
                             </div>
                             
-                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar relative">
                                 {loading ? (
                                     <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-cyan-500" /></div>
                                 ) : searchResults.length > 0 ? (
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pb-8">
                                         {searchResults.map((img, i) => (
                                             <button 
                                                 key={i} 
@@ -289,6 +289,12 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({ isOpen, onCl
                                             ? "Introduce un término para buscar imágenes libres de derechos (Unsplash, Pexels, Pixabay)."
                                             : "Introduce un término para buscar GIFs en Giphy."
                                         }
+                                    </div>
+                                )}
+                                
+                                {activeTab === 'giphy' && (
+                                    <div className="absolute bottom-2 right-2 pointer-events-none opacity-80">
+                                        <img src="https://assets.mistercuarter.es/elements/giphylogo4.png" className="h-6 object-contain" alt="Powered by GIPHY" />
                                     </div>
                                 )}
                             </div>

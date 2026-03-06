@@ -112,7 +112,7 @@ export const CyberTextArea: React.FC<TextAreaProps> = ({ label, className = '', 
 };
 
 interface CheckboxProps {
-  label: string;
+  label: React.ReactNode;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;

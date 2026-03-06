@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Quiz, Question, Option, ExportFormat, QUESTION_TYPES, PLATFORM_SPECS, GameTeam, GameMode, JeopardyConfig } from './types';
-import { QuizEditor } from './components/QuizEditor';
 import { ExportPanel } from './components/ExportPanel';
 import { ExportHub } from './components/pages/ExportHub'; 
 import { Header } from './components/Header';
@@ -87,6 +86,7 @@ const NeuralApp: React.FC = () => {
   const [sharedQuizId, setSharedQuizId] = useState<string | null>(null);
   const [arcadeEvalId, setArcadeEvalId] = useState<string | null>(null); 
   const [raidDashboardId, setRaidDashboardId] = useState<string | null>(null);
+  const [creatorMode, setCreatorMode] = useState<'MANUAL' | 'AI' | 'IMPORT'>('MANUAL');
 
   const [targetPlatform, setTargetPlatform] = useState('UNIVERSAL');
   const [genParams, setGenParams] = useState<{
@@ -265,7 +265,8 @@ const NeuralApp: React.FC = () => {
 
   const handleLoadQuiz = (loadedQuiz: Quiz) => {
       setQuiz(loadedQuiz);
-      setView('create_manual');
+      setCreatorMode('MANUAL');
+      setView('new_creator');
       toast.info("Quiz cargado.");
   };
 
@@ -277,17 +278,25 @@ const NeuralApp: React.FC = () => {
           isPublic: false,
           allowCloning: false
       });
-      setView('create_manual');
+      setCreatorMode('MANUAL');
+      setView('new_creator');
       toast.success("Quiz copiado al editor.");
   };
 
-  const handleSafeExit = (targetView: ViewState) => {
-      if (view === 'create_manual' && quiz.questions.length > 0) {
+  const handleSafeExit = (targetView: string) => {
+      if (view === 'new_creator' && quiz.questions.length > 0) {
           if (!confirm("Si sales del editor sin guardar, podrías perder cambios recientes. ¿Continuar?")) {
               return;
           }
       }
-      setView(targetView);
+      
+      if (targetView.startsWith('new_creator:')) {
+          const mode = targetView.split(':')[1] as 'MANUAL' | 'AI' | 'IMPORT';
+          setCreatorMode(mode);
+          setView('new_creator');
+      } else {
+          setView(targetView as ViewState);
+      }
   };
 
   const handleLoginRequest = async () => {
@@ -376,7 +385,7 @@ const NeuralApp: React.FC = () => {
       }));
       setQuiz({ title: genParams.topic || 'AI Generated Quiz', description: `Generated for ${genParams.age} - ${targetPlatform}`, questions: enhancedQuestions, tags: aiResult.tags || ['AI Generated', targetPlatform] });
       setIsGenSuccess(true);
-      setTimeout(() => { toast.success("Quiz Generated Successfully!"); setView('create_manual'); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGenSuccess(false); setGenProgress(0); }, 1000);
+      setTimeout(() => { toast.success("Quiz Generated Successfully!"); setCreatorMode('MANUAL'); setView('new_creator'); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsGenSuccess(false); setGenProgress(0); }, 1000);
     } catch (e: any) { console.error(e); toast.error(`${t.alert_fail} (${e.message})`); clearInterval(progressTimer); setGenProgress(0); } finally { clearInterval(funnyMessageInterval); setIsGenerating(false); }
   };
 
@@ -388,17 +397,17 @@ const NeuralApp: React.FC = () => {
     setView('convert_analysis'); setAnalysisProgress(0); setAnalysisStatus(getRandomMessage('start', language)); const MIN_DURATION = 8000; const startTime = Date.now(); let currentVirtualProgress = 0; clearAnalysisInterval();
     const processingPromise = (async () => { try { if (isAlreadyStructured && preParsedQuestions.length > 0) { return preParsedQuestions; } else { const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' }; const selectedLang = langMap[language] || 'Spanish'; const generatedQs = await parseRawTextToQuiz(content, selectedLang, imageInput); return generatedQs; } } catch (e) { throw e; } })();
     progressIntervalRef.current = window.setInterval(() => { const elapsed = Date.now() - startTime; let targetP = 0; if (elapsed < MIN_DURATION) { targetP = (elapsed / MIN_DURATION) * 80; } else { const extraTime = elapsed - MIN_DURATION; const creep = 19 * (1 - Math.exp(-extraTime / 10000)); targetP = 80 + creep; } if (targetP > currentVirtualProgress) { currentVirtualProgress = targetP; } setAnalysisProgress(currentVirtualProgress); if (elapsed > 1000 && elapsed < 1200) { setAnalysisStatus(getDetectionMessage(sourceName, content, language)); } else if (elapsed > 4000 && elapsed < 4200) { setAnalysisStatus(getRandomMessage('detect_generic', language)); } else if (elapsed > 6000 && elapsed < 6200) { setAnalysisStatus(getRandomMessage('progress', language)); } }, 100);
-    try { const questions = await processingPromise; if (questions.length === 0) throw new Error(t.alert_no_questions); const elapsedNow = Date.now() - startTime; if (elapsedNow < MIN_DURATION) { await new Promise(r => setTimeout(r, MIN_DURATION - elapsedNow)); } clearAnalysisInterval(); setAnalysisProgress(100); setAnalysisStatus(getRandomMessage('success', language)); const missingAnswers = questions.some(q => (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.filter((o: any) => o.text.trim() !== "").length < 2); if (missingAnswers) { setTempQuestions(questions); setTempQuizInfo({ title: sourceName, desc: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI' }); setTimeout(() => setShowMissingAnswersModal(true), 1000); } else { setQuiz({ title: sourceName, description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI', questions: questions, tags: ['Imported', isAlreadyStructured ? 'Template' : 'AI'] }); toast.success("Analysis Complete!"); setTimeout(() => { setView('create_manual'); }, 1500); } } catch (error: any) { clearAnalysisInterval(); setAnalysisProgress(0); setAnalysisStatus(getRandomMessage('error', language)); console.error(error); toast.error(`Analysis Failed: ${error.message}`); setTimeout(() => { setView('convert_upload'); }, 4000); }
+    try { const questions = await processingPromise; if (questions.length === 0) throw new Error(t.alert_no_questions); const elapsedNow = Date.now() - startTime; if (elapsedNow < MIN_DURATION) { await new Promise(r => setTimeout(r, MIN_DURATION - elapsedNow)); } clearAnalysisInterval(); setAnalysisProgress(100); setAnalysisStatus(getRandomMessage('success', language)); const missingAnswers = questions.some(q => (q.questionType === QUESTION_TYPES.MULTIPLE_CHOICE || q.questionType === QUESTION_TYPES.MULTI_SELECT) && q.options.filter((o: any) => o.text.trim() !== "").length < 2); if (missingAnswers) { setTempQuestions(questions); setTempQuizInfo({ title: sourceName, desc: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI' }); setTimeout(() => setShowMissingAnswersModal(true), 1000); } else { setQuiz({ title: sourceName, description: isAlreadyStructured ? 'Imported from Template' : 'Converted via AI', questions: questions, tags: ['Imported', isAlreadyStructured ? 'Template' : 'AI'] }); toast.success("Analysis Complete!"); setTimeout(() => { setCreatorMode('MANUAL'); setView('new_creator'); }, 1500); } } catch (error: any) { clearAnalysisInterval(); setAnalysisProgress(0); setAnalysisStatus(getRandomMessage('error', language)); console.error(error); toast.error(`Analysis Failed: ${error.message}`); setTimeout(() => { setCreatorMode('IMPORT'); setView('new_creator'); }, 4000); }
   };
-  const handleGenerateMissingAnswers = async () => { setIsGeneratingAnswers(true); try { const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' }; const enhancedQuestions = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish'); setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: enhancedQuestions, tags: ['AI Repair'] }); setShowMissingAnswersModal(false); setView('create_manual'); toast.success("Answers generated successfully!"); } catch (e) { toast.error("Error generating answers. Please check quota."); } finally { setIsGeneratingAnswers(false); } };
-  const handleSkipMissingAnswers = () => { setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: tempQuestions }); setShowMissingAnswersModal(false); setView('create_manual'); };
+  const handleGenerateMissingAnswers = async () => { setIsGeneratingAnswers(true); try { const langMap: Record<string, string> = { 'es': 'Spanish', 'en': 'English' }; const enhancedQuestions = await enhanceQuestionsWithOptions(tempQuestions, langMap[language] || 'Spanish'); setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: enhancedQuestions, tags: ['AI Repair'] }); setShowMissingAnswersModal(false); setCreatorMode('MANUAL'); setView('new_creator'); toast.success("Answers generated successfully!"); } catch (e) { toast.error("Error generating answers. Please check quota."); } finally { setIsGeneratingAnswers(false); } };
+  const handleSkipMissingAnswers = () => { setQuiz({ ...initialQuiz, title: tempQuizInfo.title, description: tempQuizInfo.desc, questions: tempQuestions }); setShowMissingAnswersModal(false); setCreatorMode('MANUAL'); setView('new_creator'); };
   
   const handleFileProcessing = async (file: File) => { if (!file) return; const fileName = file.name; const fileType = file.type; try { if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) { const reader = new FileReader(); reader.onload = (e: ProgressEvent<FileReader>) => { const data = e.target?.result; if (fileName.endsWith('.csv')) { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { performAnalysis(data as string, fileName); } } else { const wb = XLSX.read(data, { type: 'binary' }); const detectedQuestions = detectAndParseStructure(wb); if (detectedQuestions && detectedQuestions.length > 0) { performAnalysis("", fileName, true, detectedQuestions); } else { toast.error(t.alert_no_valid_csv); } } }; if (fileName.endsWith('.csv')) reader.readAsText(file); else reader.readAsBinaryString(file); return; } if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) { const text = await extractTextFromPDF(file); performAnalysis(text, fileName); return; } if (fileType.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e: ProgressEvent<FileReader>) => { const base64 = e.target?.result as string; const base64Data = base64.split(',')[1]; performAnalysis("Extract questions from this image", fileName, false, [], { data: base64Data, mimeType: fileType }); }; reader.readAsDataURL(file); return; } if (fileType.startsWith('text/') || fileName.endsWith('.json') || fileName.endsWith('.md') || fileName.endsWith('.txt')) { const text = await file.text(); performAnalysis(text, fileName); return; } toast.error(t.alert_read_error || "Unsupported file type"); } catch (e: any) { console.error(e); toast.error(`${t.alert_read_error}: ${e.message}`); } };
   const handleConvertDrag = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') { setDragActive(true); } else if (e.type === 'dragleave') { setDragActive(false); } };
   const handleConvertDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { handleFileProcessing(e.dataTransfer.files[0]); } };
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files.length > 0) { handleFileProcessing(e.target.files[0]); } };
   const handlePasteAnalysis = () => { if (!textToConvert.trim()) { toast.warning(t.alert_paste_first); return; } performAnalysis(textToConvert, "Pasted Text"); };
-  const handleUrlAnalysis = async () => { if (!urlToConvert.trim()) { toast.warning(t.alert_valid_url); return; } const url = urlToConvert.trim(); setView('convert_analysis'); setAnalysisProgress(10); setAnalysisStatus("Analyzing URL..."); try { const structuredResult = await analyzeUrl(url); if (structuredResult) { setAnalysisProgress(100); setQuiz(structuredResult.quiz); if (structuredResult.report.missing?.options || structuredResult.report.missing?.correct) { setTempQuestions(structuredResult.quiz.questions); setTempQuizInfo({ title: structuredResult.quiz.title, desc: structuredResult.quiz.description }); setTimeout(() => setShowMissingAnswersModal(true), 1000); } else { toast.success("Quiz imported successfully!"); setTimeout(() => setView('create_manual'), 1000); } return; } setAnalysisStatus("Fetching content for AI analysis..."); const content = await fetchUrlContent(url); await performAnalysis(content, "URL Import"); } catch (e: any) { console.error(e); toast.error(`URL Analysis failed: ${e.message}`); setView('convert_upload'); } };
+  const handleUrlAnalysis = async () => { if (!urlToConvert.trim()) { toast.warning(t.alert_valid_url); return; } const url = urlToConvert.trim(); setView('convert_analysis'); setAnalysisProgress(10); setAnalysisStatus("Analyzing URL..."); try { const structuredResult = await analyzeUrl(url); if (structuredResult) { setAnalysisProgress(100); setQuiz(structuredResult.quiz); if (structuredResult.report.missing?.options || structuredResult.report.missing?.correct) { setTempQuestions(structuredResult.quiz.questions); setTempQuizInfo({ title: structuredResult.quiz.title, desc: structuredResult.quiz.description }); setTimeout(() => setShowMissingAnswersModal(true), 1000); } else { toast.success("Quiz imported successfully!"); setTimeout(() => { setCreatorMode('MANUAL'); setView('new_creator'); }, 1000); } return; } setAnalysisStatus("Fetching content for AI analysis..."); const content = await fetchUrlContent(url); await performAnalysis(content, "URL Import"); } catch (e: any) { console.error(e); toast.error(`URL Analysis failed: ${e.message}`); setCreatorMode('IMPORT'); setView('new_creator'); } };
 
   const renderMissingAnswersModal = () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -430,7 +439,7 @@ const NeuralApp: React.FC = () => {
                   onHelp={() => handleSafeExit('help')} 
                   onNavigate={(target) => handleSafeExit(target as ViewState)} // Use handleSafeExit for all nav
               />
-              <LandingV2 onNavigate={(targetView: string) => setView(targetView as ViewState)} user={user} onLoginReq={handleLoginRequest} />
+              <LandingV2 onNavigate={(targetView: string) => handleSafeExit(targetView)} user={user} onLoginReq={handleLoginRequest} />
               <Footer onPrivacy={() => setView('privacy')} onTerms={() => setView('terms')} />
           </div>
       );
@@ -475,7 +484,7 @@ const NeuralApp: React.FC = () => {
         {/* --- NEW INTEGRATED CREATOR --- */}
         {view === 'new_creator' && (
             <NewCreator 
-                onNavigate={(v) => setView(v as ViewState)}
+                onNavigate={(v) => handleSafeExit(v)}
                 user={user}
                 t={t}
                 initialQuiz={quiz}
@@ -484,134 +493,20 @@ const NeuralApp: React.FC = () => {
                 onExport={handleGoToExport}
                 onPlay={handlePlayFromEditor}
                 isSaving={isSaving}
+                initialMode={creatorMode}
             />
         )}
 
-        {view === 'create_menu' && (
-            <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
-                <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
-                <h2 className="text-3xl font-cyber text-center mb-8">{t.select_protocol}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <button onClick={() => setView('create_ai')} className="group relative overflow-hidden bg-black/40 border border-gray-800 hover:border-purple-500 rounded-xl p-8 text-left transition-all duration-300">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-opacity"><Sparkles className="w-24 h-24 text-purple-500" /></div>
-                        <h3 className="text-2xl font-bold font-cyber text-purple-400 mb-2 group-hover:text-purple-300">{t.ai_gen}</h3>
-                        <p className="text-gray-400 font-mono text-sm">{t.ai_gen_desc}</p>
-                    </button>
-                    <button onClick={() => { setQuiz(initialQuiz); setView('create_manual'); }} className="group relative overflow-hidden bg-black/40 border border-gray-800 hover:border-cyan-500 rounded-xl p-8 text-left transition-all duration-300">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-opacity"><PenTool className="w-24 h-24 text-cyan-500" /></div>
-                        <h3 className="text-2xl font-bold font-cyber text-cyan-400 mb-2 group-hover:text-cyan-300">{t.manual_editor}</h3>
-                        <p className="text-gray-400 font-mono text-sm">{t.manual_editor_desc}</p>
-                    </button>
-                </div>
-            </div>
-        )}
-
-        {view === 'create_ai' && (
-            <div className="max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
-                <div className="flex items-center gap-4"><button onClick={() => setView('create_menu')} className="group flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors uppercase font-mono font-bold tracking-widest text-sm"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> ATRÁS</button></div>
-                <div className="inline-block border border-cyan-500/30 bg-cyan-900/10 px-4 py-1"><span className="text-cyan-400 font-mono text-sm tracking-widest uppercase">CONFIGURACIÓN NEURAL</span></div>
-                <CyberCard className="border-cyan-500/20 p-8 space-y-8">
-                    <div className="space-y-4"><div className="flex items-center gap-2 text-cyan-400"><ArrowLeft className="w-4 h-4 rotate-180" /><h3 className="font-mono font-bold text-lg">1. SELECCIONA PLATAFORMA DESTINO</h3></div><p className="text-gray-500 text-xs font-mono">No te preocupes, podrás exportar a otras plataformas después.</p><CyberSelect options={Object.entries(PLATFORM_SPECS).map(([key, spec]) => ({ value: key, label: spec.name }))} value={targetPlatform} onChange={(e) => handlePlatformChange(e.target.value)} className="h-14 text-lg" /></div>
-                    <div className="h-px bg-gray-800 w-full" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">TEMA / ASUNTO</label><CyberInput value={genParams.topic} onChange={(e) => setGenParams({...genParams, topic: e.target.value})} placeholder="Ej. 'Historia de Roma', 'Física Cuántica'" className="h-12" /></div><div className="space-y-2"><label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">NÚMERO DE PREGUNTAS (MAX 50)</label><CyberInput type="number" value={genParams.count} onChange={(e) => setGenParams({...genParams, count: e.target.value})} className="h-12 font-mono text-lg" min={1} max={50} /></div></div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">EDAD / NIVEL</label>
-                            <CyberSelect options={['Universal', 'Primary (6-12)', 'Secondary (12-16)', 'High School (16-18)', 'University', 'Professional'].map(v => ({ value: v, label: v }))} value={genParams.age} onChange={(e) => setGenParams({...genParams, age: e.target.value})} className="h-12" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">IDIOMA</label>
-                            <CyberSelect options={[{ value: 'Spanish', label: '🇪🇸 Español' }, { value: 'English', label: '🇬🇧 English' }, { value: 'French', label: '🇫🇷 Français' }, { value: 'German', label: '🇩🇪 Deutsch' }, { value: 'Italian', label: '🇮🇹 Italiano' }, { value: 'Portuguese', label: '🇵🇹 Português' }, { value: 'Catalan', label: '🏴 Catalan' }, { value: 'Basque', label: '🏴 Euskera' }, { value: 'Galician', label: '🏴 Galego' }]} value={genParams.language} onChange={(e) => setGenParams({...genParams, language: e.target.value})} className="h-12" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-mono text-cyan-400 uppercase tracking-widest">TONO</label>
-                            <CyberSelect 
-                                options={[
-                                    { value: 'Neutral', label: '🔘 Neutral / Estándar' }, 
-                                    { value: 'Divertido', label: '🎉 Divertido / Casual' }, 
-                                    { value: 'Infantil', label: '🧸 Infantil / Amable' }, 
-                                    { value: 'Académico', label: '🎓 Académico / Serio' }, 
-                                    { value: 'Sarcástico', label: '😏 Sarcástico / Ingenioso' },
-                                    { value: 'Custom', label: '✨ Personalizado / Gamificación' }
-                                ]} 
-                                value={genParams.tone} 
-                                onChange={(e) => setGenParams({...genParams, tone: e.target.value})} 
-                                className="h-12 border-purple-500/50 text-purple-200" 
-                            />
-                        </div>
-                    </div>
-
-                    {genParams.tone === 'Custom' && (
-                        <div className="space-y-2 animate-in slide-in-from-top-2">
-                            <label className="text-xs font-mono text-yellow-400 uppercase tracking-widest">CONTEXTO NARRATIVO</label>
-                            <CyberTextArea 
-                                value={genParams.customToneContext} 
-                                onChange={(e) => setGenParams({...genParams, customToneContext: e.target.value})} 
-                                placeholder="Ej: Una aventura de piratas, Misión espacial, Detectives victorianos..." 
-                                className="h-20 font-mono text-sm border-yellow-500/50 bg-yellow-900/10"
-                            />
-                        </div>
-                    )}
-
-                    <div className="h-px bg-gray-800 w-full" />
-                    <div className="space-y-4"><div className="flex items-center gap-2 text-cyan-400"><h3 className="font-mono font-bold text-lg">2. SELECCIONA TIPOS DE PREGUNTA</h3></div><div className="space-y-6"><div className="bg-cyan-950/10 border border-cyan-900/30 p-4 rounded-lg"><h4 className="text-xs font-mono text-cyan-500 uppercase tracking-widest mb-3 border-b border-cyan-900/30 pb-1">CON VALIDACIÓN</h4><div className="grid grid-cols-2 md:grid-cols-3 gap-4">{[QUESTION_TYPES.MULTIPLE_CHOICE, QUESTION_TYPES.MULTI_SELECT, QUESTION_TYPES.TRUE_FALSE, QUESTION_TYPES.FILL_GAP, QUESTION_TYPES.ORDER].map(type => (<CyberCheckbox key={type} label={type} checked={genParams.types.includes(type)} onChange={() => toggleQuestionType(type)} />))}</div></div><div className="bg-purple-950/10 border border-purple-900/30 p-4 rounded-lg"><h4 className="text-xs font-mono text-purple-500 uppercase tracking-widest mb-3 border-b border-purple-900/30 pb-1">SIN VALIDACIÓN</h4><div className="grid grid-cols-2 md:grid-cols-3 gap-4">{[QUESTION_TYPES.OPEN_ENDED, QUESTION_TYPES.POLL].map(type => (<CyberCheckbox key={type} label={type} checked={genParams.types.includes(type)} onChange={() => toggleQuestionType(type)} />))}</div></div></div></div>
-                    <div className="h-px bg-gray-800 w-full" />
-                    <div className="space-y-4"><div className="flex items-center gap-2 text-pink-400"><ArrowLeft className="w-4 h-4 rotate-180" /><h3 className="font-mono font-bold text-lg">MATERIAL DE CONTEXTO (OPCIONAL)</h3></div><div className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer hover:bg-white/5 ${dragActive ? 'border-cyan-400 bg-cyan-900/20' : 'border-gray-700'}`} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop} onClick={() => contextFileInputRef.current?.click()}><UploadCloud className="w-12 h-12 mx-auto text-gray-600 mb-2" /><p className="text-gray-300 font-bold">ARRASTRA O HAZ CLIC</p><p className="text-xs text-gray-500">(.txt, .md, .csv, .json, .pdf)</p><input type="file" ref={contextFileInputRef} className="hidden" accept=".pdf,.txt,.md,.json,.csv" onChange={handleContextFileInput} multiple /></div><CyberTextArea value={genParams.context} onChange={(e) => setGenParams({...genParams, context: e.target.value})} placeholder="Pega tu texto sin formato, contenido de PDF o contenido web aquí..." className="h-32 font-mono text-sm" /><CyberInput placeholder="O pega URLs de referencia..." value={genParams.urls} onChange={(e) => setGenParams({...genParams, urls: e.target.value})} /></div>
-                    <CyberButton onClick={handleCreateAI} isLoading={isGenerating} className={`w-full h-16 text-xl font-cyber tracking-widest mt-8 transition-colors duration-500 ${isGenSuccess ? 'bg-green-600 hover:bg-green-500 border-green-400' : ''}`}>{isGenSuccess ? <><CheckCircle2 className="w-6 h-6 mr-2 animate-bounce" /> ¡PROCESO FINALIZADO!</> : t.initiate_gen}</CyberButton>
-                    {isGenerating && (<div className="mt-4 space-y-3"><div className="h-2 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800 relative"><div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(6,182,212,0.6)]" style={{ width: `${genProgress}%` }} /></div><div className="text-center"><p className="font-mono text-sm md:text-base text-cyan-300 animate-pulse"><span className="opacity-50 mr-2">[{Math.floor(genProgress)}%]</span>{generationStatus}</p></div></div>)}
-                </CyberCard>
-            </div>
-        )}
-
-        {view === 'create_manual' && (
-            <>
-                <div className="max-w-6xl mx-auto w-full mb-6">
-                    <CyberButton variant="ghost" onClick={() => handleSafeExit('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
-                </div>
-                <div className="max-w-6xl mx-auto w-full">
-                    <QuizEditor 
-                        quiz={quiz} 
-                        setQuiz={setQuiz} 
-                        onExport={handleGoToExport} 
-                        onSave={handleSaveQuiz} 
-                        isSaving={isSaving} 
-                        user={user} 
-                        t={t}
-                        onPlay={handlePlayFromEditor} 
-                        currentLanguage={language}
-                        onNavigate={(v) => setView(v as ViewState)}
-                    />
-                </div>
-            </>
-        )}
+        {/* --- REMOVED OLD VIEWS --- */}
 
         {/* NEW: EXPORT HUB VIEW */}
         {view === 'export_hub' && (
             <ExportHub 
                 quiz={quiz}
                 setQuiz={setQuiz}
-                onBack={() => setView('create_manual')}
+                onBack={() => setView('new_creator')}
                 t={t}
             />
-        )}
-
-        {view === 'convert_upload' && (
-            <div className="max-w-4xl mx-auto w-full space-y-8 animate-in slide-in-from-right-10 duration-500">
-                <CyberButton variant="ghost" onClick={() => setView('home')} className="pl-0 gap-2"><ArrowLeft className="w-4 h-4" /> {t.back_hub}</CyberButton>
-                <div className="text-center space-y-2"><h2 className="text-3xl font-cyber text-pink-400">{t.upload_source}</h2><p className="text-gray-500 font-mono text-sm">{t.upload_source_subtitle}</p></div>
-                <CyberCard className="border-pink-500/30 min-h-[400px] flex flex-col">
-                    <div className="flex border-b border-gray-800 mb-6"><button onClick={() => setConvertTab('upload')} className={`flex-1 py-3 text-xs font-bold font-mono transition-colors ${convertTab === 'upload' ? 'text-pink-400 border-b-2 border-pink-500 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}>{t.tab_upload}</button><button onClick={() => setConvertTab('paste')} className={`flex-1 py-3 text-xs font-bold font-mono transition-colors ${convertTab === 'paste' ? 'text-pink-400 border-b-2 border-pink-500 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}>{t.tab_paste}</button><button onClick={() => setConvertTab('url')} className={`flex-1 py-3 text-xs font-bold font-mono transition-colors ${convertTab === 'url' ? 'text-pink-400 border-b-2 border-pink-500 bg-pink-950/20' : 'text-gray-500 hover:text-gray-300'}`}>{t.tab_url}</button></div>
-                    <div className="flex-1 flex flex-col justify-center">{convertTab === 'upload' && (<div className={`border-2 border-dashed rounded-xl p-10 text-center transition-all ${dragActive ? 'border-pink-400 bg-pink-900/20' : 'border-gray-700 hover:border-gray-500'}`} onDragEnter={handleConvertDrag} onDragLeave={handleConvertDrag} onDragOver={handleConvertDrag} onDrop={handleConvertDrop}><FilePlus className={`w-16 h-16 mx-auto mb-4 ${dragActive ? 'text-pink-400' : 'text-gray-600'}`} /><p className="text-gray-300 font-bold mb-2">{t.drop_file}</p><p className="text-xs text-gray-500 mb-6">{t.supports_fmt}</p><input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls,.csv,.pdf,.txt,.md,.json,.png,.jpg,.jpeg,.webp" onChange={handleFileUpload} /><CyberButton variant="secondary" onClick={() => fileInputRef.current?.click()}>{t.tab_upload}</CyberButton><p className="text-[10px] text-gray-600 mt-4">{t.autodetect_fmt}</p></div>)}{convertTab === 'paste' && (<div className="space-y-4 h-full flex flex-col"><div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded text-xs text-blue-200"><p><strong>💡 Tip:</strong> {t.paste_instr}</p></div><textarea value={textToConvert} onChange={(e) => setTextToConvert(e.target.value)} placeholder={t.paste_placeholder} className="flex-1 w-full bg-black/40 border border-gray-700 rounded p-4 text-sm font-mono text-gray-300 focus:border-pink-500 outline-none resize-none min-h-[300px]" /><CyberButton onClick={handlePasteAnalysis} className="w-full"><ClipboardPaste className="w-4 h-4 mr-2"/> {t.analyze_btn}</CyberButton></div>)}{convertTab === 'url' && (<div className="space-y-6 text-center max-w-lg mx-auto"><LinkIcon className="w-16 h-16 mx-auto text-gray-700" /><div className="text-left space-y-2"><p className="text-sm text-gray-300">{t.url_instr}</p><p className="text-xs text-gray-500 italic">{t.url_hint}</p></div><CyberInput value={urlToConvert} onChange={(e) => setUrlToConvert(e.target.value)} placeholder={t.url_placeholder} /><CyberButton onClick={handleUrlAnalysis} className="w-full"><BrainCircuit className="w-4 h-4 mr-2"/> {t.scan_btn}</CyberButton></div>)}</div>
-                </CyberCard>
-            </div>
-        )}
-
-        {view === 'convert_analysis' && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 animate-in fade-in">
-                <div className="relative w-24 h-24"><div className="absolute inset-0 rounded-full border-4 border-gray-800"></div><div className="absolute inset-0 rounded-full border-4 border-t-pink-500 border-r-transparent border-b-transparent border-l-transparent animate-spin"></div><BrainCircuit className="absolute inset-0 m-auto w-10 h-10 text-pink-500 animate-pulse" /></div>
-                <div className="w-full max-w-md space-y-2 text-center"><h2 className="text-2xl font-cyber text-white">{t.processing}</h2><p className="text-pink-400 font-mono text-sm animate-pulse">{analysisStatus}</p><CyberProgressBar progress={analysisProgress} /></div>
-            </div>
         )}
 
         {view === 'game_lobby' && (<GameLobby user={user} onBack={() => setView('home')} onStartGame={(q, teams, mode, config) => { setGameQuiz(q); setGameTeams(teams); setGameConfig(config); if (mode === 'HEX_CONQUEST') setView('game_hex'); else setView('game_board'); }} t={t} preSelectedQuiz={gameQuiz} language={language} />)}

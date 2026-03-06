@@ -161,7 +161,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
                         
                         {/* 1. EDITOR MANUAL (AHORA PRIMERO) */}
                         <div 
-                            onClick={() => onNavigate('create_manual')}
+                            onClick={() => onNavigate('new_creator:MANUAL')}
                             className="group bg-gray-900/30 border border-gray-700 hover:border-white/30 rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-800 flex flex-col justify-between h-64"
                         >
                             <div>
@@ -180,7 +180,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
 
                         {/* 2. GENERADOR IA (AHORA SEGUNDO - DESTACADO) */}
                         <div 
-                            onClick={() => onNavigate('create_ai')}
+                            onClick={() => onNavigate('new_creator:AI')}
                             className="group relative bg-gradient-to-br from-cyan-900/40 to-blue-900/40 border border-cyan-500/80 hover:border-cyan-400 rounded-2xl p-8 cursor-pointer overflow-hidden transition-all hover:shadow-[0_0_40px_rgba(6,182,212,0.2)] flex flex-col justify-between h-64"
                         >
                             <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-40 transition-opacity">
@@ -202,7 +202,7 @@ export const LandingV2: React.FC<LandingV2Props> = ({ onNavigate, user }) => {
 
                         {/* 3. CONVERSOR (AHORA TERCERO) */}
                         <div 
-                            onClick={() => onNavigate('convert_upload')}
+                            onClick={() => onNavigate('new_creator:IMPORT')}
                             className="group bg-gray-900/30 border border-gray-700 hover:border-pink-500/50 rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-800 flex flex-col justify-between h-64"
                         >
                             <div>

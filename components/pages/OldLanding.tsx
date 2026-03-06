@@ -32,13 +32,13 @@ export const OldLanding: React.FC<OldLandingProps> = ({ t, onNavigate, onResetGa
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-7xl">
-                <CyberCard className="group hover:border-cyan-500/50 hover:bg-cyan-950/10 transition-all duration-300 cursor-pointer h-full" onClick={() => onNavigate('create_menu')}>
+                <CyberCard className="group hover:border-cyan-500/50 hover:bg-cyan-950/10 transition-all duration-300 cursor-pointer h-full" onClick={() => onNavigate('new_creator:MANUAL')}>
                     <div className="flex flex-col h-full space-y-4">
                         <div className="p-4 bg-cyan-950/30 rounded-full w-fit group-hover:scale-110 transition-transform duration-300 border border-cyan-500/30"><BrainCircuit className="w-8 h-8 text-cyan-400" /></div>
                         <div><h3 className="text-2xl font-bold font-cyber text-white group-hover:text-cyan-300 mb-2">NEURAL QUIZ</h3><p className="text-cyan-400/80 font-mono text-xs uppercase tracking-wider mb-3">{t.create_quiz_desc}</p><p className="text-gray-400 text-sm leading-relaxed">{t.create_quiz_help}</p></div>
                     </div>
                 </CyberCard>
-                <CyberCard className="group hover:border-pink-500/50 hover:bg-pink-950/10 transition-all duration-300 cursor-pointer h-full" onClick={() => onNavigate('convert_upload')}>
+                <CyberCard className="group hover:border-pink-500/50 hover:bg-pink-950/10 transition-all duration-300 cursor-pointer h-full" onClick={() => onNavigate('new_creator:IMPORT')}>
                     <div className="flex flex-col h-full space-y-4">
                         <div className="p-4 bg-pink-950/30 rounded-full w-fit group-hover:scale-110 transition-transform duration-300 border border-pink-500/30"><FileUp className="w-8 h-8 text-pink-400" /></div>
                         <div><h3 className="text-2xl font-bold font-cyber text-white group-hover:text-pink-300 mb-2">{t.convert_quiz}</h3><p className="text-pink-400/80 font-mono text-xs uppercase tracking-wider mb-3">{t.convert_quiz_desc}</p><p className="text-gray-400 text-sm leading-relaxed">{t.convert_quiz_help}</p></div>
