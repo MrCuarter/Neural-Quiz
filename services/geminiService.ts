@@ -102,6 +102,7 @@ const quizRootSchema: Schema = {
 // --- SYSTEM PROMPT ---
 const SYSTEM_INSTRUCTION = `Eres un experto diseñador de juegos educativos. 
 Tu misión es generar cuestionarios JSON precisos.
+SIEMPRE identifica la respuesta correcta. Si el material de origen es ambiguo o no indica las respuestas correctas, utiliza tu conocimiento experto para determinar la respuesta más precisa. Cada pregunta DEBE tener al menos una respuesta correcta marcada.
 Genera "imageSearchQuery" (2-3 palabras en INGLÉS) y "fallback_category" para cada pregunta.
 Genera "tags" útiles.
 
@@ -267,7 +268,19 @@ export const generateQuizQuestions = async (params: GenParams): Promise<{questio
 export const parseRawTextToQuiz = async (rawText: string, language: string = 'Spanish', image?: any): Promise<any[]> => {
     return withRetry(async () => {
         const ai = getAI();
-        const prompt = `Extract questions from: ${rawText.substring(0, 5000)}. Language: ${language}. Calculate difficulty (1-5) for each.`;
+        const prompt = `
+        TASK: Extract educational questions from the provided text.
+        LANGUAGE: ${language}
+        
+        CRITICAL INSTRUCTIONS:
+        1. If the text contains questions but the correct answers are NOT explicitly marked, identified, or clear, you MUST use your own knowledge to determine the most accurate and correct answer(s) for each question.
+        2. Every question generated MUST have at least one correct answer identified.
+        3. Calculate difficulty (1-5) for each question based on the content complexity.
+        
+        TEXT TO ANALYZE:
+        ${rawText.substring(0, 10000)}
+        `;
+
         const response = await ai.models.generateContent({
             model: MODEL_NAME,
             contents: prompt,
@@ -279,7 +292,9 @@ export const parseRawTextToQuiz = async (rawText: string, language: string = 'Sp
         });
         
         const cleanedText = cleanAIResponse(response.text || "{}");
-        return JSON.parse(cleanedText).questions || [];
+        const data = JSON.parse(cleanedText);
+        
+        return validateQuizQuestions(data.questions || []);
     });
 };
 

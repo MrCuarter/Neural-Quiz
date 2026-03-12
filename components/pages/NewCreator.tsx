@@ -276,8 +276,7 @@ export const NewCreator: React.FC<NewCreatorProps> = ({
                 const readyQs = preParsedQuestions.map(q => ({...q, id: uuid()}));
                 processImportedQuestions(readyQs);
             } else {
-                const rawQs = await parseRawTextToQuiz(content, 'Spanish');
-                const readyQs = rawQs.map((q: any) => ({...q, id: uuid(), correctOptionIds: [q.correctOptionId]}));
+                const readyQs = await parseRawTextToQuiz(content, 'Spanish');
                 processImportedQuestions(readyQs);
             }
         } catch (e: any) {
